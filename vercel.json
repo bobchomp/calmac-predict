@@ -2,5 +2,10 @@
   "functions": {
     "api/weather.js": { "maxDuration": 30 },
     "api/status.js":  { "maxDuration": 15 }
-  }
+  },
+  "routes": [
+    { "src": "/api/weather", "dest": "/api/weather.js" },
+    { "src": "/api/status",  "dest": "/api/status.js" },
+    { "src": "/(.*)",        "dest": "/index.html" }
+  ]
 }
