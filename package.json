@@ -1,0 +1,6 @@
+{
+  "name": "calmac-predictor",
+  "version": "1.0.0",
+  "description": "Unofficial CalMac sailing predictor",
+  "engines": { "node": "18.x" }
+}
