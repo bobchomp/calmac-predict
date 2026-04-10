@@ -1,6 +1,3 @@
-export const config = { runtime: ‘edge’ };
-
-// Key weather points for CalMac routes — one representative location per route area
 const ROUTE_WEATHER_POINTS = [
 { route: ‘Ardrossan – Brodick (Arran)’, lat: 55.58, lon: -5.09 },
 { route: ‘Troon – Brodick (Arran)’, lat: 55.53, lon: -4.97 },
@@ -26,52 +23,6 @@ const ROUTE_WEATHER_POINTS = [
 { route: ‘Port Askaig – Feolin (Jura)’, lat: 55.85, lon: -6.10 },
 ];
 
-export default async function handler(req) {
-try {
-const results = await Promise.all(
-ROUTE_WEATHER_POINTS.map(async (point) => {
-const url = `https://api.open-meteo.com/v1/forecast?latitude=${point.lat}&longitude=${point.lon}&hourly=windspeed_10m,windgusts_10m,weathercode&windspeed_unit=mph&forecast_days=2&timezone=Europe%2FLondon`;
-const res = await fetch(url);
-const data = await res.json();
-
-```
-    const now = new Date();
-    const currentHour = now.getHours();
-    const gusts = data.hourly?.windgusts_10m?.slice(currentHour, currentHour + 12) || [];
-    const winds = data.hourly?.windspeed_10m?.slice(currentHour, currentHour + 12) || [];
-    const codes = data.hourly?.weathercode?.slice(currentHour, currentHour + 12) || [];
-
-    const maxGust = Math.max(...gusts, 0);
-    const maxWind = Math.max(...winds, 0);
-    const worstCode = Math.max(...codes, 0);
-
-    return {
-      route: point.route,
-      maxGustMph: Math.round(maxGust),
-      maxWindMph: Math.round(maxWind),
-      weatherCode: worstCode,
-      sailingRisk: calcRisk(maxGust, worstCode)
-    };
-  })
-);
-
-return new Response(JSON.stringify({ weather: results, fetchedAt: new Date().toISOString() }), {
-  headers: {
-    'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
-    'Cache-Control': 's-maxage=1800'
-  }
-});
-```
-
-} catch (err) {
-return new Response(JSON.stringify({ error: err.message, weather: [] }), {
-status: 500,
-headers: { ‘Content-Type’: ‘application/json’, ‘Access-Control-Allow-Origin’: ‘*’ }
-});
-}
-}
-
 function calcRisk(gustMph, weatherCode) {
 let risk = 0;
 if (gustMph >= 55) risk += 60;
@@ -87,3 +38,52 @@ else if (weatherCode >= 51) risk += 5;
 
 return Math.min(risk, 100);
 }
+
+module.exports = async function handler(req, res) {
+res.setHeader(‘Access-Control-Allow-Origin’, ‘*’);
+res.setHeader(‘Cache-Control’, ‘s-maxage=1800’);
+
+try {
+// Batch all routes into one Open-Meteo request using their multi-point support
+// Open-Meteo supports comma-separated lat/lon lists
+const lats = ROUTE_WEATHER_POINTS.map(p => p.lat).join(’,’);
+const lons = ROUTE_WEATHER_POINTS.map(p => p.lon).join(’,’);
+
+```
+const url = `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&hourly=windspeed_10m,windgusts_10m,weathercode&windspeed_unit=mph&forecast_days=2&timezone=Europe%2FLondon`;
+
+const response = await fetch(url);
+const raw = await response.json();
+
+// Open-Meteo returns an array when multiple locations are requested
+const dataArray = Array.isArray(raw) ? raw : [raw];
+
+const now = new Date();
+const currentHour = now.getHours();
+
+const results = ROUTE_WEATHER_POINTS.map((point, i) => {
+  const data = dataArray[i] || {};
+  const gusts = data.hourly?.windgusts_10m?.slice(currentHour, currentHour + 12) || [];
+  const winds = data.hourly?.windspeed_10m?.slice(currentHour, currentHour + 12) || [];
+  const codes = data.hourly?.weathercode?.slice(currentHour, currentHour + 12) || [];
+
+  const maxGust = gusts.length ? Math.max(...gusts) : 0;
+  const maxWind = winds.length ? Math.max(...winds) : 0;
+  const worstCode = codes.length ? Math.max(...codes) : 0;
+
+  return {
+    route: point.route,
+    maxGustMph: Math.round(maxGust),
+    maxWindMph: Math.round(maxWind),
+    weatherCode: worstCode,
+    sailingRisk: calcRisk(maxGust, worstCode)
+  };
+});
+
+res.status(200).json({ weather: results, fetchedAt: new Date().toISOString() });
+```
+
+} catch (err) {
+res.status(500).json({ error: err.message, weather: [] });
+}
+};
