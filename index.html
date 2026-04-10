@@ -848,8 +848,8 @@ footer a { color: var(--blue); text-decoration: none; }
       const controller = new AbortController();
       const id = setTimeout(() => controller.abort(), ms);
       return fetch(url, { signal: controller.signal })
-        .then(r => { clearTimeout(id); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-        .catch(e => { clearTimeout(id); throw e; });
+        .then(r => { clearTimeout(id); if (!r.ok) throw new Error('HTTP ' + r.status + ' from ' + url); return r.json(); })
+        .catch(e => { clearTimeout(id); throw new Error(e.message + ' [' + url + ']'); });
     };
 
     const [weatherResult, calmacResult] = await Promise.allSettled([
@@ -900,7 +900,8 @@ footer a { color: var(--blue); text-decoration: none; }
     lastFetched = new Date();
 
     if (!weatherOk && !calmacOk) {
-      setStatus('error', 'API functions not responding — make sure the /api/ folder is deployed to Vercel correctly.');
+      const reason = weatherResult.reason?.message || calmacResult.reason?.message || 'unknown error';
+      setStatus('error', 'API not responding: ' + reason);
     } else if (errors.length) {
       setStatus('ok', `Loaded with partial data (${errors.join(' & ')} unavailable) — updated ${lastFetched.toLocaleTimeString()}`);
     } else {
