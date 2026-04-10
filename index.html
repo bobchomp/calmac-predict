@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Will It Sail? – CalMac Predictor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --navy:   #003087;
+      --blue:   #005eb8;
+      --sky:    #41b6e6;
+      --white:  #ffffff;
+      --offwhite: #f4f7fb;
+      --light:  #dbe8f5;
+      --green:  #00843d;
+      --amber:  #e8a000;
+      --red:    #c8102e;
+      --text:   #1a2c4e;
+      --muted:  #6b82a0;
+      --shadow: 0 2px 16px rgba(0,48,135,0.10);
+    }
+
+```
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Source Sans 3', sans-serif;
+  background: var(--offwhite);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+/* ── HEADER ── */
+header {
+  background: linear-gradient(135deg, var(--navy) 0%, var(--blue) 100%);
+  color: var(--white);
+  padding: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+header::before {
+  content: '';
+  position: absolute;
+  bottom: -40px; left: -60px;
+  width: 320px; height: 320px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.04);
+}
+header::after {
+  content: '';
+  position: absolute;
+  top: -80px; right: -40px;
+  width: 420px; height: 420px;
+  border-radius: 50%;
+  background: rgba(65,182,230,0.08);
+}
+
+.header-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 36px 24px 32px;
+  position: relative; z-index: 1;
+}
+
+.header-logo {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.ferry-icon {
+  width: 48px; height: 48px;
+  background: var(--sky);
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px;
+  flex-shrink: 0;
+}
+
+.site-name {
+  font-family: 'Syne', sans-serif;
+  font-size: 1.1rem;
+  font-weight: 600;
+  opacity: 0.85;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+h1 {
+  font-family: 'Syne', sans-serif;
+  font-size: clamp(2.2rem, 5vw, 3.4rem);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+h1 span { color: var(--sky); }
+
+.subtitle {
+  margin-top: 10px;
+  font-size: 1.05rem;
+  opacity: 0.8;
+  max-width: 520px;
+}
+
+.wave-divider {
+  display: block;
+  width: 100%;
+  height: 48px;
+  margin-bottom: -2px;
+}
+
+/* ── TOOLBAR ── */
+.toolbar {
+  background: var(--white);
+  border-bottom: 1px solid var(--light);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0,48,135,0.07);
+}
+
+.toolbar-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.search-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 200px;
+}
+
+.search-wrap svg {
+  position: absolute;
+  left: 12px; top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+
+#search {
+  width: 100%;
+  padding: 9px 12px 9px 38px;
+  border: 1.5px solid var(--light);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.95rem;
+  color: var(--text);
+  background: var(--offwhite);
+  outline: none;
+  transition: border-color 0.2s;
+}
+#search:focus { border-color: var(--blue); background: var(--white); }
+
+.filter-btns {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.filter-btn {
+  padding: 7px 14px;
+  border-radius: 20px;
+  border: 1.5px solid var(--light);
+  background: var(--white);
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.18s;
+}
+.filter-btn:hover { border-color: var(--blue); color: var(--blue); }
+.filter-btn.active { background: var(--navy); border-color: var(--navy); color: var(--white); }
+
+.refresh-btn {
+  padding: 8px 16px;
+  background: var(--blue);
+  color: var(--white);
+  border: none;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex; align-items: center; gap: 6px;
+  transition: background 0.18s;
+  white-space: nowrap;
+}
+.refresh-btn:hover { background: var(--navy); }
+.refresh-btn.spinning svg { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── MAIN ── */
+main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 28px 24px 60px;
+}
+
+/* ── STATUS BANNER ── */
+.status-bar {
+  background: var(--white);
+  border-radius: 12px;
+  padding: 14px 20px;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: var(--shadow);
+  font-size: 0.9rem;
+  color: var(--muted);
+  border-left: 4px solid var(--sky);
+}
+
+.status-bar.loading { border-color: var(--sky); }
+.status-bar.error   { border-color: var(--red); color: var(--red); }
+.status-bar.ok      { border-color: var(--green); }
+
+.pulse {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--sky);
+  flex-shrink: 0;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.75); }
+}
+
+/* ── SUMMARY CARDS ── */
+.summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.sum-card {
+  background: var(--white);
+  border-radius: 12px;
+  padding: 18px 16px;
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.sum-card .num {
+  font-family: 'Syne', sans-serif;
+  font-size: 2.2rem;
+  font-weight: 800;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.sum-card .label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.sum-card.likely   .num { color: var(--green); }
+.sum-card.caution  .num { color: var(--amber); }
+.sum-card.unlikely .num { color: var(--red); }
+.sum-card.total    .num { color: var(--navy); }
+
+/* ── ROUTE GRID ── */
+.routes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+  gap: 16px;
+}
+
+.route-card {
+  background: var(--white);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.18s, box-shadow 0.18s;
+  animation: fadeUp 0.4s ease both;
+}
+.route-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 24px rgba(0,48,135,0.14);
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.route-card-top {
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid var(--light);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.verdict-badge {
+  flex-shrink: 0;
+  width: 48px; height: 48px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.4rem;
+}
+
+.verdict-badge.likely   { background: #e6f5ed; }
+.verdict-badge.caution  { background: #fef6e4; }
+.verdict-badge.unlikely { background: #fceaed; }
+.verdict-badge.unknown  { background: var(--light); }
+
+.route-name {
+  font-family: 'Syne', sans-serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--navy);
+}
+
+.verdict-text {
+  margin-top: 4px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.verdict-text.likely   { color: var(--green); }
+.verdict-text.caution  { color: var(--amber); }
+.verdict-text.unlikely { color: var(--red); }
+.verdict-text.unknown  { color: var(--muted); }
+
+.route-card-body {
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+}
+
+.stat-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+}
+
+.stat-icon {
+  width: 28px; height: 28px;
+  border-radius: 7px;
+  background: var(--offwhite);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.95rem;
+  flex-shrink: 0;
+}
+
+.stat-label { color: var(--muted); flex: 1; }
+.stat-val   { font-weight: 600; color: var(--text); }
+
+/* wind bar */
+.wind-bar-wrap {
+  margin-top: 2px;
+}
+.wind-bar-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--light);
+  overflow: hidden;
+  margin-top: 4px;
+}
+.wind-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.6s ease;
+}
+.wind-safe   .wind-bar-fill { background: var(--green); }
+.wind-caution .wind-bar-fill { background: var(--amber); }
+.wind-danger .wind-bar-fill { background: var(--red); }
+
+/* calmac alert pill */
+.alert-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.alert-normal   { background: #e6f5ed; color: var(--green); }
+.alert-amber    { background: #fef6e4; color: var(--amber); }
+.alert-disrupted, .alert-cancelled { background: #fceaed; color: var(--red); }
+.alert-unknown  { background: var(--light); color: var(--muted); }
+
+.route-card-footer {
+  padding: 10px 18px;
+  background: var(--offwhite);
+  border-top: 1px solid var(--light);
+  font-size: 0.78rem;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.confidence-wrap {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.conf-pip {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--light);
+}
+.conf-pip.filled { background: var(--sky); }
+
+/* ── DISCLAIMER ── */
+.disclaimer {
+  margin-top: 36px;
+  padding: 18px 22px;
+  background: var(--white);
+  border-radius: 12px;
+  border-left: 4px solid var(--sky);
+  font-size: 0.85rem;
+  color: var(--muted);
+  line-height: 1.6;
+  box-shadow: var(--shadow);
+}
+
+.disclaimer strong { color: var(--navy); }
+
+.disclaimer a {
+  color: var(--blue);
+  text-decoration: none;
+  font-weight: 600;
+}
+.disclaimer a:hover { text-decoration: underline; }
+
+/* ── EMPTY STATE ── */
+.empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--muted);
+  grid-column: 1/-1;
+}
+.empty .empty-icon { font-size: 3rem; margin-bottom: 12px; }
+.empty p { font-size: 1rem; }
+
+/* ── SKELETON ── */
+.skeleton {
+  background: linear-gradient(90deg, var(--light) 25%, #eaf0f8 50%, var(--light) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 6px;
+}
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── FOOTER ── */
+footer {
+  text-align: center;
+  padding: 20px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+footer a { color: var(--blue); text-decoration: none; }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 600px) {
+  .header-inner { padding: 24px 16px 20px; }
+  main { padding: 20px 14px 48px; }
+  .toolbar-inner { padding: 10px 14px; }
+  .routes-grid { grid-template-columns: 1fr; }
+}
+```
+
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="header-logo">
+      <div class="ferry-icon">⛴️</div>
+      <div class="site-name">Will It Sail?</div>
+    </div>
+    <h1>CalMac <span>Sailing</span> Predictor</h1>
+    <p class="subtitle">Unofficial weather-based predictions for all CalMac routes across Scotland's west coast and islands.</p>
+  </div>
+  <svg class="wave-divider" viewBox="0 0 1440 48" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+    <path d="M0,24 C240,48 480,0 720,24 C960,48 1200,0 1440,24 L1440,48 L0,48 Z" fill="#f4f7fb"/>
+  </svg>
+</header>
+
+<div class="toolbar">
+  <div class="toolbar-inner">
+    <div class="search-wrap">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      <input id="search" type="text" placeholder="Search routes…" autocomplete="off" />
+    </div>
+    <div class="filter-btns">
+      <button class="filter-btn active" data-filter="all">All</button>
+      <button class="filter-btn" data-filter="likely">✅ Likely</button>
+      <button class="filter-btn" data-filter="caution">⚠️ Caution</button>
+      <button class="filter-btn" data-filter="unlikely">❌ Unlikely</button>
+    </div>
+    <button class="refresh-btn" id="refreshBtn">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+      </svg>
+      Refresh
+    </button>
+  </div>
+</div>
+
+<main>
+  <div class="status-bar loading" id="statusBar">
+    <div class="pulse" id="pulse"></div>
+    <span id="statusText">Loading weather and CalMac alerts…</span>
+  </div>
+
+  <div class="summary-cards" id="summaryCards" style="display:none">
+    <div class="sum-card total">
+      <div class="num" id="sumTotal">–</div>
+      <div class="label">Total Routes</div>
+    </div>
+    <div class="sum-card likely">
+      <div class="num" id="sumLikely">–</div>
+      <div class="label">Likely Sailing</div>
+    </div>
+    <div class="sum-card caution">
+      <div class="num" id="sumCaution">–</div>
+      <div class="label">Use Caution</div>
+    </div>
+    <div class="sum-card unlikely">
+      <div class="num" id="sumUnlikely">–</div>
+      <div class="label">At Risk</div>
+    </div>
+  </div>
+
+  <div class="routes-grid" id="routesGrid">
+    <!-- Skeleton cards while loading -->
+    <div id="skeletons"></div>
+  </div>
+
+  <div class="disclaimer">
+    <strong>⚠️ This is an unofficial, independent tool.</strong> Predictions are based on Open-Meteo wind forecasts
+    and CalMac's public service status page. They are estimates only — actual sailing decisions are made by CalMac
+    based on many factors including sea state and vessel condition.
+    Always check <a href="https://www.calmac.co.uk/service-status" target="_blank" rel="noopener">CalMac's official service status</a>
+    before travelling. Cancellations can happen at short notice.
+  </div>
+</main>
+
+<footer>
+  <p>Unofficial tool — not affiliated with Caledonian MacBrayne. Weather via <a href="https://open-meteo.com" target="_blank">Open-Meteo</a>. Built for community use.</p>
+</footer>
+
+<script>
+  // ── STATE ──
+  let allRoutes = [];
+  let activeFilter = 'all';
+  let searchQuery = '';
+  let lastFetched = null;
+
+  // All 22 CalMac routes (matches api/weather.js)
+  const ROUTE_NAMES = [
+    'Ardrossan – Brodick (Arran)',
+    'Troon – Brodick (Arran)',
+    'Kennacraig – Port Ellen / Port Askaig (Islay)',
+    'Oban – Craignure (Mull)',
+    'Oban – Coll / Tiree',
+    'Oban – Colonsay',
+    'Oban – Castlebay / Lochboisdale',
+    'Mallaig – Armadale (Skye)',
+    'Ullapool – Stornoway (Lewis)',
+    'Uig – Tarbert / Lochmaddy',
+    'Gourock – Dunoon',
+    'Wemyss Bay – Rothesay (Bute)',
+    'Colintraive – Rhubodach (Bute)',
+    'Largs – Cumbrae Slip',
+    'Tarbert – Portavadie',
+    'Claonaig – Lochranza (Arran)',
+    'Tobermory – Kilchoan',
+    'Fishnish – Lochaline',
+    'Mallaig – Small Isles',
+    'Oban – Lismore',
+    'Seil – Luing',
+    'Port Askaig – Feolin (Jura)',
+  ];
+
+  // ── HELPERS ──
+  function verdictFromRiskAndAlert(risk, alertStatus) {
+    // If CalMac has already disrupted/cancelled, it's unlikely regardless of weather
+    if (alertStatus === 'cancelled') return 'unlikely';
+    if (alertStatus === 'disrupted') return 'unlikely';
+    if (alertStatus === 'amber') {
+      return risk >= 30 ? 'unlikely' : 'caution';
+    }
+    if (risk >= 55) return 'unlikely';
+    if (risk >= 25) return 'caution';
+    return 'likely';
+  }
+
+  function verdictEmoji(v) {
+    return { likely: '✅', caution: '⚠️', unlikely: '❌', unknown: '❓' }[v] || '❓';
+  }
+
+  function verdictLabel(v) {
+    return { likely: 'Likely to Sail', caution: 'Caution Advised', unlikely: 'At Risk of Cancellation', unknown: 'Checking…' }[v] || 'Unknown';
+  }
+
+  function alertLabel(status) {
+    return {
+      normal: 'Normal Service',
+      amber: 'Amber Alert',
+      disrupted: 'Disrupted',
+      cancelled: 'Cancelled',
+      unknown: 'No Alert Data',
+    }[status] || 'No Alert Data';
+  }
+
+  function windClass(gust) {
+    if (gust >= 45) return 'wind-danger';
+    if (gust >= 30) return 'wind-caution';
+    return 'wind-safe';
+  }
+
+  function windBarPct(gust) {
+    return Math.min(100, Math.round((gust / 65) * 100));
+  }
+
+  function confidencePips(route) {
+    // Confidence: higher if we have both weather + calmac data
+    let score = 1;
+    if (route.weather) score++;
+    if (route.alertStatus && route.alertStatus !== 'unknown') score++;
+    return score; // 1-3
+  }
+
+  function weatherDesc(code) {
+    if (code >= 95) return 'Thunderstorm';
+    if (code >= 80) return 'Heavy showers';
+    if (code >= 71) return 'Snow';
+    if (code >= 61) return 'Rain';
+    if (code >= 51) return 'Drizzle';
+    if (code >= 45) return 'Fog';
+    if (code >= 3)  return 'Overcast';
+    if (code >= 1)  return 'Partly cloudy';
+    return 'Clear';
+  }
+
+  // ── RENDER ──
+  function renderRoutes() {
+    const grid = document.getElementById('routesGrid');
+    let filtered = allRoutes.filter(r => {
+      const matchFilter = activeFilter === 'all' || r.verdict === activeFilter;
+      const matchSearch = r.name.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchFilter && matchSearch;
+    });
+
+    if (filtered.length === 0) {
+      grid.innerHTML = `<div class="empty">
+        <div class="empty-icon">🔍</div>
+        <p>No routes match your filter.</p>
+      </div>`;
+      return;
+    }
+
+    grid.innerHTML = filtered.map((r, i) => {
+      const v = r.verdict || 'unknown';
+      const pct = windBarPct(r.maxGustMph || 0);
+      const wc = windClass(r.maxGustMph || 0);
+      const pips = confidencePips(r);
+      const alertStatus = r.alertStatus || 'unknown';
+      const delay = Math.min(i * 35, 400);
+
+      return `
+      <div class="route-card" style="animation-delay:${delay}ms">
+        <div class="route-card-top">
+          <div class="verdict-badge ${v}">${verdictEmoji(v)}</div>
+          <div>
+            <div class="route-name">${r.name}</div>
+            <div class="verdict-text ${v}">${verdictLabel(v)}</div>
+          </div>
+        </div>
+        <div class="route-card-body">
+
+          <div class="stat-row">
+            <div class="stat-icon">💨</div>
+            <span class="stat-label">Max gusts (next 12h)</span>
+            <span class="stat-val">${r.maxGustMph !== undefined ? r.maxGustMph + ' mph' : '–'}</span>
+          </div>
+          <div class="${wc} wind-bar-wrap">
+            <div class="wind-bar-track">
+              <div class="wind-bar-fill" style="width:${pct}%"></div>
+            </div>
+          </div>
+
+          <div class="stat-row">
+            <div class="stat-icon">🌬️</div>
+            <span class="stat-label">Avg wind speed</span>
+            <span class="stat-val">${r.maxWindMph !== undefined ? r.maxWindMph + ' mph' : '–'}</span>
+          </div>
+
+          <div class="stat-row">
+            <div class="stat-icon">🌦️</div>
+            <span class="stat-label">Conditions</span>
+            <span class="stat-val">${r.weatherCode !== undefined ? weatherDesc(r.weatherCode) : '–'}</span>
+          </div>
+
+          <div class="stat-row">
+            <div class="stat-icon">🚢</div>
+            <span class="stat-label">CalMac alert</span>
+            <span class="alert-pill alert-${alertStatus}">${alertLabel(alertStatus)}</span>
+          </div>
+
+        </div>
+        <div class="route-card-footer">
+          <div class="confidence-wrap">
+            ${[1,2,3].map(n => `<div class="conf-pip ${n <= pips ? 'filled' : ''}"></div>`).join('')}
+            <span>${pips === 3 ? 'High' : pips === 2 ? 'Medium' : 'Low'} confidence</span>
+          </div>
+          <span>Risk score: <strong>${r.risk !== undefined ? r.risk : '–'}/100</strong></span>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function updateSummary() {
+    const likely   = allRoutes.filter(r => r.verdict === 'likely').length;
+    const caution  = allRoutes.filter(r => r.verdict === 'caution').length;
+    const unlikely = allRoutes.filter(r => r.verdict === 'unlikely').length;
+
+    document.getElementById('sumTotal').textContent   = allRoutes.length;
+    document.getElementById('sumLikely').textContent  = likely;
+    document.getElementById('sumCaution').textContent = caution;
+    document.getElementById('sumUnlikely').textContent = unlikely;
+    document.getElementById('summaryCards').style.display = '';
+  }
+
+  function showSkeletons() {
+    const grid = document.getElementById('routesGrid');
+    grid.innerHTML = Array(6).fill(0).map(() => `
+      <div class="route-card">
+        <div class="route-card-top">
+          <div class="verdict-badge unknown" style="background:var(--light)"></div>
+          <div style="flex:1">
+            <div class="skeleton" style="height:14px;width:70%;margin-bottom:6px"></div>
+            <div class="skeleton" style="height:11px;width:45%"></div>
+          </div>
+        </div>
+        <div class="route-card-body">
+          <div class="skeleton" style="height:11px;margin-bottom:6px"></div>
+          <div class="skeleton" style="height:6px;margin-bottom:6px"></div>
+          <div class="skeleton" style="height:11px;margin-bottom:6px"></div>
+          <div class="skeleton" style="height:11px"></div>
+        </div>
+        <div class="route-card-footer">
+          <div class="skeleton" style="height:10px;width:50%"></div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function setStatus(type, msg) {
+    const bar = document.getElementById('statusBar');
+    const text = document.getElementById('statusText');
+    const pulse = document.getElementById('pulse');
+    bar.className = 'status-bar ' + type;
+    text.textContent = msg;
+    pulse.style.display = type === 'loading' ? '' : 'none';
+  }
+
+  // ── DATA FETCH ──
+  async function fetchData() {
+    const btn = document.getElementById('refreshBtn');
+    btn.classList.add('spinning');
+    showSkeletons();
+    setStatus('loading', 'Fetching weather forecasts and CalMac service status…');
+
+    // Build initial route objects
+    allRoutes = ROUTE_NAMES.map(name => ({
+      name,
+      verdict: 'unknown',
+      alertStatus: 'unknown',
+      maxGustMph: undefined,
+      maxWindMph: undefined,
+      weatherCode: undefined,
+      risk: undefined,
+    }));
+
+    let weatherOk = false;
+    let calmacOk = false;
+    let errors = [];
+
+    // Fetch weather and CalMac status in parallel
+    const [weatherResult, calmacResult] = await Promise.allSettled([
+      fetch('/api/weather').then(r => r.json()),
+      fetch('/api/status').then(r => r.json()),
+    ]);
+
+    // Apply weather data
+    if (weatherResult.status === 'fulfilled' && weatherResult.value.weather?.length) {
+      weatherOk = true;
+      weatherResult.value.weather.forEach(w => {
+        const route = allRoutes.find(r => r.name === w.route);
+        if (route) {
+          route.maxGustMph  = w.maxGustMph;
+          route.maxWindMph  = w.maxWindMph;
+          route.weatherCode = w.weatherCode;
+          route.risk        = w.sailingRisk;
+        }
+      });
+    } else {
+      errors.push('weather forecast');
+    }
+
+    // Apply CalMac alert data — fuzzy match route names
+    if (calmacResult.status === 'fulfilled' && calmacResult.value.routes?.length) {
+      calmacOk = true;
+      calmacResult.value.routes.forEach(cr => {
+        // Try to fuzzy-match the scraped route name to our list
+        const crNorm = cr.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const match = allRoutes.find(r => {
+          const rNorm = r.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+          return rNorm.includes(crNorm) || crNorm.includes(rNorm) || similarity(crNorm, rNorm) > 0.5;
+        });
+        if (match) match.alertStatus = cr.status;
+      });
+    } else {
+      errors.push('CalMac alerts');
+    }
+
+    // Compute verdicts
+    allRoutes.forEach(r => {
+      r.verdict = verdictFromRiskAndAlert(r.risk ?? 0, r.alertStatus);
+    });
+
+    updateSummary();
+    renderRoutes();
+    btn.classList.remove('spinning');
+    lastFetched = new Date();
+
+    if (!weatherOk && !calmacOk) {
+      setStatus('error', 'Could not load data. Check your internet connection and try refreshing.');
+    } else if (errors.length) {
+      setStatus('ok', `Loaded (${errors.join(' and ')} unavailable) — updated ${lastFetched.toLocaleTimeString()}`);
+    } else {
+      setStatus('ok', `All data loaded — updated ${lastFetched.toLocaleTimeString()}. Next auto-refresh in 30 minutes.`);
+    }
+  }
+
+  // Simple string similarity (Jaccard on bigrams)
+  function similarity(a, b) {
+    const bigrams = s => new Set([...Array(s.length - 1)].map((_, i) => s.slice(i, i+2)));
+    const A = bigrams(a), B = bigrams(b);
+    const inter = [...A].filter(x => B.has(x)).length;
+    return inter / (A.size + B.size - inter || 1);
+  }
+
+  // ── EVENTS ──
+  document.getElementById('search').addEventListener('input', e => {
+    searchQuery = e.target.value;
+    renderRoutes();
+  });
+
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeFilter = btn.dataset.filter;
+      renderRoutes();
+    });
+  });
+
+  document.getElementById('refreshBtn').addEventListener('click', fetchData);
+
+  // Auto-refresh every 30 mins
+  setInterval(fetchData, 30 * 60 * 1000);
+
+  // Initial load
+  fetchData();
+</script>
+
+</body>
+</html>
