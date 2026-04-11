@@ -46,21 +46,22 @@ const now = new Date();
 const currentHour = now.getHours();
 
 ```
-const params = new URLSearchParams({
-  latitude:  ROUTE_WEATHER_POINTS.map(p => p.lat).join(','),
-  longitude: ROUTE_WEATHER_POINTS.map(p => p.lon).join(','),
-  hourly:    'windspeed_10m,windgusts_10m,weathercode',
-  windspeed_unit: 'mph',
-  forecast_days:  '1',
-  timezone:  'Europe/London',
-});
+// Build URL manually — URLSearchParams encodes commas as %2C which Open-Meteo rejects
+const lats = ROUTE_WEATHER_POINTS.map(p => p.lat).join(',');
+const lons = ROUTE_WEATHER_POINTS.map(p => p.lon).join(',');
+const url = 'https://api.open-meteo.com/v1/forecast'
+  + '?latitude=' + lats
+  + '&longitude=' + lons
+  + '&hourly=windspeed_10m,windgusts_10m,weathercode'
+  + '&windspeed_unit=mph'
+  + '&forecast_days=1'
+  + '&timezone=Europe%2FLondon';
 
-const url = `https://api.open-meteo.com/v1/forecast?${params.toString()}`;
 const response = await fetch(url, { signal: AbortSignal.timeout(25000) });
 
 if (!response.ok) {
   const text = await response.text();
-  throw new Error(`Open-Meteo ${response.status}: ${text.slice(0, 300)}`);
+  throw new Error('Open-Meteo ' + response.status + ': ' + text.slice(0, 300));
 }
 
 const raw = await response.json();
@@ -69,7 +70,7 @@ const dataArray = Array.isArray(raw) ? raw : [raw];
 const results = ROUTE_WEATHER_POINTS.map((point, i) => {
   const data = dataArray[i];
   if (!data || !data.hourly) {
-    return { route: point.route, maxGustMph: null, maxWindMph: null, weatherCode: null, sailingRisk: null, error: 'no data' };
+    return { route: point.route, maxGustMph: null, maxWindMph: null, weatherCode: null, sailingRisk: null, error: 'no data for index ' + i };
   }
   const gusts = (data.hourly.windgusts_10m || []).slice(currentHour, currentHour + 12);
   const winds = (data.hourly.windspeed_10m  || []).slice(currentHour, currentHour + 12);
