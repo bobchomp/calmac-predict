@@ -1,11 +1,13 @@
 {
   "functions": {
-    "api/weather.js": { "maxDuration": 30, "memory": 512 },
-    "api/status.js":  { "maxDuration": 15, "memory": 256 }
+    "api/weather.js":  { "maxDuration": 30, "memory": 512 },
+    "api/status.js":   { "maxDuration": 15, "memory": 256 },
+    "api/feedback.js": { "maxDuration": 10, "memory": 128 }
   },
   "routes": [
-    { "src": "/api/weather", "dest": "/api/weather.js" },
-    { "src": "/api/status",  "dest": "/api/status.js" },
-    { "src": "/(.*)",        "dest": "/index.html" }
+    { "src": "/api/weather",  "dest": "/api/weather.js" },
+    { "src": "/api/status",   "dest": "/api/status.js" },
+    { "src": "/api/feedback", "dest": "/api/feedback.js" },
+    { "src": "/(.*)",         "dest": "/index.html" }
   ]
 }
