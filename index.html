@@ -316,7 +316,38 @@ footer a{color:var(--blue);text-decoration:none;}
 .factor-weight{font-family:'Syne',sans-serif;font-weight:700;font-size:.85rem;color:var(--blue);margin-left:auto;flex-shrink:0;}
 ```
 
-  </style>
+/* ── FEEDBACK ROW ── */
+.feedback-row {
+display: flex;
+align-items: center;
+gap: 8px;
+padding: 10px 16px;
+background: var(–offwhite);
+border-top: 1px solid var(–light);
+}
+.feedback-label {
+font-size: .78rem;
+color: var(–muted);
+flex: 1;
+}
+.fb-btn {
+padding: 5px 12px;
+border-radius: 20px;
+border: 1.5px solid var(–light);
+background: var(–white);
+font-family: inherit;
+font-size: .78rem;
+font-weight: 600;
+cursor: pointer;
+transition: all .18s;
+-webkit-tap-highlight-color: transparent;
+}
+.fb-btn:hover { border-color: var(–blue); }
+.fb-btn.fb-yes:hover { background: #e6f5ed; border-color: var(–green); color: var(–green); }
+.fb-btn.fb-no:hover  { background: #fceaed; border-color: var(–red);   color: var(–red);   }
+.fb-btn.fb-sent { opacity: .5; pointer-events: none; }
+</style>
+
 </head>
 <body>
 
@@ -953,28 +984,43 @@ async function fetchAllWeather() {
   const hour = new Date().getHours();
 
   async function fetchOne(route) {
-    const url = 'https://api.open-meteo.com/v1/forecast'
-      + '?latitude=' + route.lat + '&longitude=' + route.lon
+    const baseParams = '?latitude=' + route.lat + '&longitude=' + route.lon
+      + '&forecast_days=1&timezone=Europe%2FLondon';
+    const windUrl = 'https://api.open-meteo.com/v1/forecast' + baseParams
       + '&hourly=windspeed_10m,windgusts_10m,weathercode,visibility,precipitation,snowfall'
-      + '&windspeed_unit=mph&forecast_days=1&timezone=Europe%2FLondon';
-    const r = await fetch(url);
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    const j = await r.json();
+      + '&windspeed_unit=mph';
+    const marineUrl = 'https://marine-api.open-meteo.com/v1/marine' + baseParams
+      + '&hourly=wave_height,wave_period,swell_wave_height';
+
+    const [windResp, marineResp] = await Promise.allSettled([
+      fetch(windUrl).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }),
+      fetch(marineUrl).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }),
+    ]);
+
+    if (windResp.status === 'rejected') throw new Error(windResp.reason);
+    const j = windResp.value;
     const hourly = j.hourly || {};
-    const slice = arr => (arr || []).slice(hour, hour + 12);
+    const marine = marineResp.status === 'fulfilled' ? (marineResp.value.hourly || null) : null;
+
+    const slice = arr => (arr || []).slice(hour, hour + 12).filter(v => v != null);
     const mx = arr => arr.length ? Math.max(...arr) : null;
     const mn = arr => arr.length ? Math.min(...arr) : null;
-    const gusts = slice(hourly.windgusts_10m);
-    const winds = slice(hourly.windspeed_10m);
+    const gusts  = slice(hourly.windgusts_10m);
+    const winds  = slice(hourly.windspeed_10m);
+    const waves  = marine ? slice(marine.wave_height) : [];
+    const swells = marine ? slice(marine.swell_wave_height) : [];
+
     return {
-      route: route.name, hourly, marine: null,
+      route: route.name, hourly, marine,
       maxGustMph: mx(gusts) !== null ? Math.round(mx(gusts)) : null,
       maxWindMph: mx(winds) !== null ? Math.round(mx(winds)) : null,
-      worstCode: mx(slice(hourly.weathercode)),
-      minVisM:   mn(slice(hourly.visibility)),
-      maxPrecip: mx(slice(hourly.precipitation)),
-      maxSnow:   mx(slice(hourly.snowfall)),
-      maxWaveM: null, hasMarine: false,
+      worstCode:  mx(slice(hourly.weathercode)),
+      minVisM:    mn(slice(hourly.visibility)),
+      maxPrecip:  mx(slice(hourly.precipitation)),
+      maxSnow:    mx(slice(hourly.snowfall)),
+      maxWaveM:   mx(waves)  !== null ? Math.round(mx(waves)  * 10) / 10 : null,
+      maxSwellM:  mx(swells) !== null ? Math.round(mx(swells) * 10) / 10 : null,
+      hasMarine:  marine !== null,
     };
   }
 
@@ -1221,6 +1267,11 @@ function buildCard(r, i) {
       </div>
       <span>Updated ${lastFetched ? lastFetched.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '–'}</span>
     </div>
+    <div class="feedback-row" data-route="${r.name}">
+      <span class="feedback-label">Did it sail?</span>
+      <button class="fb-btn fb-yes" data-route="${r.name}" data-sailed="true" title="Yes, it sailed">✅ Yes</button>
+      <button class="fb-btn fb-no"  data-route="${r.name}" data-sailed="false" title="No, it was cancelled">❌ No</button>
+    </div>
   </div>`;
 }
 
@@ -1461,6 +1512,37 @@ function attachCardClicks(container) {
     });
   });
 }
+
+
+// ── FEEDBACK SUBMISSION ──
+document.addEventListener('click', async e => {
+  const btn = e.target.closest('.fb-btn');
+  if (!btn) return;
+  e.stopPropagation();
+  const sailed = btn.dataset.sailed === 'true';
+  const routeName = btn.dataset.route;
+  const route = allRoutes.find(r => r.name === routeName);
+
+  // Mark both buttons as sent
+  const row = btn.closest('.feedback-row');
+  row.querySelectorAll('.fb-btn').forEach(b => b.classList.add('fb-sent'));
+  row.querySelector('.feedback-label').textContent = sailed ? '✅ Thanks! Marked as sailed.' : '❌ Thanks! Marked as cancelled.';
+
+  // Send to /api/feedback (best-effort — don't block UI)
+  try {
+    await fetch('/api/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        route: routeName,
+        sailed,
+        predictedChance: route ? sailingChance(route.risk || 0) : null,
+        gustMph: route?.maxGustMph ?? null,
+        waveM:   route?.maxWaveM   ?? null,
+      })
+    });
+  } catch (_) { /* silent fail */ }
+});
 
 // ── BOOT ──
 // Tie loading screen to actual data fetch
