@@ -946,70 +946,22 @@ function setStatus(type, msg) {
 }
 
 // ── FETCH ──
-async function fetchWeatherForRoute(route) {
-  const weatherUrl = 'https://api.open-meteo.com/v1/forecast'
-    + '?latitude=' + route.lat + '&longitude=' + route.lon
-    + '&hourly=windspeed_10m,windgusts_10m,weathercode,visibility,precipitation,snowfall'
-    + '&windspeed_unit=mph&forecast_days=1&timezone=Europe%2FLondon';
-
-  const marineUrl = 'https://marine-api.open-meteo.com/v1/marine'
-    + '?latitude=' + route.lat + '&longitude=' + route.lon
-    + '&hourly=wave_height,wave_period,swell_wave_height'
-    + '&forecast_days=1&timezone=Europe%2FLondon';
-
-  try {
-    // Fetch weather and marine in parallel; marine may fail for inland/sheltered points
-    const [weatherRes, marineRes] = await Promise.all([
-      fetch(weatherUrl),
-      fetch(marineUrl).catch(() => null),
-    ]);
-
-    const weatherData = await weatherRes.json();
-    const marineData  = marineRes && marineRes.ok ? await marineRes.json().catch(() => null) : null;
-
-    const hour = new Date().getHours();
-    const hourly = weatherData.hourly || {};
-    const marine = marineData ? marineData.hourly : null;
-
-    // Summary stats for the next 12 hours (for display)
-    const gusts = (hourly.windgusts_10m || []).slice(hour, hour + 12);
-    const winds = (hourly.windspeed_10m  || []).slice(hour, hour + 12);
-    const codes = (hourly.weathercode    || []).slice(hour, hour + 12);
-    const waves = marine ? (marine.wave_height || []).slice(hour, hour + 12) : [];
-    const visList = (hourly.visibility   || []).slice(hour, hour + 12);
-
-    const maxGust   = gusts.length  ? Math.max.apply(null, gusts)  : 0;
-    const maxWind   = winds.length  ? Math.max.apply(null, winds)  : 0;
-    const worstCode = codes.length  ? Math.max.apply(null, codes)  : 0;
-    const maxWave   = waves.length  ? Math.max.apply(null, waves)  : null;
-    const minVis    = visList.length ? Math.min.apply(null, visList) : null;
-
-    const overallRisk = calcOverallRisk(route.name, hour, hourly, marine);
-
-    return {
-      name:        route.name,
-      maxGustMph:  Math.round(maxGust),
-      maxWindMph:  Math.round(maxWind),
-      weatherCode: worstCode,
-      maxWaveM:    maxWave !== null ? Math.round(maxWave * 10) / 10 : null,
-      minVisM:     minVis,
-      risk:        overallRisk,
-      hasMarine:   !!marine,
-      hourlyData:  hourly,
-      marineData:  marine,
-    };
-  } catch(e) {
-    return { name: route.name, maxGustMph: null, maxWindMph: null, weatherCode: null,
-             maxWaveM: null, minVisM: null, risk: null, hasMarine: false,
-             hourlyData: null, marineData: null };
-  }
+// All weather data comes from our Vercel serverless function (/api/weather)
+// which calls Open-Meteo server-side — avoids mobile rate limiting
+async function fetchAllWeather() {
+  const res = await fetch('/api/weather');
+  if (!res.ok) throw new Error('API returned ' + res.status);
+  const data = await res.json();
+  if (!data.routes || !data.routes.length) throw new Error('No route data returned');
+  return data.routes;
 }
+
 
 async function fetchData() {
   const btn = document.getElementById('refreshBtn');
   btn.classList.add('spinning');
   showSkeletons();
-  setStatus('loading', 'Fetching weather, wave & visibility data for all routes…');
+  setStatus('loading', 'Loading…');
 
   allRoutes = ROUTES.map(r => ({
     name: r.name, verdict: 'unknown',
@@ -1019,55 +971,55 @@ async function fetchData() {
     hourlyData: null, marineData: null,
   }));
 
-  let weatherOk = false;
-  // Fetch routes one at a time so we can track real progress
-  let completed = 0;
-  const weatherResults = await Promise.all(ROUTES.map(async route => {
-    const result = await fetchWeatherForRoute(route);
-    completed++;
-    // Update loading screen progress bar if it's still visible
+  try {
     if (typeof ls !== 'undefined') {
-      ls.setProgress(Math.round((completed / ROUTES.length) * 90));
-      ls.setMessage('Loading route ' + completed + ' of ' + ROUTES.length + '…');
+      ls.setMessage('Calling weather API…');
+      ls.setProgress(20);
     }
-    return result;
-  }));
 
-  if (weatherResults && weatherResults.some(w => w.maxGustMph !== null)) {
-    weatherOk = true;
-    weatherResults.forEach(w => {
-      const route = allRoutes.find(r => r.name === w.name);
-      if (route) {
-        route.maxGustMph  = w.maxGustMph;
-        route.maxWindMph  = w.maxWindMph;
-        route.weatherCode = w.weatherCode;
-        route.maxWaveM    = w.maxWaveM;
-        route.minVisM     = w.minVisM;
-        route.risk        = w.risk;
-        route.hasMarine   = w.hasMarine;
-        route.hourlyData  = w.hourlyData;
-        route.marineData  = w.marineData;
-      }
+    const routeData = await fetchAllWeather();
+
+    if (typeof ls !== 'undefined') {
+      ls.setProgress(75);
+      ls.setMessage('Calculating risk scores…');
+    }
+
+    const hour = new Date().getHours();
+
+    routeData.forEach(w => {
+      const route = allRoutes.find(r => r.name === w.route);
+      if (!route) return;
+      route.maxGustMph  = w.maxGustMph;
+      route.maxWindMph  = w.maxWindMph;
+      route.weatherCode = w.worstCode;
+      route.maxWaveM    = w.maxWaveM;
+      route.minVisM     = w.minVisM;
+      route.hasMarine   = w.hasMarine;
+      route.hourlyData  = w.hourly;
+      route.marineData  = w.marine;
+      // Compute risk using the full algorithm
+      route.risk = calcOverallRisk(route.name, hour, w.hourly || {}, w.marine || null);
     });
-  }
 
-  allRoutes.forEach(r => { r.verdict = verdictFromRisk(r.risk || 0); });
+    allRoutes.forEach(r => { r.verdict = verdictFromRisk(r.risk || 0); });
 
-  updateSummary();
-  renderRoutes();
-  btn.classList.remove('spinning');
-  lastFetched = new Date();
+    updateSummary();
+    renderRoutes();
+    lastFetched = new Date();
 
-  const marineCount = allRoutes.filter(r => r.hasMarine).length;
-  const season = ['Nov','Nov','Dec','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov'][new Date().getMonth()];
-
-  if (!weatherOk) {
-    setStatus('error', 'Could not load weather data. Check your connection and try refreshing.');
-  } else {
+    const marineCount = allRoutes.filter(r => r.hasMarine).length;
     setStatus('ok', 'Updated ' + lastFetched.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})
       + ' · Wave data: ' + marineCount + '/22 routes'
-      + ' · Season: ' + (seasonFactor() < 0.9 ? 'Winter (stricter thresholds)' : seasonFactor() < 1.0 ? 'Shoulder' : 'Summer')
+      + ' · ' + (seasonFactor() < 0.9 ? 'Winter mode' : seasonFactor() < 1.0 ? 'Shoulder season' : 'Summer mode')
       + ' · Auto-refreshes every 30 min');
+
+  } catch(err) {
+    setStatus('error', 'Could not load data: ' + err.message + ' — tap Refresh to try again');
+    allRoutes.forEach(r => { r.verdict = 'unknown'; });
+    renderRoutes();
+    throw err; // re-throw so boot handler catches it
+  } finally {
+    btn.classList.remove('spinning');
   }
 }
 
