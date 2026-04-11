@@ -94,6 +94,7 @@ main{max-width:1100px;margin:0 auto;padding:22px 20px 60px;}
 .overall-chance{text-align:right;flex-shrink:0;}
 .chance-pct{font-family:'Syne',sans-serif;font-size:1.8rem;font-weight:800;line-height:1;}
 .chance-lbl{font-size:.65rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-top:1px;}
+.exposure-lbl{font-size:.65rem;color:var(--muted);margin-top:2px;}
 
 /* Weather row */
 .card-weather{padding:10px 16px;background:var(--offwhite);border-bottom:1px solid var(--light);display:flex;gap:14px;font-size:.82rem;color:var(--muted);}
@@ -489,26 +490,139 @@ let searchQuery  = '';
 let lastFetched  = null;
 
 // ── HELPERS ──
-function calcRisk(gustMph, weatherCode) {
-  let risk = 0;
-  if (gustMph >= 55) risk += 60;
-  else if (gustMph >= 45) risk += 45;
-  else if (gustMph >= 35) risk += 25;
-  else if (gustMph >= 25) risk += 10;
-  if (weatherCode >= 95) risk += 40;
-  else if (weatherCode >= 80) risk += 25;
-  else if (weatherCode >= 71) risk += 30;
-  else if (weatherCode >= 61) risk += 15;
-  else if (weatherCode >= 51) risk += 5;
-  return Math.min(risk, 100);
+// ── ROUTE PROFILES ──
+// Each route has a wind threshold (mph gusts that typically cause cancellation)
+// and an exposure rating (1=sheltered, 2=moderate, 3=exposed, 4=very exposed)
+// Sheltered routes need much higher winds to cancel; exposed routes cancel earlier.
+// Winter months (Nov-Mar) lower effective threshold by ~15%.
+const ROUTE_PROFILES = {
+  'Ardrossan - Brodick (Arran)':                   { threshold: 45, exposure: 3 },
+  'Troon - Brodick (Arran)':                        { threshold: 45, exposure: 3 },
+  'Kennacraig - Port Ellen / Port Askaig (Islay)':  { threshold: 42, exposure: 3 },
+  'Oban - Craignure (Mull)':                        { threshold: 50, exposure: 2 },
+  'Oban - Coll / Tiree':                            { threshold: 38, exposure: 4 },
+  'Oban - Colonsay':                                { threshold: 40, exposure: 3 },
+  'Oban - Castlebay / Lochboisdale':                { threshold: 38, exposure: 4 },
+  'Mallaig - Armadale (Skye)':                      { threshold: 55, exposure: 1 },
+  'Ullapool - Stornoway (Lewis)':                   { threshold: 40, exposure: 4 },
+  'Uig - Tarbert / Lochmaddy':                      { threshold: 40, exposure: 4 },
+  'Gourock - Dunoon':                               { threshold: 65, exposure: 1 },
+  'Wemyss Bay - Rothesay (Bute)':                  { threshold: 60, exposure: 1 },
+  'Colintraive - Rhubodach (Bute)':                { threshold: 70, exposure: 1 },
+  'Largs - Cumbrae Slip':                          { threshold: 65, exposure: 1 },
+  'Tarbert - Portavadie':                          { threshold: 55, exposure: 2 },
+  'Claonaig - Lochranza (Arran)':                  { threshold: 48, exposure: 2 },
+  'Tobermory - Kilchoan':                          { threshold: 45, exposure: 3 },
+  'Fishnish - Lochaline':                          { threshold: 55, exposure: 2 },
+  'Mallaig - Small Isles':                         { threshold: 38, exposure: 4 },
+  'Oban - Lismore':                                { threshold: 55, exposure: 2 },
+  'Seil - Luing':                                  { threshold: 60, exposure: 1 },
+  'Port Askaig - Feolin (Jura)':                   { threshold: 58, exposure: 1 },
+};
+
+// Routes with tidal restrictions that can cause cancellations independently of weather
+const TIDAL_ROUTES = new Set([
+  'Uig - Tarbert / Lochmaddy',  // Harris/Berneray tidal restrictions
+  'Mallaig - Small Isles',       // Some piers have tidal access windows
+]);
+
+// ── SEASON FACTOR ──
+function seasonFactor() {
+  const month = new Date().getMonth(); // 0=Jan
+  // Winter (Nov-Mar): sailings cancel at lower wind speeds
+  if (month >= 10 || month <= 2) return 0.85;
+  // Autumn/Spring: slightly reduced
+  if (month >= 8 || month <= 4) return 0.93;
+  return 1.0; // Summer
 }
 
-function sailingChance(risk, alertStatus) {
-  let chance = 100 - risk;
-  if (alertStatus === 'cancelled') chance = Math.min(chance, 5);
-  else if (alertStatus === 'disrupted') chance = Math.min(chance, 20);
-  else if (alertStatus === 'amber') chance = Math.min(chance, 60);
-  return Math.max(0, Math.min(100, Math.round(chance)));
+// ── CORE RISK ALGORITHM ──
+// Returns a risk score 0-100 using all available data for a specific hour
+function calcHourlyRisk(routeName, hour, hourlyWeather, hourlyMarine) {
+  const profile = ROUTE_PROFILES[routeName] || { threshold: 45, exposure: 2 };
+  const season  = seasonFactor();
+  const effectiveThreshold = profile.threshold * season;
+  let risk = 0;
+
+  // ── WIND (0-40 pts) ──
+  // How close are we to the route's specific cancellation threshold?
+  const gust = (hourlyWeather.windgusts_10m || [])[hour] || 0;
+  const wind = (hourlyWeather.windspeed_10m || [])[hour] || 0;
+  const gustRatio = gust / effectiveThreshold; // >1 means likely cancelled
+  if (gustRatio >= 1.1)      risk += 40;
+  else if (gustRatio >= 0.9) risk += 30;
+  else if (gustRatio >= 0.75) risk += 18;
+  else if (gustRatio >= 0.6)  risk += 8;
+  else if (gustRatio >= 0.45) risk += 3;
+
+  // ── WAVE HEIGHT (0-30 pts) ──
+  // Significant wave height is often more decisive than wind alone
+  if (hourlyMarine) {
+    const waveH = (hourlyMarine.wave_height || [])[hour] || 0;
+    const swellH = (hourlyMarine.swell_wave_height || [])[hour] || 0;
+    const wavePeriod = (hourlyMarine.wave_period || [])[hour] || 8;
+    // Long-period swell is more disruptive than short chop at same height
+    const periodFactor = wavePeriod > 12 ? 1.3 : wavePeriod > 8 ? 1.1 : 1.0;
+    const effectiveWave = Math.max(waveH, swellH * 0.8) * periodFactor;
+
+    // Thresholds vary by exposure: sheltered routes rarely see big waves
+    const waveThreshold = profile.exposure === 1 ? 3.0
+                        : profile.exposure === 2 ? 2.5
+                        : profile.exposure === 3 ? 2.0
+                        : 1.5; // very exposed
+    const waveRatio = effectiveWave / waveThreshold;
+    if (waveRatio >= 1.2)      risk += 30;
+    else if (waveRatio >= 1.0) risk += 22;
+    else if (waveRatio >= 0.8) risk += 14;
+    else if (waveRatio >= 0.6) risk += 7;
+    else if (waveRatio >= 0.4) risk += 2;
+  } else {
+    // No marine data — estimate wave risk from wind and exposure
+    const estimatedWave = (wind * 0.04) * profile.exposure;
+    if (estimatedWave > 2.5) risk += 15;
+    else if (estimatedWave > 1.5) risk += 8;
+    else if (estimatedWave > 1.0) risk += 3;
+  }
+
+  // ── VISIBILITY / FOG (0-15 pts) ──
+  const vis = (hourlyWeather.visibility || [])[hour];
+  if (vis !== undefined) {
+    if (vis < 500)        risk += 15; // Dense fog — serious disruption risk
+    else if (vis < 1000)  risk += 10;
+    else if (vis < 3000)  risk += 5;
+    else if (vis < 5000)  risk += 2;
+  }
+
+  // ── PRECIPITATION / SNOW (0-10 pts) ──
+  const snow = (hourlyWeather.snowfall || [])[hour] || 0;
+  const precip = (hourlyWeather.precipitation || [])[hour] || 0;
+  const code = (hourlyWeather.weathercode || [])[hour] || 0;
+  if (snow > 2 || code >= 71)      risk += 10; // Significant snow
+  else if (snow > 0.5 || code >= 61) risk += 4; // Light snow or heavy rain
+
+  // ── TIDAL PENALTY (0-5 pts) ──
+  // Routes with known tidal restrictions get a small background risk
+  if (TIDAL_ROUTES.has(routeName)) risk += 3;
+
+  return Math.min(100, Math.round(risk));
+}
+
+// ── 12-HOUR OVERALL RISK ──
+// Takes the worst risk across the next 12 hours (weighted toward nearer hours)
+function calcOverallRisk(routeName, currentHour, hourlyWeather, hourlyMarine) {
+  let maxRisk = 0;
+  for (let i = 0; i < 12; i++) {
+    const h = Math.min(currentHour + i, 23);
+    const r = calcHourlyRisk(routeName, h, hourlyWeather, hourlyMarine);
+    // Weight nearer hours slightly higher
+    const weighted = i < 3 ? r * 1.1 : r;
+    if (weighted > maxRisk) maxRisk = weighted;
+  }
+  return Math.min(100, Math.round(maxRisk));
+}
+
+function sailingChance(risk) {
+  return Math.max(0, Math.min(100, Math.round(100 - risk)));
 }
 
 function chanceColor(pct) {
@@ -517,9 +631,7 @@ function chanceColor(pct) {
   return 'var(--red)';
 }
 
-function verdictFromRisk(risk, alertStatus) {
-  if (alertStatus === 'cancelled' || alertStatus === 'disrupted') return 'unlikely';
-  if (alertStatus === 'amber') return risk >= 30 ? 'unlikely' : 'caution';
+function verdictFromRisk(risk) {
   if (risk >= 55) return 'unlikely';
   if (risk >= 25) return 'caution';
   return 'likely';
@@ -527,7 +639,8 @@ function verdictFromRisk(risk, alertStatus) {
 
 function verdictEmoji(v) { return {likely:'✅',caution:'⚠️',unlikely:'❌',unknown:'❓'}[v]||'❓'; }
 
-function weatherDesc(code) {
+function weatherDesc(code, vis) {
+  if (vis !== undefined && vis < 1000) return '🌫 Fog/poor vis';
   if (code >= 95) return '⛈ Thunderstorm';
   if (code >= 80) return '🌧 Heavy showers';
   if (code >= 71) return '❄️ Snow';
@@ -539,26 +652,19 @@ function weatherDesc(code) {
   return '☀️ Clear';
 }
 
-function alertLabel(s) {
-  return {normal:'Normal Service',amber:'Amber Alert',disrupted:'Disrupted',cancelled:'Cancelled',unknown:'Checking…'}[s]||'Checking…';
-}
-
 function windClass(g) {
   if (g >= 45) return 'wind-danger';
   if (g >= 30) return 'wind-caution';
   return 'wind-safe';
 }
 
-// For a specific sailing time, find the hourly gust/code and compute chance
-function sailingRisk(departureTime, hourlyData, alertStatus) {
-  if (!hourlyData) return null;
-  const [hh, mm] = departureTime.split(':').map(Number);
-  // Use the gust at that hour (or nearest available)
-  const idx = Math.min(hh, hourlyData.windgusts_10m.length - 1);
-  const gust = hourlyData.windgusts_10m[idx] || 0;
-  const code = hourlyData.weathercode[idx] || 0;
-  const risk = calcRisk(gust, code);
-  return sailingChance(risk, alertStatus);
+// Per-sailing risk at a specific departure time
+function sailingRisk(departureTime, routeName, hourlyWeather, hourlyMarine) {
+  if (!hourlyWeather) return null;
+  const [hh] = departureTime.split(':').map(Number);
+  const idx = Math.min(hh, 23);
+  const risk = calcHourlyRisk(routeName, idx, hourlyWeather, hourlyMarine);
+  return sailingChance(risk);
 }
 
 // ── RENDER ──
@@ -581,12 +687,12 @@ function renderRoutes() {
 
   grid.innerHTML = filtered.map((r, i) => {
     const v        = r.verdict || 'unknown';
-    const alert    = r.alertStatus || 'unknown';
-    const overall  = r.maxGustMph !== undefined ? sailingChance(r.risk || 0, alert) : null;
+    const profile  = ROUTE_PROFILES[r.name] || {threshold:45,exposure:2};
+    const overall  = r.maxGustMph !== undefined ? sailingChance(r.risk || 0) : null;
     const colour   = overall !== null ? chanceColor(overall) : 'var(--muted)';
     const gustPct  = Math.min(100, Math.round(((r.maxGustMph||0) / 65) * 100));
     const wc       = windClass(r.maxGustMph || 0);
-    const pips     = r.maxGustMph !== undefined ? (alert !== 'unknown' ? 3 : 2) : 1;
+    const pips     = r.maxGustMph !== undefined ? (r.hasMarine ? 3 : 2) : 1;
     const delay    = Math.min(i * 30, 350);
 
     // Sailings for this route
@@ -595,7 +701,7 @@ function renderRoutes() {
       const time = s.t;
       const [hh, mm] = time.split(':').map(Number);
       const isPast = (hh < currentHour) || (hh === currentHour && mm <= currentMin);
-      const pct = r.hourlyData ? sailingRisk(time, r.hourlyData, alert) : null;
+      const pct = r.hourlyData ? sailingRisk(time, r.name, r.hourlyData, r.marineData) : null;
       const col = pct !== null ? chanceColor(pct) : 'var(--muted)';
       const barW = pct !== null ? pct : 0;
       return `<div class="sailing-row${isPast?' sailing-past':''}">
@@ -615,17 +721,18 @@ function renderRoutes() {
         <div class="verdict-badge ${v}">${verdictEmoji(v)}</div>
         <div class="card-head-text">
           <div class="route-name">${r.name}</div>
-          <span class="alert-pill alert-${alert}">${alertLabel(alert)}</span>
         </div>
         <div class="overall-chance">
           <div class="chance-pct" style="color:${colour}">${overall !== null ? overall+'%' : '–'}</div>
           <div class="chance-lbl">Next 12h</div>
+          <div class="exposure-lbl">${['','🛡 Sheltered','🌊 Moderate','🌊🌊 Exposed','⚠️ Very exposed'][profile.exposure]}</div>
         </div>
       </div>
       <div class="card-weather ${wc}">
-        <div class="wx-item">💨 Gusts <strong>${r.maxGustMph !== undefined ? r.maxGustMph+' mph' : '–'}</strong></div>
-        <div class="wx-item">🌬 Wind <strong>${r.maxWindMph !== undefined ? r.maxWindMph+' mph' : '–'}</strong></div>
-        <div class="wx-item">${r.weatherCode !== undefined ? weatherDesc(r.weatherCode) : ''}</div>
+        <div class="wx-item">💨 <strong>${r.maxGustMph !== undefined ? r.maxGustMph+' mph' : '–'}</strong></div>
+        <div class="wx-item">🌊 <strong>${r.maxWaveM !== null && r.maxWaveM !== undefined ? r.maxWaveM+'m' : '–'}</strong></div>
+        ${r.minVisM !== null && r.minVisM !== undefined && r.minVisM < 5000 ? `<div class="wx-item">🌫 <strong>${r.minVisM < 1000 ? (r.minVisM+'m') : (Math.round(r.minVisM/1000*10)/10+'km')} vis</strong></div>` : ''}
+        <div class="wx-item">${r.weatherCode !== undefined ? weatherDesc(r.weatherCode, r.minVisM) : ''}</div>
       </div>
       <div class="wind-bar-wrap ${wc}">
         <div class="wind-bar-track"><div class="wind-bar-fill" style="width:${gustPct}%"></div></div>
@@ -679,69 +786,81 @@ function setStatus(type, msg) {
 
 // ── FETCH ──
 async function fetchWeatherForRoute(route) {
-  const url = 'https://api.open-meteo.com/v1/forecast'
+  const weatherUrl = 'https://api.open-meteo.com/v1/forecast'
     + '?latitude=' + route.lat + '&longitude=' + route.lon
-    + '&hourly=windspeed_10m,windgusts_10m,weathercode'
+    + '&hourly=windspeed_10m,windgusts_10m,weathercode,visibility,precipitation,snowfall'
     + '&windspeed_unit=mph&forecast_days=1&timezone=Europe%2FLondon';
+
+  const marineUrl = 'https://marine-api.open-meteo.com/v1/marine'
+    + '?latitude=' + route.lat + '&longitude=' + route.lon
+    + '&hourly=wave_height,wave_period,swell_wave_height'
+    + '&forecast_days=1&timezone=Europe%2FLondon';
+
   try {
-    const r = await fetch(url);
-    const data = await r.json();
+    // Fetch weather and marine in parallel; marine may fail for inland/sheltered points
+    const [weatherRes, marineRes] = await Promise.all([
+      fetch(weatherUrl),
+      fetch(marineUrl).catch(() => null),
+    ]);
+
+    const weatherData = await weatherRes.json();
+    const marineData  = marineRes && marineRes.ok ? await marineRes.json().catch(() => null) : null;
+
     const hour = new Date().getHours();
-    const gusts = (data.hourly.windgusts_10m || []).slice(hour, hour + 12);
-    const winds = (data.hourly.windspeed_10m  || []).slice(hour, hour + 12);
-    const codes = (data.hourly.weathercode    || []).slice(hour, hour + 12);
-    const maxGust   = gusts.length ? Math.max.apply(null, gusts) : 0;
-    const maxWind   = winds.length ? Math.max.apply(null, winds) : 0;
-    const worstCode = codes.length ? Math.max.apply(null, codes) : 0;
+    const hourly = weatherData.hourly || {};
+    const marine = marineData ? marineData.hourly : null;
+
+    // Summary stats for the next 12 hours (for display)
+    const gusts = (hourly.windgusts_10m || []).slice(hour, hour + 12);
+    const winds = (hourly.windspeed_10m  || []).slice(hour, hour + 12);
+    const codes = (hourly.weathercode    || []).slice(hour, hour + 12);
+    const waves = marine ? (marine.wave_height || []).slice(hour, hour + 12) : [];
+    const visList = (hourly.visibility   || []).slice(hour, hour + 12);
+
+    const maxGust   = gusts.length  ? Math.max.apply(null, gusts)  : 0;
+    const maxWind   = winds.length  ? Math.max.apply(null, winds)  : 0;
+    const worstCode = codes.length  ? Math.max.apply(null, codes)  : 0;
+    const maxWave   = waves.length  ? Math.max.apply(null, waves)  : null;
+    const minVis    = visList.length ? Math.min.apply(null, visList) : null;
+
+    const overallRisk = calcOverallRisk(route.name, hour, hourly, marine);
+
     return {
-      name: route.name,
-      maxGustMph: Math.round(maxGust),
-      maxWindMph: Math.round(maxWind),
+      name:        route.name,
+      maxGustMph:  Math.round(maxGust),
+      maxWindMph:  Math.round(maxWind),
       weatherCode: worstCode,
-      sailingRisk: calcRisk(maxGust, worstCode),
-      hourlyData: data.hourly,  // keep full hourly for per-sailing breakdown
+      maxWaveM:    maxWave !== null ? Math.round(maxWave * 10) / 10 : null,
+      minVisM:     minVis,
+      risk:        overallRisk,
+      hasMarine:   !!marine,
+      hourlyData:  hourly,
+      marineData:  marine,
     };
   } catch(e) {
-    return { name: route.name, maxGustMph: null, maxWindMph: null, weatherCode: null, sailingRisk: null, hourlyData: null };
+    return { name: route.name, maxGustMph: null, maxWindMph: null, weatherCode: null,
+             maxWaveM: null, minVisM: null, risk: null, hasMarine: false,
+             hourlyData: null, marineData: null };
   }
-}
-
-async function fetchCalMacStatus() {
-  try {
-    const r = await fetch('/api/status');
-    const text = await r.text();
-    return JSON.parse(text);
-  } catch(e) {
-    return { routes: [] };
-  }
-}
-
-function similarity(a, b) {
-  const bigrams = s => new Set(Array.from({length: s.length-1}, (_, i) => s.slice(i, i+2)));
-  const A = bigrams(a), B = bigrams(b);
-  const inter = Array.from(A).filter(x => B.has(x)).length;
-  return inter / (A.size + B.size - inter || 1);
 }
 
 async function fetchData() {
   const btn = document.getElementById('refreshBtn');
   btn.classList.add('spinning');
   showSkeletons();
-  setStatus('loading', 'Fetching weather and CalMac alerts…');
+  setStatus('loading', 'Fetching weather, wave & visibility data for all routes…');
 
   allRoutes = ROUTES.map(r => ({
-    name: r.name, verdict: 'unknown', alertStatus: 'unknown',
-    maxGustMph: undefined, maxWindMph: undefined, weatherCode: undefined, risk: undefined, hourlyData: null,
+    name: r.name, verdict: 'unknown',
+    maxGustMph: undefined, maxWindMph: undefined, weatherCode: undefined,
+    maxWaveM: undefined, minVisM: undefined,
+    risk: undefined, hasMarine: false,
+    hourlyData: null, marineData: null,
   }));
 
-  let weatherOk = false, errors = [];
+  let weatherOk = false;
+  const weatherResults = await Promise.all(ROUTES.map(fetchWeatherForRoute));
 
-  const [weatherResults, calmacData] = await Promise.all([
-    Promise.all(ROUTES.map(fetchWeatherForRoute)),
-    fetchCalMacStatus(),
-  ]);
-
-  // Apply weather
   if (weatherResults && weatherResults.some(w => w.maxGustMph !== null)) {
     weatherOk = true;
     weatherResults.forEach(w => {
@@ -750,41 +869,33 @@ async function fetchData() {
         route.maxGustMph  = w.maxGustMph;
         route.maxWindMph  = w.maxWindMph;
         route.weatherCode = w.weatherCode;
-        route.risk        = w.sailingRisk;
+        route.maxWaveM    = w.maxWaveM;
+        route.minVisM     = w.minVisM;
+        route.risk        = w.risk;
+        route.hasMarine   = w.hasMarine;
         route.hourlyData  = w.hourlyData;
+        route.marineData  = w.marineData;
       }
     });
-  } else {
-    errors.push('weather');
   }
 
-  // Apply CalMac alerts
-  if (calmacData && calmacData.routes && calmacData.routes.length) {
-    calmacData.routes.forEach(cr => {
-      const crNorm = cr.name.toLowerCase().replace(/[^a-z0-9]/g,'');
-      const match = allRoutes.find(r => {
-        const rNorm = r.name.toLowerCase().replace(/[^a-z0-9]/g,'');
-        return rNorm.includes(crNorm) || crNorm.includes(rNorm) || similarity(crNorm, rNorm) > 0.5;
-      });
-      if (match) match.alertStatus = cr.status;
-    });
-  } else {
-    errors.push('CalMac alerts');
-  }
-
-  allRoutes.forEach(r => { r.verdict = verdictFromRisk(r.risk || 0, r.alertStatus); });
+  allRoutes.forEach(r => { r.verdict = verdictFromRisk(r.risk || 0); });
 
   updateSummary();
   renderRoutes();
   btn.classList.remove('spinning');
   lastFetched = new Date();
 
+  const marineCount = allRoutes.filter(r => r.hasMarine).length;
+  const season = ['Nov','Nov','Dec','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov'][new Date().getMonth()];
+
   if (!weatherOk) {
     setStatus('error', 'Could not load weather data. Check your connection and try refreshing.');
-  } else if (errors.length) {
-    setStatus('ok', 'Loaded with partial data (' + errors.join(' & ') + ' unavailable) — ' + lastFetched.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}));
   } else {
-    setStatus('ok', 'All data loaded — ' + lastFetched.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) + '. Auto-refreshes every 30 min.');
+    setStatus('ok', 'Updated ' + lastFetched.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})
+      + ' · Wave data: ' + marineCount + '/22 routes'
+      + ' · Season: ' + (seasonFactor() < 0.9 ? 'Winter (stricter thresholds)' : seasonFactor() < 1.0 ? 'Shoulder' : 'Summer')
+      + ' · Auto-refreshes every 30 min');
   }
 }
 
