@@ -144,15 +144,100 @@ footer a{color:var(--blue);text-decoration:none;}
 
 @media(max-width:600px){
   .header-inner{padding:20px 14px 18px;}
-  main{padding:16px 12px 48px;}
+  main{padding:16px 12px 100px;}
   .toolbar-inner{padding:8px 12px;}
   .routes-grid{grid-template-columns:1fr;}
 }
+
+/* ── LOADING SCREEN ── */
+#loadingScreen{
+  position:fixed;inset:0;z-index:9999;
+  background:linear-gradient(160deg,var(--navy) 0%,var(--blue) 60%,#0077cc 100%);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  transition:opacity .6s ease, visibility .6s ease;
+}
+#loadingScreen.hidden{opacity:0;visibility:hidden;pointer-events:none;}
+.ls-icon{font-size:64px;margin-bottom:24px;animation:ferryBob 2s ease-in-out infinite;}
+@keyframes ferryBob{
+  0%,100%{transform:translateY(0);}
+  50%{transform:translateY(-10px);}
+}
+.ls-title{font-family:'Syne',sans-serif;font-size:1.8rem;font-weight:800;color:var(--white);letter-spacing:-.02em;margin-bottom:6px;}
+.ls-sub{font-size:.95rem;color:rgba(255,255,255,.7);margin-bottom:40px;}
+.ls-spinner{width:44px;height:44px;border:3px solid rgba(255,255,255,.2);border-top-color:var(--sky);border-radius:50%;animation:spin 1s linear infinite;}
+.ls-progress{margin-top:24px;width:200px;height:3px;background:rgba(255,255,255,.15);border-radius:2px;overflow:hidden;}
+.ls-progress-fill{height:100%;background:var(--sky);border-radius:2px;width:0%;transition:width .3s ease;}
+.ls-status{margin-top:12px;font-size:.78rem;color:rgba(255,255,255,.55);letter-spacing:.03em;}
+
+/* ── BOTTOM NAV ── */
+.bottom-nav{
+  position:fixed;bottom:0;left:0;right:0;z-index:200;
+  background:var(--white);border-top:1px solid var(--light);
+  display:flex;align-items:stretch;
+  box-shadow:0 -4px 20px rgba(0,48,135,0.10);
+  padding-bottom:env(safe-area-inset-bottom);
+}
+.nav-tab{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:10px 4px 8px;cursor:pointer;border:none;background:none;
+  font-family:inherit;transition:all .18s;gap:3px;
+  -webkit-tap-highlight-color:transparent;
+}
+.nav-tab svg{transition:all .18s;}
+.nav-tab .nav-label{font-size:.65rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);transition:color .18s;}
+.nav-tab.active .nav-label{color:var(--blue);}
+.nav-tab.active svg{stroke:var(--blue);}
+.nav-tab:not(.active) svg{stroke:var(--muted);}
+
+/* Favourite star on route card */
+.fav-btn{
+  position:absolute;top:10px;right:10px;
+  background:none;border:none;cursor:pointer;font-size:1.3rem;
+  line-height:1;padding:4px;
+  -webkit-tap-highlight-color:transparent;
+  transition:transform .2s;
+}
+.fav-btn:active{transform:scale(1.3);}
+.route-card{position:relative;}
+
+/* Favourites empty state */
+.favs-empty{text-align:center;padding:60px 24px;color:var(--muted);}
+.favs-empty .big-icon{font-size:3.5rem;margin-bottom:16px;}
+.favs-empty p{font-size:1rem;line-height:1.5;}
+
+/* Tab pages */
+.tab-page{display:none;}
+.tab-page.active{display:block;}
+
+/* About page */
+.about-card{background:var(--white);border-radius:14px;padding:20px;box-shadow:var(--shadow);margin-bottom:14px;}
+.about-card h3{font-family:'Syne',sans-serif;font-size:1rem;font-weight:700;color:var(--navy);margin-bottom:10px;}
+.about-card p,.about-card li{font-size:.88rem;color:var(--muted);line-height:1.65;}
+.about-card ul{padding-left:18px;margin-top:6px;}
+.about-card li{margin-bottom:4px;}
+.about-card a{color:var(--blue);text-decoration:none;font-weight:600;}
+.factor-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--light);}
+.factor-row:last-child{border-bottom:none;}
+.factor-icon{font-size:1.3rem;width:32px;text-align:center;flex-shrink:0;}
+.factor-text .factor-name{font-weight:600;font-size:.88rem;color:var(--text);}
+.factor-text .factor-desc{font-size:.78rem;color:var(--muted);}
+.factor-weight{font-family:'Syne',sans-serif;font-weight:700;font-size:.85rem;color:var(--blue);margin-left:auto;flex-shrink:0;}
 ```
 
   </style>
 </head>
 <body>
+
+<!-- ── LOADING SCREEN ── -->
+
+<div id="loadingScreen">
+  <div class="ls-icon">⛴️</div>
+  <div class="ls-title">Will It Sail?</div>
+  <div class="ls-sub">CalMac Sailing Predictor</div>
+  <div class="ls-spinner"></div>
+  <div class="ls-progress"><div class="ls-progress-fill" id="lsProgress"></div></div>
+  <div class="ls-status" id="lsStatus">Fetching weather data…</div>
+</div>
 
 <header>
   <div class="header-inner">
@@ -190,26 +275,73 @@ footer a{color:var(--blue);text-decoration:none;}
 <main>
   <div class="status-bar loading" id="statusBar">
     <div class="pulse" id="pulse"></div>
-    <span id="statusText">Loading weather forecasts and CalMac alerts…</span>
+    <span id="statusText">Loading weather forecasts…</span>
   </div>
 
-  <div class="summary-cards" id="summaryCards" style="display:none">
-    <div class="sum-card total"><div class="num" id="sumTotal">–</div><div class="lbl">Total Routes</div></div>
-    <div class="sum-card likely"><div class="num" id="sumLikely">–</div><div class="lbl">Likely Sailing</div></div>
-    <div class="sum-card caution"><div class="num" id="sumCaution">–</div><div class="lbl">Use Caution</div></div>
-    <div class="sum-card unlikely"><div class="num" id="sumUnlikely">–</div><div class="lbl">At Risk</div></div>
+  <!-- ── ALL ROUTES TAB ── -->
+
+  <div class="tab-page active" id="tabRoutes">
+    <div class="summary-cards" id="summaryCards" style="display:none">
+      <div class="sum-card total"><div class="num" id="sumTotal">–</div><div class="lbl">Total Routes</div></div>
+      <div class="sum-card likely"><div class="num" id="sumLikely">–</div><div class="lbl">Likely Sailing</div></div>
+      <div class="sum-card caution"><div class="num" id="sumCaution">–</div><div class="lbl">Use Caution</div></div>
+      <div class="sum-card unlikely"><div class="num" id="sumUnlikely">–</div><div class="lbl">At Risk</div></div>
+    </div>
+    <div class="routes-grid" id="routesGrid"></div>
+    <div class="disclaimer" style="margin-bottom:80px">
+      <strong>⚠️ Unofficial tool — not affiliated with CalMac.</strong> Predictions use wind, wave height, swell, visibility, snow, tidal restrictions and seasonal factors. Timetables are approximate. Always check <a href="https://www.calmac.co.uk/service-status" target="_blank" rel="noopener">CalMac's official service status</a> before travelling.
+    </div>
   </div>
 
-  <div class="routes-grid" id="routesGrid"></div>
+  <!-- ── FAVOURITES TAB ── -->
 
-  <div class="disclaimer">
-    <strong>⚠️ Unofficial tool — not affiliated with CalMac.</strong> Predictions are based on Open-Meteo wind forecasts and CalMac's public service status page. Timetables are approximate and may vary by season or day. Always check <a href="https://www.calmac.co.uk/service-status" target="_blank" rel="noopener">CalMac's official service status</a> before travelling.
+  <div class="tab-page" id="tabFavs">
+    <div id="favsGrid" class="routes-grid"></div>
+    <div id="favsEmpty" class="favs-empty" style="display:none">
+      <div class="big-icon">⭐</div>
+      <p>No favourite routes yet.<br>Tap the ★ on any route to save it here.</p>
+    </div>
+  </div>
+
+  <!-- ── ABOUT TAB ── -->
+
+  <div class="tab-page" id="tabAbout" style="padding-bottom:80px">
+    <div class="about-card">
+      <h3>How predictions work</h3>
+      <p>Each route is scored 0–100 using live data from Open-Meteo. The score is converted to a "chance of sailing" percentage. Sailing decisions are then made by CalMac — these are estimates only.</p>
+    </div>
+    <div class="about-card">
+      <h3>Factors in the algorithm</h3>
+      <div class="factor-row"><div class="factor-icon">💨</div><div class="factor-text"><div class="factor-name">Wind gusts</div><div class="factor-desc">Compared against each route's known cancellation threshold</div></div><div class="factor-weight">40 pts</div></div>
+      <div class="factor-row"><div class="factor-icon">🌊</div><div class="factor-text"><div class="factor-name">Wave height & swell</div><div class="factor-desc">Significant wave height + swell period from Marine API</div></div><div class="factor-weight">30 pts</div></div>
+      <div class="factor-row"><div class="factor-icon">🌫</div><div class="factor-text"><div class="factor-name">Visibility / fog</div><div class="factor-desc">Poor visibility can disrupt routes independently of wind</div></div><div class="factor-weight">15 pts</div></div>
+      <div class="factor-row"><div class="factor-icon">❄️</div><div class="factor-text"><div class="factor-name">Snow & precipitation</div><div class="factor-desc">Heavy snow adds additional risk</div></div><div class="factor-weight">10 pts</div></div>
+      <div class="factor-row"><div class="factor-icon">🌙</div><div class="factor-text"><div class="factor-name">Season weighting</div><div class="factor-desc">Winter thresholds are 15% stricter than summer</div></div><div class="factor-weight">×0.85</div></div>
+      <div class="factor-row"><div class="factor-icon">🗺</div><div class="factor-text"><div class="factor-name">Route exposure</div><div class="factor-desc">Sheltered routes (Gourock–Dunoon) vs very exposed (Coll/Tiree)</div></div><div class="factor-weight">Profile</div></div>
+    </div>
+    <div class="about-card">
+      <h3>Disclaimer</h3>
+      <p>This is an <strong>unofficial</strong> community tool, not affiliated with Caledonian MacBrayne. Always check <a href="https://www.calmac.co.uk/service-status" target="_blank">CalMac's official service status</a> before travelling. Weather data by <a href="https://open-meteo.com" target="_blank">Open-Meteo</a>.</p>
+    </div>
   </div>
 </main>
 
-<footer>
-  <p>Weather data via <a href="https://open-meteo.com" target="_blank">Open-Meteo</a>. Not affiliated with Caledonian MacBrayne.</p>
-</footer>
+<!-- ── BOTTOM NAV ── -->
+
+<nav class="bottom-nav">
+  <button class="nav-tab active" data-tab="tabRoutes" id="navRoutes">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    <span class="nav-label">Routes</span>
+  </button>
+  <button class="nav-tab" data-tab="tabFavs" id="navFavs">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+    <span class="nav-label">Favourites</span>
+  </button>
+  <button class="nav-tab" data-tab="tabAbout" id="navAbout">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <span class="nav-label">About</span>
+  </button>
+</nav>
 
 <script>
 // ── TIMETABLE ──
@@ -670,86 +802,17 @@ function sailingRisk(departureTime, routeName, hourlyWeather, hourlyMarine) {
 // ── RENDER ──
 function renderRoutes() {
   const grid = document.getElementById('routesGrid');
-  const now = new Date();
-  const currentHour = now.getHours();
-  const currentMin  = now.getMinutes();
-
   let filtered = allRoutes.filter(r => {
     const mf = activeFilter === 'all' || r.verdict === activeFilter;
     const ms = r.name.toLowerCase().includes(searchQuery.toLowerCase());
     return mf && ms;
   });
-
   if (filtered.length === 0) {
     grid.innerHTML = '<div class="empty"><div class="empty-icon">🔍</div><p>No routes match your filter.</p></div>';
     return;
   }
-
-  grid.innerHTML = filtered.map((r, i) => {
-    const v        = r.verdict || 'unknown';
-    const profile  = ROUTE_PROFILES[r.name] || {threshold:45,exposure:2};
-    const overall  = r.maxGustMph !== undefined ? sailingChance(r.risk || 0) : null;
-    const colour   = overall !== null ? chanceColor(overall) : 'var(--muted)';
-    const gustPct  = Math.min(100, Math.round(((r.maxGustMph||0) / 65) * 100));
-    const wc       = windClass(r.maxGustMph || 0);
-    const pips     = r.maxGustMph !== undefined ? (r.hasMarine ? 3 : 2) : 1;
-    const delay    = Math.min(i * 30, 350);
-
-    // Sailings for this route
-    const sailings = TIMETABLE[r.name] || [];
-    const sailingRows = sailings.map(s => {
-      const time = s.t;
-      const [hh, mm] = time.split(':').map(Number);
-      const isPast = (hh < currentHour) || (hh === currentHour && mm <= currentMin);
-      const pct = r.hourlyData ? sailingRisk(time, r.name, r.hourlyData, r.marineData) : null;
-      const col = pct !== null ? chanceColor(pct) : 'var(--muted)';
-      const barW = pct !== null ? pct : 0;
-      return `<div class="sailing-row${isPast?' sailing-past':''}">
-        <div class="sailing-time">${time}</div>
-        <div class="sailing-direction">${s.f} → ${s.to}</div>
-        <div class="sailing-bar-wrap">
-          <div class="sailing-bar-track">
-            <div class="sailing-bar-fill" style="width:${barW}%;background:${col}"></div>
-          </div>
-        </div>
-        <div class="sailing-pct-label" style="color:${col}">${pct !== null ? pct+'%' : '–'}</div>
-      </div>`;
-    }).join('');
-
-    return `<div class="route-card" style="animation-delay:${delay}ms">
-      <div class="card-head">
-        <div class="verdict-badge ${v}">${verdictEmoji(v)}</div>
-        <div class="card-head-text">
-          <div class="route-name">${r.name}</div>
-        </div>
-        <div class="overall-chance">
-          <div class="chance-pct" style="color:${colour}">${overall !== null ? overall+'%' : '–'}</div>
-          <div class="chance-lbl">Next 12h</div>
-          <div class="exposure-lbl">${['','🛡 Sheltered','🌊 Moderate','🌊🌊 Exposed','⚠️ Very exposed'][profile.exposure]}</div>
-        </div>
-      </div>
-      <div class="card-weather ${wc}">
-        <div class="wx-item">💨 <strong>${r.maxGustMph !== undefined ? r.maxGustMph+' mph' : '–'}</strong></div>
-        <div class="wx-item">🌊 <strong>${r.maxWaveM !== null && r.maxWaveM !== undefined ? r.maxWaveM+'m' : '–'}</strong></div>
-        ${r.minVisM !== null && r.minVisM !== undefined && r.minVisM < 5000 ? `<div class="wx-item">🌫 <strong>${r.minVisM < 1000 ? (r.minVisM+'m') : (Math.round(r.minVisM/1000*10)/10+'km')} vis</strong></div>` : ''}
-        <div class="wx-item">${r.weatherCode !== undefined ? weatherDesc(r.weatherCode, r.minVisM) : ''}</div>
-      </div>
-      <div class="wind-bar-wrap ${wc}">
-        <div class="wind-bar-track"><div class="wind-bar-fill" style="width:${gustPct}%"></div></div>
-      </div>
-      ${sailings.length > 0 ? `<div class="sailings-section">
-        <div class="sailings-title">Today's sailings</div>
-        <div class="sailings-list">${sailingRows}</div>
-      </div>` : ''}
-      <div class="card-foot">
-        <div class="conf-pips">
-          ${[1,2,3].map(n=>`<div class="conf-pip ${n<=pips?'filled':''}"></div>`).join('')}
-          <span>${pips===3?'High':pips===2?'Medium':'Low'} confidence</span>
-        </div>
-        <span>Updated ${lastFetched ? lastFetched.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '–'}</span>
-      </div>
-    </div>`;
-  }).join('');
+  grid.innerHTML = filtered.map((r, i) => buildCard(r, i)).join('');
+  attachFavButtons(grid);
 }
 
 function updateSummary() {
@@ -899,6 +962,176 @@ async function fetchData() {
   }
 }
 
+// ── FAVOURITES ──
+let favourites = JSON.parse(localStorage.getItem('wis_favs') || '[]');
+
+function saveFavourites() {
+  localStorage.setItem('wis_favs', JSON.stringify(favourites));
+}
+
+function isFav(name) { return favourites.includes(name); }
+
+function toggleFav(name) {
+  if (isFav(name)) {
+    favourites = favourites.filter(f => f !== name);
+  } else {
+    favourites.push(name);
+  }
+  saveFavourites();
+  renderRoutes();
+  renderFavourites();
+  // Update star button without full re-render
+  document.querySelectorAll('.fav-btn').forEach(btn => {
+    if (btn.dataset.route === name) btn.textContent = isFav(name) ? '★' : '☆';
+  });
+}
+
+function renderFavourites() {
+  const grid = document.getElementById('favsGrid');
+  const empty = document.getElementById('favsEmpty');
+  const favRoutes = allRoutes.filter(r => isFav(r.name));
+  if (favRoutes.length === 0) {
+    grid.innerHTML = '';
+    empty.style.display = '';
+  } else {
+    empty.style.display = 'none';
+    grid.innerHTML = favRoutes.map((r, i) => buildCard(r, i)).join('');
+    attachFavButtons(grid);
+  }
+}
+
+// ── BOTTOM NAV ──
+let activeTab = 'tabRoutes';
+document.querySelectorAll('.nav-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    const target = tab.dataset.tab;
+    activeTab = target;
+    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    document.querySelectorAll('.tab-page').forEach(p => p.classList.remove('active'));
+    document.getElementById(target).classList.add('active');
+    // Show/hide toolbar based on tab
+    const showToolbar = target === 'tabRoutes';
+    document.querySelector('.toolbar').style.display = showToolbar ? '' : 'none';
+    if (target === 'tabFavs') renderFavourites();
+    window.scrollTo(0, 0);
+  });
+});
+
+// ── LOADING SCREEN ──
+function runLoadingScreen(onDone) {
+  const screen = document.getElementById('loadingScreen');
+  const progress = document.getElementById('lsProgress');
+  const status = document.getElementById('lsStatus');
+  const messages = [
+    'Fetching wind forecasts…',
+    'Loading wave & swell data…',
+    'Calculating route risks…',
+    'Checking visibility…',
+    'Applying seasonal factors…',
+    'Almost ready…',
+  ];
+  let pct = 0;
+  let msgIdx = 0;
+  const interval = setInterval(() => {
+    pct = Math.min(pct + (100 / 30), 95); // reach 95% over ~10s
+    progress.style.width = pct + '%';
+    if (msgIdx < messages.length - 1 && pct > (msgIdx + 1) * 16) {
+      msgIdx++;
+      status.textContent = messages[msgIdx];
+    }
+  }, 333);
+
+  setTimeout(() => {
+    clearInterval(interval);
+    progress.style.width = '100%';
+    status.textContent = 'Ready!';
+    setTimeout(() => {
+      screen.classList.add('hidden');
+      onDone();
+    }, 500);
+  }, 10000);
+}
+
+// ── BUILD CARD (extracted so both tabs can use it) ──
+function buildCard(r, i) {
+  const currentHour = new Date().getHours();
+  const currentMin  = new Date().getMinutes();
+  const v        = r.verdict || 'unknown';
+  const profile  = ROUTE_PROFILES[r.name] || {threshold:45,exposure:2};
+  const overall  = r.maxGustMph !== undefined ? sailingChance(r.risk || 0) : null;
+  const colour   = overall !== null ? chanceColor(overall) : 'var(--muted)';
+  const gustPct  = Math.min(100, Math.round(((r.maxGustMph||0) / 65) * 100));
+  const wc       = windClass(r.maxGustMph || 0);
+  const pips     = r.maxGustMph !== undefined ? (r.hasMarine ? 3 : 2) : 1;
+  const delay    = Math.min(i * 30, 350);
+  const favStar  = isFav(r.name) ? '★' : '☆';
+
+  const sailings = TIMETABLE[r.name] || [];
+  const sailingRows = sailings.map(s => {
+    const time = s.t;
+    const [hh, mm] = time.split(':').map(Number);
+    const isPast = (hh < currentHour) || (hh === currentHour && mm <= currentMin);
+    const pct = r.hourlyData ? sailingRisk(time, r.name, r.hourlyData, r.marineData) : null;
+    const col = pct !== null ? chanceColor(pct) : 'var(--muted)';
+    const barW = pct !== null ? pct : 0;
+    return `<div class="sailing-row${isPast?' sailing-past':''}">
+      <div class="sailing-time">${time}</div>
+      <div class="sailing-direction">${s.f} → ${s.to}</div>
+      <div class="sailing-bar-wrap">
+        <div class="sailing-bar-track">
+          <div class="sailing-bar-fill" style="width:${barW}%;background:${col}"></div>
+        </div>
+      </div>
+      <div class="sailing-pct-label" style="color:${col}">${pct !== null ? pct+'%' : '–'}</div>
+    </div>`;
+  }).join('');
+
+  return `<div class="route-card" style="animation-delay:${delay}ms">
+    <button class="fav-btn" data-route="${r.name}" title="Favourite this route">${favStar}</button>
+    <div class="card-head">
+      <div class="verdict-badge ${v}">${verdictEmoji(v)}</div>
+      <div class="card-head-text">
+        <div class="route-name">${r.name}</div>
+      </div>
+      <div class="overall-chance">
+        <div class="chance-pct" style="color:${colour}">${overall !== null ? overall+'%' : '–'}</div>
+        <div class="chance-lbl">Next 12h</div>
+        <div class="exposure-lbl">${['','🛡 Sheltered','🌊 Moderate','🌊🌊 Exposed','⚠️ Very exposed'][profile.exposure]}</div>
+      </div>
+    </div>
+    <div class="card-weather ${wc}">
+      <div class="wx-item">💨 <strong>${r.maxGustMph !== undefined ? r.maxGustMph+' mph' : '–'}</strong></div>
+      <div class="wx-item">🌊 <strong>${r.maxWaveM !== null && r.maxWaveM !== undefined ? r.maxWaveM+'m' : '–'}</strong></div>
+      ${r.minVisM !== null && r.minVisM !== undefined && r.minVisM < 5000 ? `<div class="wx-item">🌫 <strong>${r.minVisM < 1000 ? (r.minVisM+'m') : (Math.round(r.minVisM/1000*10)/10+'km')} vis</strong></div>` : ''}
+      <div class="wx-item">${r.weatherCode !== undefined ? weatherDesc(r.weatherCode, r.minVisM) : ''}</div>
+    </div>
+    <div class="wind-bar-wrap ${wc}">
+      <div class="wind-bar-track"><div class="wind-bar-fill" style="width:${gustPct}%"></div></div>
+    </div>
+    ${sailings.length > 0 ? `<div class="sailings-section">
+      <div class="sailings-title">Today's sailings</div>
+      <div class="sailings-list">${sailingRows}</div>
+    </div>` : ''}
+    <div class="card-foot">
+      <div class="conf-pips">
+        ${[1,2,3].map(n=>`<div class="conf-pip ${n<=pips?'filled':''}"></div>`).join('')}
+        <span>${pips===3?'High':pips===2?'Medium':'Low'} confidence</span>
+      </div>
+      <span>Updated ${lastFetched ? lastFetched.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '–'}</span>
+    </div>
+  </div>`;
+}
+
+function attachFavButtons(container) {
+  container.querySelectorAll('.fav-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      toggleFav(btn.dataset.route);
+    });
+  });
+}
+
 // ── EVENTS ──
 document.getElementById('search').addEventListener('input', e => { searchQuery = e.target.value; renderRoutes(); });
 document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -911,7 +1144,11 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
 });
 document.getElementById('refreshBtn').addEventListener('click', fetchData);
 setInterval(fetchData, 30 * 60 * 1000);
-fetchData();
+
+// ── BOOT ──
+runLoadingScreen(() => {
+  fetchData();
+});
 </script>
 
 </body>
