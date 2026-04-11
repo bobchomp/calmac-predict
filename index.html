@@ -946,15 +946,66 @@ function setStatus(type, msg) {
 }
 
 // ── FETCH ──
-// All weather data comes from our Vercel serverless function (/api/weather)
-// which calls Open-Meteo server-side — avoids mobile rate limiting
+// Single batched request to Open-Meteo for all 22 routes at once.
 async function fetchAllWeather() {
-  const res = await fetch('/api/weather');
-  if (!res.ok) throw new Error('API returned ' + res.status);
-  const data = await res.json();
-  if (!data.routes || !data.routes.length) throw new Error('No route data returned');
-  return data.routes;
+  const hour = new Date().getHours();
+  const lats = ROUTES.map(r => r.lat).join(',');
+  const lons = ROUTES.map(r => r.lon).join(',');
+
+  const weatherUrl = 'https://api.open-meteo.com/v1/forecast'
+    + '?latitude=' + lats + '&longitude=' + lons
+    + '&hourly=windspeed_10m,windgusts_10m,weathercode,visibility,precipitation,snowfall'
+    + '&windspeed_unit=mph&forecast_days=1&timezone=Europe%2FLondon';
+
+  const marineUrl = 'https://marine-api.open-meteo.com/v1/marine'
+    + '?latitude=' + lats + '&longitude=' + lons
+    + '&hourly=wave_height,wave_period,swell_wave_height'
+    + '&forecast_days=1&timezone=Europe%2FLondon';
+
+  const [wRes, mRes] = await Promise.all([
+    fetch(weatherUrl),
+    fetch(marineUrl).catch(() => null),
+  ]);
+
+  if (!wRes.ok) throw new Error('Weather API returned ' + wRes.status);
+
+  const wJson = await wRes.json();
+  const mJson = (mRes && mRes.ok) ? await mRes.json().catch(() => null) : null;
+
+  const wArr = Array.isArray(wJson) ? wJson : [wJson];
+  const mArr = mJson ? (Array.isArray(mJson) ? mJson : [mJson]) : [];
+
+  const slice = arr => (arr || []).slice(hour, hour + 12);
+  const mx = arr => arr.length ? Math.max(...arr) : null;
+  const mn = arr => arr.length ? Math.min(...arr) : null;
+
+  const results = ROUTES.map((route, i) => {
+    const hourly = (wArr[i] && wArr[i].hourly) || {};
+    const marineH = (mArr[i] && mArr[i].hourly) || null;
+    const gusts = slice(hourly.windgusts_10m);
+    const winds = slice(hourly.windspeed_10m);
+    const waves = marineH ? slice(marineH.wave_height) : [];
+    return {
+      route:      route.name,
+      hourly,
+      marine:     marineH,
+      maxGustMph: mx(gusts) !== null ? Math.round(mx(gusts)) : null,
+      maxWindMph: mx(winds) !== null ? Math.round(mx(winds)) : null,
+      worstCode:  mx(slice(hourly.weathercode)),
+      minVisM:    mn(slice(hourly.visibility)),
+      maxPrecip:  mx(slice(hourly.precipitation)),
+      maxSnow:    mx(slice(hourly.snowfall)),
+      maxWaveM:   mx(waves) !== null ? Math.round(mx(waves) * 10) / 10 : null,
+      hasMarine:  !!marineH,
+    };
+  });
+
+  if (!results.some(r => r.maxGustMph !== null)) {
+    throw new Error('No weather data received — check your connection');
+  }
+  return results;
 }
+
 
 
 async function fetchData() {
