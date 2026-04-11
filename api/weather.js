@@ -37,6 +37,35 @@ else if (weatherCode >= 51) risk += 5;
 return Math.min(risk, 100);
 }
 
+async function fetchOneRoute(point, currentHour) {
+const url = ‘https://api.open-meteo.com/v1/forecast’
++ ‘?latitude=’ + point.lat
++ ‘&longitude=’ + point.lon
++ ‘&hourly=windspeed_10m,windgusts_10m,weathercode’
++ ‘&windspeed_unit=mph’
++ ‘&forecast_days=1’
++ ‘&timezone=Europe%2FLondon’;
+
+const res = await fetch(url);
+if (!res.ok) throw new Error(’HTTP ’ + res.status);
+const data = await res.json();
+
+const gusts = (data.hourly.windgusts_10m || []).slice(currentHour, currentHour + 12);
+const winds = (data.hourly.windspeed_10m  || []).slice(currentHour, currentHour + 12);
+const codes = (data.hourly.weathercode    || []).slice(currentHour, currentHour + 12);
+const maxGust   = gusts.length ? Math.max(…gusts) : 0;
+const maxWind   = winds.length ? Math.max(…winds) : 0;
+const worstCode = codes.length ? Math.max(…codes) : 0;
+
+return {
+route: point.route,
+maxGustMph:  Math.round(maxGust),
+maxWindMph:  Math.round(maxWind),
+weatherCode: worstCode,
+sailingRisk: calcRisk(maxGust, worstCode),
+};
+}
+
 module.exports = async function handler(req, res) {
 res.setHeader(‘Access-Control-Allow-Origin’, ‘*’);
 res.setHeader(‘Cache-Control’, ‘s-maxage=1800’);
@@ -46,46 +75,14 @@ const now = new Date();
 const currentHour = now.getHours();
 
 ```
-// Build URL manually — URLSearchParams encodes commas as %2C which Open-Meteo rejects
-const lats = ROUTE_WEATHER_POINTS.map(p => p.lat).join(',');
-const lons = ROUTE_WEATHER_POINTS.map(p => p.lon).join(',');
-const url = 'https://api.open-meteo.com/v1/forecast'
-  + '?latitude=' + lats
-  + '&longitude=' + lons
-  + '&hourly=windspeed_10m,windgusts_10m,weathercode'
-  + '&windspeed_unit=mph'
-  + '&forecast_days=1'
-  + '&timezone=Europe%2FLondon';
-
-const response = await fetch(url);
-
-if (!response.ok) {
-  const text = await response.text();
-  throw new Error('Open-Meteo ' + response.status + ': ' + text.slice(0, 300));
-}
-
-const raw = await response.json();
-const dataArray = Array.isArray(raw) ? raw : [raw];
-
-const results = ROUTE_WEATHER_POINTS.map((point, i) => {
-  const data = dataArray[i];
-  if (!data || !data.hourly) {
-    return { route: point.route, maxGustMph: null, maxWindMph: null, weatherCode: null, sailingRisk: null, error: 'no data for index ' + i };
-  }
-  const gusts = (data.hourly.windgusts_10m || []).slice(currentHour, currentHour + 12);
-  const winds = (data.hourly.windspeed_10m  || []).slice(currentHour, currentHour + 12);
-  const codes = (data.hourly.weathercode     || []).slice(currentHour, currentHour + 12);
-  const maxGust   = gusts.length ? Math.max(...gusts) : 0;
-  const maxWind   = winds.length ? Math.max(...winds) : 0;
-  const worstCode = codes.length ? Math.max(...codes) : 0;
-  return {
-    route: point.route,
-    maxGustMph:  Math.round(maxGust),
-    maxWindMph:  Math.round(maxWind),
-    weatherCode: worstCode,
-    sailingRisk: calcRisk(maxGust, worstCode),
-  };
-});
+// Fetch all routes in parallel, each failure returns nulls rather than crashing
+const results = await Promise.all(
+  ROUTE_WEATHER_POINTS.map(function(point) {
+    return fetchOneRoute(point, currentHour).catch(function(e) {
+      return { route: point.route, maxGustMph: null, maxWindMph: null, weatherCode: null, sailingRisk: null, error: e.message };
+    });
+  })
+);
 
 res.status(200).json({ weather: results, fetchedAt: now.toISOString() });
 ```
