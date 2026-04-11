@@ -141,7 +141,7 @@
     footer a{color:var(--blue);text-decoration:none;}
 
     @media(max-width:600px){
-      .header-inner{padding:20px 14px 18px;}
+      .header-inner{padding:calc(20px + env(safe-area-inset-top)) 14px 18px;}
       main{padding:16px 12px 100px;}
       .toolbar-inner{padding:8px 12px;}
       .routes-grid{grid-template-columns:1fr;}
