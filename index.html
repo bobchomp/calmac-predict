@@ -595,31 +595,32 @@ footer a { color: var(--blue); text-decoration: none; }
   let searchQuery = '';
   let lastFetched = null;
 
-  // All 22 CalMac routes (matches api/weather.js)
-  const ROUTE_NAMES = [
-    'Ardrossan - Brodick (Arran)',
-    'Troon - Brodick (Arran)',
-    'Kennacraig - Port Ellen / Port Askaig (Islay)',
-    'Oban - Craignure (Mull)',
-    'Oban - Coll / Tiree',
-    'Oban - Colonsay',
-    'Oban - Castlebay / Lochboisdale',
-    'Mallaig - Armadale (Skye)',
-    'Ullapool - Stornoway (Lewis)',
-    'Uig - Tarbert / Lochmaddy',
-    'Gourock - Dunoon',
-    'Wemyss Bay - Rothesay (Bute)',
-    'Colintraive - Rhubodach (Bute)',
-    'Largs - Cumbrae Slip',
-    'Tarbert - Portavadie',
-    'Claonaig - Lochranza (Arran)',
-    'Tobermory - Kilchoan',
-    'Fishnish - Lochaline',
-    'Mallaig - Small Isles',
-    'Oban - Lismore',
-    'Seil - Luing',
-    'Port Askaig - Feolin (Jura)',
+  // Routes with coordinates — weather fetched directly from Open-Meteo (CORS enabled, no backend needed)
+  const ROUTES = [
+    { name: 'Ardrossan - Brodick (Arran)',                   lat: 55.58, lon: -5.09 },
+    { name: 'Troon - Brodick (Arran)',                       lat: 55.53, lon: -4.97 },
+    { name: 'Kennacraig - Port Ellen / Port Askaig (Islay)', lat: 55.87, lon: -5.50 },
+    { name: 'Oban - Craignure (Mull)',                       lat: 56.41, lon: -5.47 },
+    { name: 'Oban - Coll / Tiree',                          lat: 56.62, lon: -6.52 },
+    { name: 'Oban - Colonsay',                              lat: 56.07, lon: -6.19 },
+    { name: 'Oban - Castlebay / Lochboisdale',              lat: 56.95, lon: -7.32 },
+    { name: 'Mallaig - Armadale (Skye)',                    lat: 57.06, lon: -5.83 },
+    { name: 'Ullapool - Stornoway (Lewis)',                  lat: 58.20, lon: -6.39 },
+    { name: 'Uig - Tarbert / Lochmaddy',                    lat: 57.73, lon: -6.96 },
+    { name: 'Gourock - Dunoon',                             lat: 55.96, lon: -4.92 },
+    { name: 'Wemyss Bay - Rothesay (Bute)',                 lat: 55.84, lon: -5.05 },
+    { name: 'Colintraive - Rhubodach (Bute)',               lat: 55.92, lon: -5.15 },
+    { name: 'Largs - Cumbrae Slip',                         lat: 55.79, lon: -4.87 },
+    { name: 'Tarbert - Portavadie',                         lat: 55.87, lon: -5.41 },
+    { name: 'Claonaig - Lochranza (Arran)',                 lat: 55.70, lon: -5.39 },
+    { name: 'Tobermory - Kilchoan',                         lat: 56.62, lon: -6.08 },
+    { name: 'Fishnish - Lochaline',                         lat: 56.52, lon: -5.73 },
+    { name: 'Mallaig - Small Isles',                        lat: 56.97, lon: -6.30 },
+    { name: 'Oban - Lismore',                               lat: 56.50, lon: -5.49 },
+    { name: 'Seil - Luing',                                 lat: 56.23, lon: -5.62 },
+    { name: 'Port Askaig - Feolin (Jura)',                  lat: 55.85, lon: -6.10 },
   ];
+  const ROUTE_NAMES = ROUTES.map(r => r.name);
 
   // ── HELPERS ──
   function verdictFromRiskAndAlert(risk, alertStatus) {
@@ -843,31 +844,65 @@ footer a { color: var(--blue); text-decoration: none; }
     let calmacOk = false;
     let errors = [];
 
-    // Fetch weather and CalMac status in parallel, with timeout
-    const fetchJSON = async (url, ms = 25000) => {
-      const controller = new AbortController();
-      const id = setTimeout(() => controller.abort(), ms);
+    function calcRisk(gustMph, weatherCode) {
+      let risk = 0;
+      if (gustMph >= 55) risk += 60;
+      else if (gustMph >= 45) risk += 45;
+      else if (gustMph >= 35) risk += 25;
+      else if (gustMph >= 25) risk += 10;
+      if (weatherCode >= 95) risk += 40;
+      else if (weatherCode >= 80) risk += 25;
+      else if (weatherCode >= 71) risk += 30;
+      else if (weatherCode >= 61) risk += 15;
+      else if (weatherCode >= 51) risk += 5;
+      return Math.min(risk, 100);
+    }
+
+    // Fetch weather directly from Open-Meteo (public API, CORS enabled — no backend needed)
+    async function fetchWeatherForRoute(route) {
+      const url = 'https://api.open-meteo.com/v1/forecast'
+        + '?latitude=' + route.lat
+        + '&longitude=' + route.lon
+        + '&hourly=windspeed_10m,windgusts_10m,weathercode'
+        + '&windspeed_unit=mph&forecast_days=1&timezone=Europe%2FLondon';
       try {
-        const r = await fetch(url, { signal: controller.signal });
-        clearTimeout(id);
+        const r = await fetch(url);
+        const data = await r.json();
+        const hour = new Date().getHours();
+        const gusts = (data.hourly.windgusts_10m || []).slice(hour, hour + 12);
+        const winds = (data.hourly.windspeed_10m  || []).slice(hour, hour + 12);
+        const codes = (data.hourly.weathercode    || []).slice(hour, hour + 12);
+        const maxGust   = gusts.length ? Math.max.apply(null, gusts) : 0;
+        const maxWind   = winds.length ? Math.max.apply(null, winds) : 0;
+        const worstCode = codes.length ? Math.max.apply(null, codes) : 0;
+        return { name: route.name, maxGustMph: Math.round(maxGust), maxWindMph: Math.round(maxWind), weatherCode: worstCode, sailingRisk: calcRisk(maxGust, worstCode) };
+      } catch(e) {
+        return { name: route.name, maxGustMph: null, maxWindMph: null, weatherCode: null, sailingRisk: null };
+      }
+    }
+
+    // Fetch CalMac status from our serverless function (needed for scraping — can't do from browser)
+    async function fetchCalMacStatus() {
+      try {
+        const r = await fetch('/api/status');
         const text = await r.text();
         return JSON.parse(text);
       } catch(e) {
-        clearTimeout(id);
-        throw new Error(e.message + ' [' + url + ']');
+        return { routes: [] };
       }
-    };
+    }
 
-    const [weatherResult, calmacResult] = await Promise.allSettled([
-      fetchJSON('/api/weather', 25000),
-      fetchJSON('/api/status', 12000),
+    // Run weather fetches + CalMac status in parallel
+    const [weatherResults, calmacData] = await Promise.all([
+      Promise.all(ROUTES.map(fetchWeatherForRoute)),
+      fetchCalMacStatus(),
     ]);
 
     // Apply weather data
-    if (weatherResult.status === 'fulfilled' && weatherResult.value.weather?.length) {
+    if (weatherResults && weatherResults.some(w => w.maxGustMph !== null)) {
       weatherOk = true;
-      weatherResult.value.weather.forEach(w => {
-        const route = allRoutes.find(r => r.name === w.route);
+      weatherResults.forEach(w => {
+        const route = allRoutes.find(r => r.name === w.name);
         if (route) {
           route.maxGustMph  = w.maxGustMph;
           route.maxWindMph  = w.maxWindMph;
@@ -879,11 +914,10 @@ footer a { color: var(--blue); text-decoration: none; }
       errors.push('weather forecast');
     }
 
-    // Apply CalMac alert data — fuzzy match route names
-    if (calmacResult.status === 'fulfilled' && calmacResult.value.routes?.length) {
+    // Apply CalMac alert data
+    if (calmacData && calmacData.routes && calmacData.routes.length) {
       calmacOk = true;
-      calmacResult.value.routes.forEach(cr => {
-        // Try to fuzzy-match the scraped route name to our list
+      calmacData.routes.forEach(cr => {
         const crNorm = cr.name.toLowerCase().replace(/[^a-z0-9]/g, '');
         const match = allRoutes.find(r => {
           const rNorm = r.name.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -906,8 +940,7 @@ footer a { color: var(--blue); text-decoration: none; }
     lastFetched = new Date();
 
     if (!weatherOk && !calmacOk) {
-      const reason = weatherResult.reason?.message || calmacResult.reason?.message || 'unknown error';
-      setStatus('error', 'API not responding: ' + reason);
+      setStatus('error', 'Could not load weather or CalMac data. Check your connection and try refreshing.');
     } else if (errors.length) {
       setStatus('ok', `Loaded with partial data (${errors.join(' & ')} unavailable) — updated ${lastFetched.toLocaleTimeString()}`);
     } else {
