@@ -1,7 +1,7 @@
 {
   "functions": {
-    "api/weather.js": { "maxDuration": 30 },
-    "api/status.js":  { "maxDuration": 15 }
+    "api/weather.js": { "maxDuration": 30, "memory": 512 },
+    "api/status.js":  { "maxDuration": 15, "memory": 256 }
   },
   "routes": [
     { "src": "/api/weather", "dest": "/api/weather.js" },
