@@ -57,7 +57,7 @@ const url = 'https://api.open-meteo.com/v1/forecast'
   + '&forecast_days=1'
   + '&timezone=Europe%2FLondon';
 
-const response = await fetch(url, { signal: AbortSignal.timeout(25000) });
+const response = await fetch(url);
 
 if (!response.ok) {
   const text = await response.text();
