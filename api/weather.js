@@ -1,26 +1,26 @@
 const ROUTES = [
-{ route: ‘Ardrossan \u2013 Brodick (Arran)’,                    lat: 55.58, lon: -5.09 },
-{ route: ‘Troon \u2013 Brodick (Arran)’,                        lat: 55.53, lon: -4.97 },
-{ route: ‘Kennacraig \u2013 Port Ellen / Port Askaig (Islay)’, lat: 55.87, lon: -5.50 },
-{ route: ‘Oban \u2013 Craignure (Mull)’,                        lat: 56.41, lon: -5.47 },
-{ route: ‘Oban \u2013 Coll / Tiree’,                            lat: 56.62, lon: -6.52 },
-{ route: ‘Oban \u2013 Colonsay’,                                lat: 56.07, lon: -6.19 },
-{ route: ‘Oban \u2013 Castlebay / Lochboisdale’,               lat: 56.95, lon: -7.32 },
-{ route: ‘Mallaig \u2013 Armadale (Skye)’,                      lat: 57.06, lon: -5.83 },
-{ route: ‘Ullapool \u2013 Stornoway (Lewis)’,                   lat: 58.20, lon: -6.39 },
-{ route: ‘Uig \u2013 Tarbert / Lochmaddy’,                     lat: 57.73, lon: -6.96 },
-{ route: ‘Gourock \u2013 Dunoon’,                               lat: 55.96, lon: -4.92 },
-{ route: ‘Wemyss Bay \u2013 Rothesay (Bute)’,                   lat: 55.84, lon: -5.05 },
-{ route: ‘Colintraive \u2013 Rhubodach (Bute)’,                 lat: 55.92, lon: -5.15 },
-{ route: ‘Largs \u2013 Cumbrae Slip’,                           lat: 55.79, lon: -4.87 },
-{ route: ‘Tarbert \u2013 Portavadie’,                           lat: 55.87, lon: -5.41 },
-{ route: ‘Claonaig \u2013 Lochranza (Arran)’,                   lat: 55.70, lon: -5.39 },
-{ route: ‘Tobermory \u2013 Kilchoan’,                           lat: 56.62, lon: -6.08 },
-{ route: ‘Fishnish \u2013 Lochaline’,                           lat: 56.52, lon: -5.73 },
-{ route: ‘Mallaig \u2013 Small Isles’,                          lat: 56.97, lon: -6.30 },
-{ route: ‘Oban \u2013 Lismore’,                                 lat: 56.50, lon: -5.49 },
-{ route: ‘Seil \u2013 Luing’,                                   lat: 56.23, lon: -5.62 },
-{ route: ‘Port Askaig \u2013 Feolin (Jura)’,                    lat: 55.85, lon: -6.10 },
+{ route: ‘Ardrossan – Brodick (Arran)’,                    lat: 55.58, lon: -5.09 },
+{ route: ‘Troon – Brodick (Arran)’,                        lat: 55.53, lon: -4.97 },
+{ route: ‘Kennacraig – Port Ellen / Port Askaig (Islay)’, lat: 55.87, lon: -5.50 },
+{ route: ‘Oban – Craignure (Mull)’,                        lat: 56.41, lon: -5.47 },
+{ route: ‘Oban – Coll / Tiree’,                            lat: 56.62, lon: -6.52 },
+{ route: ‘Oban – Colonsay’,                                lat: 56.07, lon: -6.19 },
+{ route: ‘Oban – Castlebay / Lochboisdale’,               lat: 56.95, lon: -7.32 },
+{ route: ‘Mallaig – Armadale (Skye)’,                      lat: 57.06, lon: -5.83 },
+{ route: ‘Ullapool – Stornoway (Lewis)’,                   lat: 58.20, lon: -6.39 },
+{ route: ‘Uig – Tarbert / Lochmaddy’,                     lat: 57.73, lon: -6.96 },
+{ route: ‘Gourock – Dunoon’,                               lat: 55.96, lon: -4.92 },
+{ route: ‘Wemyss Bay – Rothesay (Bute)’,                   lat: 55.84, lon: -5.05 },
+{ route: ‘Colintraive – Rhubodach (Bute)’,                 lat: 55.92, lon: -5.15 },
+{ route: ‘Largs – Cumbrae Slip’,                           lat: 55.79, lon: -4.87 },
+{ route: ‘Tarbert – Portavadie’,                           lat: 55.87, lon: -5.41 },
+{ route: ‘Claonaig – Lochranza (Arran)’,                   lat: 55.70, lon: -5.39 },
+{ route: ‘Tobermory – Kilchoan’,                           lat: 56.62, lon: -6.08 },
+{ route: ‘Fishnish – Lochaline’,                           lat: 56.52, lon: -5.73 },
+{ route: ‘Mallaig – Small Isles’,                          lat: 56.97, lon: -6.30 },
+{ route: ‘Oban – Lismore’,                                 lat: 56.50, lon: -5.49 },
+{ route: ‘Seil – Luing’,                                   lat: 56.23, lon: -5.62 },
+{ route: ‘Port Askaig – Feolin (Jura)’,                    lat: 55.85, lon: -6.10 },
 ];
 
 module.exports = async function handler(req, res) {
@@ -32,9 +32,8 @@ const now = new Date();
 const currentHour = now.getHours();
 
 ```
-// Use Open-Meteo multi-location batch API — one request for all 22 routes
-const lats = ROUTES.map(r => r.lat).join(',');
-const lons = ROUTES.map(r => r.lon).join(',');
+const lats = ROUTES.map(function(r) { return r.lat; }).join(',');
+const lons = ROUTES.map(function(r) { return r.lon; }).join(',');
 
 const weatherUrl = 'https://api.open-meteo.com/v1/forecast'
   + '?latitude=' + lats
@@ -48,55 +47,58 @@ const marineUrl = 'https://marine-api.open-meteo.com/v1/marine'
   + '&hourly=wave_height,wave_period,swell_wave_height'
   + '&forecast_days=1&timezone=Europe%2FLondon';
 
-// Fetch both in parallel; marine may partially fail — that's fine
-const [weatherRes, marineRes] = await Promise.all([
-  fetch(weatherUrl),
-  fetch(marineUrl).catch(() => null),
-]);
+var weatherRes = await fetch(weatherUrl);
+var marineRes  = await fetch(marineUrl).catch(function() { return null; });
 
-if (!weatherRes.ok) throw new Error('Weather API returned ' + weatherRes.status);
+if (!weatherRes.ok) {
+  throw new Error('Weather API returned HTTP ' + weatherRes.status);
+}
 
-const weatherArray = await weatherRes.json(); // array of 22 objects
-const marineArray  = marineRes && marineRes.ok
-  ? await marineRes.json().catch(() => null)
-  : null;
+var weatherArray = await weatherRes.json();
+var marineArray  = (marineRes && marineRes.ok) ? await marineRes.json().catch(function() { return null; }) : null;
 
-// Normalise: Open-Meteo returns an array when multiple locs are given
-const wArr = Array.isArray(weatherArray) ? weatherArray : [weatherArray];
-const mArr = marineArray ? (Array.isArray(marineArray) ? marineArray : [marineArray]) : [];
+var wArr = Array.isArray(weatherArray) ? weatherArray : [weatherArray];
+var mArr = marineArray ? (Array.isArray(marineArray) ? marineArray : [marineArray]) : [];
 
-const results = ROUTES.map((route, i) => {
-  const w = wArr[i] || {};
-  const m = mArr[i] || null;
-  const hourly = w.hourly || {};
-  const marine = m ? m.hourly || null : null;
+function sliceHours(arr, hour) {
+  return (arr || []).slice(hour, hour + 12);
+}
+function safeMax(arr) { return arr.length ? Math.max.apply(null, arr) : null; }
+function safeMin(arr) { return arr.length ? Math.min.apply(null, arr) : null; }
 
-  const slice = (arr) => (arr || []).slice(currentHour, currentHour + 12);
-  const gusts  = slice(hourly.windgusts_10m);
-  const winds  = slice(hourly.windspeed_10m);
-  const codes  = slice(hourly.weathercode);
-  const vis    = slice(hourly.visibility);
-  const precip = slice(hourly.precipitation);
-  const snow   = slice(hourly.snowfall);
-  const waves  = marine ? slice(marine.wave_height)       : [];
-  const swells = marine ? slice(marine.swell_wave_height) : [];
-  const periods= marine ? slice(marine.wave_period)       : [];
+var results = ROUTES.map(function(route, i) {
+  var w = wArr[i] || {};
+  var m = mArr[i] || null;
+  var hourly = w.hourly || {};
+  var marine = m ? (m.hourly || null) : null;
 
-  const safe = (arr, fn) => arr.length ? fn(...arr) : null;
+  var gusts  = sliceHours(hourly.windgusts_10m, currentHour);
+  var winds  = sliceHours(hourly.windspeed_10m,  currentHour);
+  var codes  = sliceHours(hourly.weathercode,    currentHour);
+  var vis    = sliceHours(hourly.visibility,     currentHour);
+  var precip = sliceHours(hourly.precipitation,  currentHour);
+  var snow   = sliceHours(hourly.snowfall,       currentHour);
+  var waves  = marine ? sliceHours(marine.wave_height,       currentHour) : [];
+  var swells = marine ? sliceHours(marine.swell_wave_height, currentHour) : [];
+  var periods= marine ? sliceHours(marine.wave_period,       currentHour) : [];
+
+  var maxGust = safeMax(gusts);
+  var maxWave = safeMax(waves);
+
   return {
-    route:        route.route,
-    hourly:       hourly,   // full hourly for per-sailing calcs
-    marine:       marine,
-    maxGustMph:   safe(gusts,  Math.max) !== null ? Math.round(safe(gusts, Math.max))  : null,
-    maxWindMph:   safe(winds,  Math.max) !== null ? Math.round(safe(winds, Math.max))  : null,
-    worstCode:    safe(codes,  Math.max),
-    minVisM:      safe(vis,    Math.min),
-    maxPrecip:    safe(precip, Math.max),
-    maxSnow:      safe(snow,   Math.max),
-    maxWaveM:     safe(waves,  Math.max) !== null ? Math.round(safe(waves,  Math.max) * 10) / 10 : null,
-    maxSwellM:    safe(swells, Math.max) !== null ? Math.round(safe(swells, Math.max) * 10) / 10 : null,
-    avgPeriod:    periods.length ? Math.round(periods.reduce((a,b)=>a+b,0)/periods.length) : null,
-    hasMarine:    !!marine,
+    route:      route.route,
+    hourly:     hourly,
+    marine:     marine,
+    maxGustMph: maxGust !== null ? Math.round(maxGust) : null,
+    maxWindMph: safeMax(winds) !== null ? Math.round(safeMax(winds)) : null,
+    worstCode:  safeMax(codes),
+    minVisM:    safeMin(vis),
+    maxPrecip:  safeMax(precip),
+    maxSnow:    safeMax(snow),
+    maxWaveM:   maxWave !== null ? Math.round(maxWave * 10) / 10 : null,
+    maxSwellM:  safeMax(swells) !== null ? Math.round(safeMax(swells) * 10) / 10 : null,
+    avgPeriod:  periods.length ? Math.round(periods.reduce(function(a,b){return a+b;},0)/periods.length) : null,
+    hasMarine:  !!marine,
   };
 });
 
@@ -104,6 +106,6 @@ res.status(200).json({ routes: results, fetchedAt: now.toISOString() });
 ```
 
 } catch (err) {
-res.status(500).json({ error: err.message, routes: [] });
+res.status(500).json({ error: err.message, stack: err.stack, routes: [] });
 }
 };
