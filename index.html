@@ -911,6 +911,7 @@ function renderRoutes() {
   }
   grid.innerHTML = filtered.map((r, i) => buildCard(r, i)).join('');
   attachFavButtons(grid);
+  attachCardClicks(grid);
 }
 
 function updateSummary() {
@@ -1089,12 +1090,12 @@ function toggleFav(name) {
     favourites.push(name);
   }
   saveFavourites();
-  renderRoutes();
-  renderFavourites();
-  // Update star button without full re-render
+  // Just update the star icons — no full re-render to avoid recursion
   document.querySelectorAll('.fav-btn').forEach(btn => {
     if (btn.dataset.route === name) btn.textContent = isFav(name) ? '★' : '☆';
   });
+  // Only re-render favourites tab if it's currently visible
+  if (activeTab === 'tabFavs') renderFavourites();
 }
 
 function renderFavourites() {
@@ -1108,6 +1109,7 @@ function renderFavourites() {
     empty.style.display = 'none';
     grid.innerHTML = favRoutes.map((r, i) => buildCard(r, i)).join('');
     attachFavButtons(grid);
+    attachCardClicks(grid);
   }
 }
 
@@ -1458,20 +1460,6 @@ function attachCardClicks(container) {
       if (routeName) openModal(routeName);
     });
   });
-}
-
-// Patch renderRoutes and renderFavourites to attach clicks
-const _origRenderRoutes = renderRoutes;
-function renderRoutes() {
-  _origRenderRoutes();
-  attachCardClicks(document.getElementById('routesGrid'));
-}
-
-const _origRenderFavs = renderFavourites;
-function renderFavourites() {
-  _origRenderFavs();
-  const grid = document.getElementById('favsGrid');
-  if (grid) attachCardClicks(grid);
 }
 
 // ── BOOT ──
