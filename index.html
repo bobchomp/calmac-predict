@@ -1020,7 +1020,18 @@ async function fetchData() {
   }));
 
   let weatherOk = false;
-  const weatherResults = await Promise.all(ROUTES.map(fetchWeatherForRoute));
+  // Fetch routes one at a time so we can track real progress
+  let completed = 0;
+  const weatherResults = await Promise.all(ROUTES.map(async route => {
+    const result = await fetchWeatherForRoute(route);
+    completed++;
+    // Update loading screen progress bar if it's still visible
+    if (typeof ls !== 'undefined') {
+      ls.setProgress(Math.round((completed / ROUTES.length) * 90));
+      ls.setMessage('Loading route ' + completed + ' of ' + ROUTES.length + '…');
+    }
+    return result;
+  }));
 
   if (weatherResults && weatherResults.some(w => w.maxGustMph !== null)) {
     weatherOk = true;
@@ -1117,39 +1128,27 @@ document.querySelectorAll('.nav-tab').forEach(tab => {
 });
 
 // ── LOADING SCREEN ──
-function runLoadingScreen(onDone) {
-  const screen = document.getElementById('loadingScreen');
+const ls = (() => {
+  const screen   = document.getElementById('loadingScreen');
   const progress = document.getElementById('lsProgress');
-  const status = document.getElementById('lsStatus');
-  const messages = [
-    'Fetching wind forecasts…',
-    'Loading wave & swell data…',
-    'Calculating route risks…',
-    'Checking visibility…',
-    'Applying seasonal factors…',
-    'Almost ready…',
-  ];
-  let pct = 0;
-  let msgIdx = 0;
-  const interval = setInterval(() => {
-    pct = Math.min(pct + (100 / 30), 95); // reach 95% over ~10s
-    progress.style.width = pct + '%';
-    if (msgIdx < messages.length - 1 && pct > (msgIdx + 1) * 16) {
-      msgIdx++;
-      status.textContent = messages[msgIdx];
+  const status   = document.getElementById('lsStatus');
+  return {
+    setProgress(pct) { progress.style.width = Math.min(100, pct) + '%'; },
+    setMessage(msg)  { status.textContent = msg; },
+    dismiss() {
+      progress.style.width = '100%';
+      status.textContent = 'Ready!';
+      setTimeout(() => screen.classList.add('hidden'), 400);
+    },
+    showError(msg) {
+      status.style.color = '#ff9090';
+      status.textContent = '⚠️ ' + msg;
+      progress.style.background = '#c8102e';
+      progress.style.width = '100%';
+      setTimeout(() => screen.classList.add('hidden'), 3500);
     }
-  }, 333);
-
-  setTimeout(() => {
-    clearInterval(interval);
-    progress.style.width = '100%';
-    status.textContent = 'Ready!';
-    setTimeout(() => {
-      screen.classList.add('hidden');
-      onDone();
-    }, 500);
-  }, 10000);
-}
+  };
+})();
 
 // ── BUILD CARD (extracted so both tabs can use it) ──
 function buildCard(r, i) {
@@ -1474,9 +1473,44 @@ function renderFavourites() {
 }
 
 // ── BOOT ──
-runLoadingScreen(() => {
-  fetchData();
-});
+// Tie loading screen to actual data fetch
+(async () => {
+  const messages = [
+    'Fetching wind forecasts…',
+    'Loading wave & swell data…',
+    'Calculating route risks…',
+    'Checking visibility…',
+    'Applying seasonal factors…',
+    'Almost ready…',
+  ];
+  let msgIdx = 0;
+  // Animate progress in steps while fetch runs
+  const ticker = setInterval(() => {
+    const newPct = Math.min(90, ((msgIdx + 1) / messages.length) * 90);
+    ls.setProgress(newPct);
+    ls.setMessage(messages[msgIdx]);
+    msgIdx = Math.min(msgIdx + 1, messages.length - 1);
+  }, 1800);
+
+  // Hard timeout — if fetch takes >45s, show error and dismiss
+  const hardTimeout = setTimeout(() => {
+    clearInterval(ticker);
+    ls.showError('Taking too long — check your connection');
+    setTimeout(fetchData, 100); // still try to render what we have
+  }, 45000);
+
+  try {
+    await fetchData();
+    clearInterval(ticker);
+    clearTimeout(hardTimeout);
+    ls.dismiss();
+  } catch(e) {
+    clearInterval(ticker);
+    clearTimeout(hardTimeout);
+    ls.showError('Could not load data — tap Refresh to try again');
+    setTimeout(() => document.getElementById('loadingScreen').classList.add('hidden'), 3500);
+  }
+})();
 </script>
 
 </body>
