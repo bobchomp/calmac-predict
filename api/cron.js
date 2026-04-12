@@ -3,9 +3,7 @@
 // 2. Records any cancellations/disruptions to Google Sheet (ground truth log)
 // 3. Sends push notifications to subscribers of affected routes
 
-const BASE_URL = process.env.VERCEL_URL
-  ? `https://${process.env.VERCEL_URL}`
-  : 'https://calmac-predict.vercel.app';
+const BASE_URL = process.env.CRON_BASE_URL || 'https://calmac-predict.vercel.app';
 
 const KV_URL   = process.env.UPSTASH_REDIS_REST_URL   || '';
 const KV_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || '';
@@ -88,7 +86,13 @@ async function recordToSheet(route, calMacStatus, predictedChance) {
 }
 
 module.exports = async function handler(req, res) {
-  if (req.headers['authorization'] !== `Bearer ${process.env.CRON_SECRET}`) {
+  const secret = process.env.CRON_SECRET;
+  // Accept auth from:
+  // 1. Vercel cron: Authorization: Bearer <secret>
+  // 2. cron-job.org: GET /api/cron?secret=<secret>
+  const headerAuth = req.headers['authorization'] === `Bearer ${secret}`;
+  const queryAuth  = req.query?.secret === secret;
+  if (!headerAuth && !queryAuth) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
