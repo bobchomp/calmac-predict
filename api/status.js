@@ -1,8 +1,8 @@
-// api/status.js
-// Fetches live CalMac service status via their internal GraphQL API
-// (apim.calmac.co.uk/graphql) — works when Origin header is set to calmac.co.uk
+// api/status.js — CalMac live service status via GraphQL
+// Returns per-sailing cancellation data using startDateTime/endDateTime windows
+// and parses time mentions from detail text for specific sailing flags
 
-const CACHE_SECONDS = 120; // 2 min cache — this is real-time disruption data
+const CACHE_SECONDS = 120;
 
 const GRAPHQL_QUERY = `{
   routes {
@@ -14,12 +14,15 @@ const GRAPHQL_QUERY = `{
       title
       status
       subStatus
-      updatedAtDateTime
+      startDateTime
+      endDateTime
+      detail
+      disruptionReason
     }
   }
 }`;
 
-// Map CalMac route names → our internal route keys
+// CalMac route name → our internal route key
 const ROUTE_MAP = {
   'Gourock - Dunoon':                                          'Gourock - Dunoon',
   'Wemyss Bay - Rothesay':                                     'Wemyss Bay - Rothesay (Bute)',
@@ -28,7 +31,7 @@ const ROUTE_MAP = {
   'Claonaig - Lochranza':                                      'Claonaig - Lochranza (Arran)',
   'Largs - Cumbrae Slip (Millport)':                           'Largs - Cumbrae Slip',
   'Colintraive - Rhubodach':                                   'Colintraive - Rhubodach (Bute)',
-  'Tarbert (Loch Fyne) - Portavadie':                         'Tarbert - Portavadie',
+  'Tarbert (Loch Fyne) - Portavadie':                          'Tarbert - Portavadie',
   'Uig - Lochmaddy':                                           'Uig - Tarbert / Lochmaddy',
   'Uig - Tarbert':                                             'Uig - Tarbert / Lochmaddy',
   'Kennacraig - Port Askaig (Islay) / Port Ellen (Islay)':    'Kennacraig - Port Ellen / Port Askaig (Islay)',
@@ -45,20 +48,43 @@ const ROUTE_MAP = {
   'Tobermory - Kilchoan':                                      'Tobermory - Kilchoan',
   'Tayinloan - Gigha':                                         'Tayinloan - Gigha',
   'Sconser - Raasay':                                          'Sconser - Raasay',
+  'Fionnphort - Iona':                                         'Fionnphort - Iona',
 };
 
-// Normalise CalMac status strings → our internal status
-function normaliseStatus(status, subStatus) {
+// Top-level route status → our status
+function normaliseTopStatus(status) {
   const s = (status || '').toUpperCase();
-  const ss = (subStatus || '').toUpperCase();
-  if (s === 'ALL_SAILINGS_CANCELLED' || ss === 'ALL_SAILINGS_CANCELLED') return 'cancelled';
-  if (s === 'DISRUPTIONS' || ss === 'DISRUPTIONS') return 'disrupted';
-  if (s === 'BE_AWARE' || ss === 'BE_AWARE') return 'amber';
-  if (s === 'NORMAL' || s === 'NONE') return 'normal';
-  if (s === 'SAILING' && ss === 'DISRUPTIONS') return 'disrupted';
-  if (s === 'SAILING' && ss === 'BE_AWARE') return 'amber';
-  if (s === 'SAILING' && (ss === 'CANCELLED' || ss === 'ALL_SAILINGS_CANCELLED')) return 'cancelled';
+  if (s === 'ALL_SAILINGS_CANCELLED') return 'cancelled';
+  if (s === 'DISRUPTIONS') return 'disrupted';
+  if (s === 'BE_AWARE') return 'amber';
+  if (s === 'NORMAL') return 'normal';
   return 'unknown';
+}
+
+// Extract times mentioned in detail text e.g. "06:55 sailing" "the 10:00 and 14:00"
+function extractMentionedTimes(detail) {
+  if (!detail) return [];
+  const times = [];
+  // Match HH:MM or H:MM patterns
+  const matches = detail.matchAll(/\b(\d{1,2}):(\d{2})\b/g);
+  for (const m of matches) {
+    const h = m[1].padStart(2, '0');
+    const min = m[2];
+    times.push(`${h}:${min}`);
+  }
+  return [...new Set(times)];
+}
+
+// Check if a sailing time (HH:MM) falls within a routeStatus window
+// windowStart/End are ISO strings, sailingTime is "HH:MM" for today
+function sailingInWindow(sailingTime, windowStart, windowEnd) {
+  if (!windowStart || !windowEnd) return false;
+  const today = new Date().toISOString().substring(0, 10); // YYYY-MM-DD
+  const [hh, mm] = sailingTime.split(':').map(Number);
+  const sailingMs = new Date(`${today}T${sailingTime}:00Z`).getTime();
+  const startMs = new Date(windowStart).getTime();
+  const endMs = new Date(windowEnd).getTime();
+  return sailingMs >= startMs && sailingMs <= endMs;
 }
 
 module.exports = async function handler(req, res) {
@@ -71,7 +97,6 @@ module.exports = async function handler(req, res) {
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        // The APIM endpoint checks Origin — must appear to come from calmac.co.uk
         'Origin': 'https://www.calmac.co.uk',
         'Referer': 'https://www.calmac.co.uk/en-gb/service-status/',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36',
@@ -80,45 +105,70 @@ module.exports = async function handler(req, res) {
       signal: AbortSignal.timeout(8000),
     });
 
-    if (!resp.ok) {
-      throw new Error(`GraphQL ${resp.status}`);
-    }
-
+    if (!resp.ok) throw new Error(`GraphQL ${resp.status}`);
     const json = await resp.json();
     const rawRoutes = json?.data?.routes || [];
+    if (!rawRoutes.length) throw new Error('Empty routes');
 
-    if (!rawRoutes.length) throw new Error('Empty routes array');
+    const todayStr = new Date().toISOString().substring(0, 10);
 
-    // Map to our format
     const routes = rawRoutes
+      .filter(r => !r.name?.toLowerCase().includes('freight'))
       .map(r => {
         const routeKey = ROUTE_MAP[r.name] || null;
-        const topStatus = normaliseStatus(r.status, null);
+        const topStatus = normaliseTopStatus(r.status);
 
-        // Find the most severe routeStatus for today's sailing entry
-        let status = topStatus;
-        let message = '';
-        const todayEntry = r.routeStatuses?.find(s =>
-          s.status === 'SAILING' || s.title?.toLowerCase().includes('today') || s.title?.toLowerCase().includes(new Date().toLocaleDateString('en-GB', { weekday: 'long' }).toLowerCase())
-        );
-        if (todayEntry) {
-          const derived = normaliseStatus(todayEntry.status, todayEntry.subStatus);
-          if (['cancelled', 'disrupted', 'amber'].includes(derived)) {
-            status = derived;
-            message = todayEntry.title || '';
+        // Find today's SAILING-type routeStatus entries
+        const todaySailingEntries = (r.routeStatuses || []).filter(s => {
+          if (s.status !== 'SAILING') return false;
+          // Check if today falls within this entry's window
+          const start = new Date(s.startDateTime);
+          const end = new Date(s.endDateTime);
+          const now = new Date();
+          return now >= start && now <= end;
+        });
+
+        // Build per-sailing status map: { "HH:MM": { status, detail, reason } }
+        const sailingStatuses = {};
+
+        for (const entry of todaySailingEntries) {
+          const subStatus = (entry.subStatus || '').toUpperCase();
+          const entryStatus = subStatus === 'ALL_SAILINGS_CANCELLED' ? 'cancelled'
+            : subStatus === 'DISRUPTIONS' ? 'disrupted'
+            : subStatus === 'BE_AWARE' ? 'amber'
+            : 'disrupted'; // default for SAILING entries
+
+          const mentionedTimes = extractMentionedTimes(entry.detail);
+
+          if (mentionedTimes.length > 0 && subStatus !== 'ALL_SAILINGS_CANCELLED') {
+            // Only specific sailings mentioned — flag those
+            for (const t of mentionedTimes) {
+              sailingStatuses[t] = {
+                status: entryStatus,
+                detail: entry.detail?.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')?.replace(/\[(\d+)\]:/g, '')?.replace(/\*\*/g, '').trim().substring(0, 300),
+                reason: entry.disruptionReason || null,
+              };
+            }
+          } else {
+            // All sailings in window affected — use sentinel '*' meaning all
+            sailingStatuses['*'] = {
+              status: entryStatus,
+              detail: entry.detail?.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')?.replace(/\[(\d+)\]:/g, '')?.replace(/\*\*/g, '').trim().substring(0, 300),
+              reason: entry.disruptionReason || null,
+            };
           }
         }
 
         return {
           name: r.name,
           routeKey,
-          status,
-          message,
+          status: topStatus,
+          sailingStatuses,   // { "HH:MM": {...} } and/or { "*": {...} }
           isUpcoming: r.isStatusChangeUpcoming || false,
-          raw: r.status, // keep raw for debugging
+          raw: r.status,
         };
       })
-      .filter(r => r.routeKey); // only routes we know about
+      .filter(r => r.routeKey);
 
     const disrupted = routes.filter(r => !['normal', 'unknown'].includes(r.status));
 
@@ -130,7 +180,6 @@ module.exports = async function handler(req, res) {
     });
 
   } catch (err) {
-    // Fallback — return empty silently, no banner shown
     return res.status(200).json({
       routes: [],
       disrupted: [],

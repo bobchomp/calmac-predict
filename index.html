@@ -317,12 +317,6 @@
 /* ── FEEDBACK ROW ── */
 
 /* ── DISRUPTION BANNER ── */
-.disruption-banner{background:#fceaed;border:1.5px solid #e57373;border-radius:10px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:flex-start;gap:10px;font-size:.83rem;color:#b71c1c;}
-.disruption-banner .db-icon{font-size:1.2rem;flex-shrink:0;margin-top:1px;}
-.disruption-banner .db-body{flex:1;}
-.disruption-banner .db-title{font-weight:700;margin-bottom:2px;}
-.disruption-banner .db-link{color:#c62828;font-weight:600;text-decoration:underline;cursor:pointer;}
-.disruption-banner.amber-alert{background:#fff8e1;border-color:#ffd54f;color:#e65100;}
 
 /* ── CARD ACTION ROW ── */
 .card-actions{display:flex;align-items:center;gap:6px;padding:8px 16px;border-top:1px solid var(--light);background:var(--offwhite);}
@@ -421,8 +415,7 @@
 </div>
 
 <main>
-  <!-- ── DISRUPTION BANNER (shown when CalMac reports active issues) ── -->
-  <div id="disruptionBanner" style="display:none"></div>
+  <!-- disruption status shown inline on sailing rows -->
 
   <div class="status-bar loading" id="statusBar">
     <div class="pulse" id="pulse"></div>
@@ -1584,6 +1577,10 @@ function buildCard(r, i) {
   const delay    = Math.min(i * 30, 350);
   const favStar  = isFav(r.name) ? '★' : '☆';
 
+  // CalMac live status for this route
+  const disruption   = liveDisruptions[r.name];
+  const calMacStatus = disruption?.status || null;
+
   const sailings = TIMETABLE[r.name] || [];
   const sailingRows = sailings.map(s => {
     const time = s.t;
@@ -1592,24 +1589,24 @@ function buildCard(r, i) {
     const pct = r.hourlyData ? sailingRisk(time, r.name, r.hourlyData, r.marineData) : null;
     const col = pct !== null ? chanceColor(pct) : 'var(--muted)';
     const barW = pct !== null ? pct : 0;
-    // Check if CalMac has flagged this route as cancelled/disrupted
-    const disruption = liveDisruptions[r.name];
-    const isCancelled = disruption?.status === 'cancelled';
-    const isDisrupted = disruption?.status === 'disrupted' || disruption?.status === 'amber';
+    // Per-sailing CalMac status — check specific time then wildcard '*'
+    const sailingStatuses = disruption?.sailingStatuses || {};
+    const sailingInfo = sailingStatuses[time] || sailingStatuses['*'] || null;
+    const sailingStatus = sailingInfo?.status || null;
 
-    if (isCancelled) {
-      return `<div class="sailing-row${isPast ? ' sailing-past' : ''}" style="background:#fceaed;border:1px solid #ffcdd2;">
+    if (sailingStatus === 'cancelled') {
+      return `<div class="sailing-row${isPast ? ' sailing-past' : ''}" style="background:#fceaed;border:1px solid #ffcdd2;cursor:pointer" title="${(sailingInfo.detail||'').substring(0,120)}">
         <div class="sailing-time" style="color:#c62828">${time}</div>
-        <div class="sailing-direction" style="color:#c62828;text-decoration:line-through">${s.f} → ${s.to}</div>
-        <div class="sailing-bar-wrap" style="flex:1"></div>
-        <div class="sailing-pct-label" style="color:#c62828;font-size:.72rem;width:auto">🚨 Cancelled</div>
+        <div class="sailing-direction" style="color:#c62828;text-decoration:line-through;flex:1">${s.f} → ${s.to}</div>
+        <div style="font-size:.75rem;font-weight:700;color:#c62828;white-space:nowrap;letter-spacing:.01em">🚨 Cancelled</div>
       </div>`;
     }
 
-    if (isDisrupted) {
-      return `<div class="sailing-row${isPast ? ' sailing-past' : ''}" style="background:#fff8e1;border:1px solid #ffe082;">
+    if (sailingStatus === 'disrupted' || sailingStatus === 'amber') {
+      const label = sailingStatus === 'amber' ? '⚠️ Be Aware' : '⚠️ Disrupted';
+      return `<div class="sailing-row${isPast ? ' sailing-past' : ''}" style="background:#fff8e1;border:1px solid #ffe082;cursor:pointer" title="${(sailingInfo.detail||'').substring(0,120)}">
         <div class="sailing-time" style="color:#e65100">${time}</div>
-        <div class="sailing-direction" style="color:#e65100">${s.f} → ${s.to}</div>
+        <div class="sailing-direction" style="color:#e65100;flex:1">${s.f} → ${s.to}</div>
         <div class="sailing-bar-wrap">
           <div class="sailing-bar-track">
             <div class="sailing-bar-fill" style="width:${barW}%;background:${col}"></div>
@@ -1642,6 +1639,9 @@ function buildCard(r, i) {
         <div class="chance-pct" style="color:${colour}">${overall !== null ? overall+'%' : '–'}</div>
         <div class="chance-lbl">Next 12h</div>
         <div class="exposure-lbl">${['','🛡 Sheltered','🌊 Moderate','🌊🌊 Exposed','⚠️ Very exposed'][profile.exposure]}</div>
+        ${calMacStatus === 'cancelled' ? '<div class="calibrated-badge" style="background:#fceaed;color:#c62828;border-color:#ffcdd2">🚨 Cancelled</div>' : ''}
+        ${calMacStatus === 'disrupted' ? '<div class="calibrated-badge" style="background:#fff3e0;color:#e65100;border-color:#ffe082">⚠️ Disrupted</div>' : ''}
+        ${calMacStatus === 'amber' ? '<div class="calibrated-badge" style="background:#fff8e1;color:#e65100;border-color:#ffe082">⚠️ Be Aware</div>' : ''}
         ${(()=>{ const t=historicalThresholds[r.name]; return t&&t.samples>=2 ? `<div class="calibrated-badge" title="Prediction calibrated using ${t.samples} months of real CalMac cancellation data">📊 Calibrated</div>` : ''; })()}
       </div>
     </div>
@@ -2183,48 +2183,22 @@ async function testNotification() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// ── DISRUPTION BANNER ──
+// ── LIVE STATUS LOADER ──
+// Loads CalMac disruption data silently — shown inline on each sailing row
 // ─────────────────────────────────────────────────────────────────────────
 async function loadDisruptionBanner() {
-  const banner = document.getElementById('disruptionBanner');
-  if (!banner) return;
   try {
     const res = await fetch('/api/status');
+    if (!res.ok) return;
     const data = await res.json();
-
-    // If fallback or no disruptions, hide the banner silently
+    if (data.fallback) return;
     const disrupted = data.disrupted || [];
-    if (data.fallback || disrupted.length === 0) {
-      banner.style.display = 'none';
-      return;
-    }
-
-    // Store for use in sailing row rendering
+    const allRoutes_status = data.routes || disrupted;
     liveDisruptions = {};
-    disrupted.forEach(d => { if (d.routeKey) liveDisruptions[d.routeKey] = d; });
-
-    const isSevere = disrupted.some(d => d.status === 'cancelled' || d.status === 'disrupted');
-    const cls = isSevere ? 'disruption-banner' : 'disruption-banner amber-alert';
-    const icon = isSevere ? '🚨' : '⚠️';
-    const routeList = disrupted.map(d => `<strong>${d.name}</strong>${d.message ? ': ' + d.message : ''}`).join('<br>');
-
-    banner.innerHTML = `<div class="${cls}"><div class="db-icon">${icon}</div><div class="db-body"><div class="db-title">CalMac reports ${disrupted.length} disrupted route${disrupted.length > 1 ? 's' : ''}</div><div style="margin:4px 0;font-size:.8rem">${routeList}</div><span class="db-link" onclick="window.open('https://www.calmac.co.uk/en-gb/service-status/','_blank')">View official status →</span></div></div>`;
-    banner.style.display = 'block';
-
-    // Stamp disrupted routes onto their cards
-    disrupted.forEach(d => {
-      if (!d.routeKey) return;
-      // Update alert pill on the corresponding card if visible
-      document.querySelectorAll('.route-card').forEach(card => {
-        if (card.querySelector('.route-name')?.textContent?.trim() === d.routeKey) {
-          const pill = card.querySelector('.alert-pill');
-          if (pill) {
-            pill.className = `alert-pill alert-${d.status}`;
-            pill.textContent = { cancelled: '🚨 Cancelled', disrupted: '⚠️ Disrupted', amber: '⚠️ Delayed' }[d.status] || d.status;
-          }
-        }
-      });
-    });
+    // Store ALL routes so sailingStatuses is available even for BE_AWARE routes
+    allRoutes_status.forEach(d => { if (d.routeKey) liveDisruptions[d.routeKey] = d; });
+    // Re-render so sailing rows reflect live CalMac status
+    if (Object.keys(liveDisruptions).length > 0 && allRoutes.length > 0) renderRoutes();
   } catch (_) {}
 }
 
