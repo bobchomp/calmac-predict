@@ -10,6 +10,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black" />
   <meta name="apple-mobile-web-app-title" content="Will It Sail?" />
   <meta name="theme-color" content="#003087" />
+  <!-- Clerk auth -->
+  <script>window.__CLERK_PUBLISHABLE_KEY__ = 'pk_test_ZGVhci1tdWxsZXQtMC5jbGVyay5hY2NvdW50cy5kZXYk';</script>
+  <script async src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet" />
   <style>
@@ -170,6 +173,12 @@
     .ls-status{margin-top:12px;font-size:.78rem;color:rgba(255,255,255,.55);letter-spacing:.03em;}
 
     /* ── BOTTOM NAV ── */
+    /* ── CLERK AUTH ── */
+    .auth-bar{display:flex;align-items:center;gap:8px;padding:6px 16px;background:var(--white);border-bottom:1px solid var(--light);justify-content:flex-end;min-height:36px;}
+    .auth-btn{font-family:inherit;font-size:.78rem;font-weight:600;padding:5px 14px;border-radius:20px;border:1.5px solid var(--navy);background:transparent;color:var(--navy);cursor:pointer;transition:all .18s;}
+    .auth-btn:hover{background:var(--navy);color:#fff;}
+    .auth-btn.signed-in{border-color:var(--green);color:var(--green);}
+    .auth-syncing{font-size:.72rem;color:var(--muted);font-style:italic;}
     .bottom-nav{
       position:fixed;bottom:0;left:0;right:0;z-index:200;
       background:var(--white);border-top:1px solid var(--light);
@@ -394,6 +403,13 @@
     <path d="M0,20 C240,40 480,0 720,20 C960,40 1200,0 1440,20 L1440,40 L0,40 Z" fill="#f4f7fb"/>
   </svg>
 </header>
+
+<!-- ── AUTH BAR ── -->
+<div class="auth-bar" id="authBar" style="display:none">
+  <span class="auth-syncing" id="authSyncing" style="display:none">Syncing…</span>
+  <div id="clerkUserBtn"></div>
+  <button class="auth-btn" id="authSignInBtn" style="display:none">Sign in to sync</button>
+</div>
 
 <div class="toolbar">
   <div class="toolbar-inner">
@@ -1491,6 +1507,8 @@ let favourites = JSON.parse(localStorage.getItem('wis_favs') || '[]');
 
 function saveFavourites() {
   localStorage.setItem('wis_favs', JSON.stringify(favourites));
+  // If signed in, sync to server in the background
+  syncFavsToServer();
 }
 
 function isFav(name) { return favourites.includes(name); }
@@ -2653,6 +2671,129 @@ document.querySelectorAll('.nav-tab').forEach(btn => {
     setTimeout(() => document.getElementById('loadingScreen').classList.add('hidden'), 3500);
   }
 })();
+
+
+// ─────────────────────────────────────────────────────────────────────────
+// ── CLERK AUTH + FAVOURITES SYNC ──
+// ─────────────────────────────────────────────────────────────────────────
+let clerkInstance = null;
+let clerkToken = null;
+
+async function syncFavsToServer() {
+  if (!clerkToken) return;
+  const syncing = document.getElementById('authSyncing');
+  if (syncing) syncing.style.display = '';
+  try {
+    await fetch('/api/user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + clerkToken },
+      body: JSON.stringify({ favs: favourites }),
+    });
+  } catch (_) {}
+  if (syncing) syncing.style.display = 'none';
+}
+
+async function loadFavsFromServer() {
+  if (!clerkToken) return;
+  const syncing = document.getElementById('authSyncing');
+  if (syncing) syncing.style.display = '';
+  try {
+    const res = await fetch('/api/user', {
+      headers: { 'Authorization': 'Bearer ' + clerkToken },
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (Array.isArray(data.favs) && data.favs.length > 0) {
+      // Merge server favs with local — union of both
+      const merged = [...new Set([...favourites, ...data.favs])];
+      favourites = merged;
+      localStorage.setItem('wis_favs', JSON.stringify(favourites));
+      renderRoutes();
+      renderFavourites();
+    }
+  } catch (_) {}
+  if (syncing) syncing.style.display = 'none';
+}
+
+async function initClerk() {
+  // Wait for Clerk to load
+  let attempts = 0;
+  while (!window.Clerk && attempts < 20) {
+    await new Promise(r => setTimeout(r, 200));
+    attempts++;
+  }
+  if (!window.Clerk) return; // Clerk failed to load — silent fallback
+
+  const publishableKey = window.__CLERK_PUBLISHABLE_KEY__;
+  if (!publishableKey || publishableKey.includes('REPLACE_WITH')) return;
+
+  try {
+    await window.Clerk.load({ publishableKey });
+    clerkInstance = window.Clerk;
+
+    const authBar = document.getElementById('authBar');
+    const signInBtn = document.getElementById('authSignInBtn');
+    const userBtnEl = document.getElementById('clerkUserBtn');
+
+    if (authBar) authBar.style.display = 'flex';
+
+    const updateAuthUI = async () => {
+      const user = clerkInstance.user;
+      if (user) {
+        // Signed in — get token and show user button
+        try {
+          clerkToken = await clerkInstance.session.getToken();
+        } catch (_) { clerkToken = null; }
+
+        if (signInBtn) signInBtn.style.display = 'none';
+
+        // Mount Clerk's user button (avatar + dropdown with sign out)
+        if (userBtnEl && !userBtnEl.dataset.mounted) {
+          userBtnEl.dataset.mounted = '1';
+          clerkInstance.mountUserButton(userBtnEl, {
+            afterSignOutUrl: location.href,
+          });
+        }
+
+        // Load server favs and merge
+        await loadFavsFromServer();
+      } else {
+        // Signed out
+        clerkToken = null;
+        if (signInBtn) signInBtn.style.display = '';
+        if (userBtnEl) userBtnEl.innerHTML = '';
+        userBtnEl.dataset.mounted = '';
+      }
+    };
+
+    // Sign-in button click
+    if (signInBtn) {
+      signInBtn.addEventListener('click', () => {
+        clerkInstance.openSignIn({
+          afterSignInUrl: location.href,
+          afterSignUpUrl: location.href,
+        });
+      });
+    }
+
+    // Listen for auth state changes
+    clerkInstance.addListener(updateAuthUI);
+
+    // Initial check
+    await updateAuthUI();
+
+  } catch (err) {
+    console.warn('[Clerk] Failed to initialise:', err.message);
+  }
+}
+
+// Kick off Clerk after page load
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initClerk);
+} else {
+  initClerk();
+}
+
 </script>
 </body>
 </html>
