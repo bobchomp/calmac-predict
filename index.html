@@ -1152,8 +1152,9 @@ function calcHourlyRisk(routeName, hour, hourlyWeather, hourlyMarine) {
 
   // ── WIND (0-40 pts) ──
   // How close are we to the route's specific cancellation threshold?
-  const gust = (hourlyWeather.windgusts_10m || [])[hour] || 0;
-  const wind = (hourlyWeather.windspeed_10m || [])[hour] || 0;
+  // Open-Meteo returns wind in m/s — convert to mph to match threshold values
+  const gust = ((hourlyWeather.windgusts_10m || [])[hour] || 0) * 2.237;
+  const wind = ((hourlyWeather.windspeed_10m || [])[hour] || 0) * 2.237;
   const gustRatio = gust / effectiveThreshold; // >1 means likely cancelled
   if (gustRatio >= 1.1)      risk += 40;
   else if (gustRatio >= 0.9) risk += 30;
@@ -1372,8 +1373,8 @@ async function fetchAllWeather() {
 
     return {
       route: route.name, hourly, marine,
-      maxGustMph: mx(gusts) !== null ? Math.round(mx(gusts)) : null,
-      maxWindMph: mx(winds) !== null ? Math.round(mx(winds)) : null,
+      maxGustMph: mx(gusts) !== null ? Math.round(mx(gusts) * 2.237) : null,
+      maxWindMph: mx(winds) !== null ? Math.round(mx(winds) * 2.237) : null,
       worstCode:  mx(slice(hourly.weathercode)),
       minVisM:    mn(slice(hourly.visibility)),
       maxPrecip:  mx(slice(hourly.precipitation)),
