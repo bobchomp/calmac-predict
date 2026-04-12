@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-title" content="Will It Sail?" />
   <meta name="theme-color" content="#003087" />
   <!-- Clerk auth -->
-  <script>window.__CLERK_PUBLISHABLE_KEY__ = 'pk_test_ZGVhci1tdWxsZXQtMC5jbGVyay5hY2NvdW50cy5kZXYk';</script>
+  <script>window.__CLERK_PUBLISHABLE_KEY__ = 'REPLACE_WITH_YOUR_CLERK_PUBLISHABLE_KEY';</script>
   <script async src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -174,11 +174,8 @@
 
     /* ── BOTTOM NAV ── */
     /* ── CLERK AUTH ── */
-    .auth-bar{display:flex;align-items:center;gap:8px;padding:6px 16px;background:var(--white);border-bottom:1px solid var(--light);justify-content:flex-end;min-height:36px;}
-    .auth-btn{font-family:inherit;font-size:.78rem;font-weight:600;padding:5px 14px;border-radius:20px;border:1.5px solid var(--navy);background:transparent;color:var(--navy);cursor:pointer;transition:all .18s;}
-    .auth-btn:hover{background:var(--navy);color:#fff;}
-    .auth-btn.signed-in{border-color:var(--green);color:var(--green);}
-    .auth-syncing{font-size:.72rem;color:var(--muted);font-style:italic;}
+    .auth-btn{font-family:inherit;font-size:.78rem;font-weight:600;padding:5px 14px;border-radius:20px;cursor:pointer;transition:all .18s;}
+    .auth-btn:hover{background:rgba(255,255,255,.25)!important;}
     .bottom-nav{
       position:fixed;bottom:0;left:0;right:0;z-index:200;
       background:var(--white);border-top:1px solid var(--light);
@@ -395,6 +392,12 @@
     <div class="header-logo">
       <div class="ferry-icon">⛴️</div>
       <div class="site-name">Will It Sail?</div>
+      <!-- Auth button sits in top-right of header -->
+      <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+        <span class="auth-syncing" id="authSyncing" style="display:none;color:rgba(255,255,255,.7);font-size:.72rem;font-style:italic">Syncing…</span>
+        <div id="clerkUserBtn"></div>
+        <button class="auth-btn" id="authSignInBtn" style="display:none;border-color:rgba(255,255,255,.6);color:#fff;font-size:.78rem;padding:5px 14px;border-radius:20px;border:1.5px solid rgba(255,255,255,.6);background:rgba(255,255,255,.12);cursor:pointer;font-family:inherit;font-weight:600;backdrop-filter:blur(4px)">Sign in</button>
+      </div>
     </div>
     <h1>CalMac <span>Sailing</span> Predictor</h1>
     <p class="subtitle">Unofficial weather-based predictions for all CalMac routes across Scotland's west coast and islands.</p>
@@ -403,13 +406,6 @@
     <path d="M0,20 C240,40 480,0 720,20 C960,40 1200,0 1440,20 L1440,40 L0,40 Z" fill="#f4f7fb"/>
   </svg>
 </header>
-
-<!-- ── AUTH BAR ── -->
-<div class="auth-bar" id="authBar" style="display:none">
-  <span class="auth-syncing" id="authSyncing" style="display:none">Syncing…</span>
-  <div id="clerkUserBtn"></div>
-  <button class="auth-btn" id="authSignInBtn" style="display:none">Sign in to sync</button>
-</div>
 
 <div class="toolbar">
   <div class="toolbar-inner">
@@ -2731,11 +2727,11 @@ async function initClerk() {
     await window.Clerk.load({ publishableKey });
     clerkInstance = window.Clerk;
 
-    const authBar = document.getElementById('authBar');
     const signInBtn = document.getElementById('authSignInBtn');
     const userBtnEl = document.getElementById('clerkUserBtn');
 
-    if (authBar) authBar.style.display = 'flex';
+    // Show the sign-in button now that Clerk is ready
+    if (signInBtn) signInBtn.style.display = '';
 
     const updateAuthUI = async () => {
       const user = clerkInstance.user;
