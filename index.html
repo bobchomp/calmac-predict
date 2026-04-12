@@ -1706,6 +1706,7 @@ function openModal(routeName, sailingTime) {
   if (!r) return;
 
   const profile  = ROUTE_PROFILES[r.name] || { threshold: 45, exposure: 2 };
+  const sailings = TIMETABLE[r.name] || [];
   // If a specific sailing time is given, use that hour; else use current hour
   const hour     = sailingTime ? parseInt(sailingTime.split(':')[0]) : new Date().getHours();
   const hourly   = r.hourlyData || {};
@@ -1863,8 +1864,8 @@ function openModal(routeName, sailingTime) {
   document.getElementById('modalContent').innerHTML = `
     <div class="modal-handle"></div>
     <div class="modal-header">
-      <div class="modal-route-name">${r.name}</div>
-      <div class="modal-subtitle">${exposureLabels[profile.exposure] || ''} · Cancellation threshold ~${Math.round(effThreshold)} mph gusts${sailingTime ? ' · <strong>' + sailingTime + ' sailing</strong>' : ''}</div>
+      <div class="modal-route-name">${sailingTime ? sailingTime + ' · ' + r.name : r.name}</div>
+      <div class="modal-subtitle">${(() => { const s = sailingTime ? sailings.find(x=>x.t===sailingTime) : null; return s ? s.f + ' → ' + s.to + ' · ' : ''; })()}${exposureLabels[profile.exposure] || ''} · Threshold ~${Math.round(effThreshold)} mph gusts</div>
     </div>
     <div class="modal-body">
 
@@ -1952,15 +1953,9 @@ document.getElementById('modalContent').addEventListener('touchend', e => {
   if (dy > 60 && document.getElementById('modalContent').scrollTop === 0) closeModal();
 }, { passive: true });
 
-// Card click → open modal (but not fav button)
+// Card click → no longer opens a modal (sailings rows handle that)
 function attachCardClicks(container) {
-  container.querySelectorAll('.route-card').forEach(card => {
-    card.addEventListener('click', e => {
-      if (e.target.closest('.fav-btn') || e.target.closest('.share-btn') || e.target.closest('.notif-btn') || e.target.closest('.card-actions')) return;
-      const routeName = card.querySelector('.route-name')?.textContent;
-      if (routeName) openModal(routeName);
-    });
-  });
+  // Intentionally empty — modal is opened by clicking individual sailing rows
 }
 
 
