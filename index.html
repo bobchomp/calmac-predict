@@ -1705,34 +1705,23 @@ function openModal(routeName, sailingTime) {
   const marine   = r.marineData || null;
   const season   = seasonFactor();
 
-  // ── Compute individual score components ──
-  // When a specific sailing time is given, use that hour's weather data
-  const useHourlyForSailing = sailingTime && r.hourlyData;
-  const sailingHour = sailingTime ? parseInt(sailingTime.split(':')[0]) : hour;
-  const sailingIdx  = Math.min(sailingHour, 23);
+  // ── Use the SAME calculation path as the sailing row cards ──
+  // sailingRisk() → calcHourlyRisk() is the single source of truth
+  const h = sailingTime ? Math.min(parseInt(sailingTime.split(':')[0]), 23) : hour;
+  const hw = r.hourlyData || {};
+  const hm = r.marineData || null;
 
-  const gust  = useHourlyForSailing
-    ? Math.round((hourly.windgusts_10m?.[sailingIdx] || 0) * 2.237)
-    : (r.maxGustMph || 0);
-  const wind  = useHourlyForSailing
-    ? Math.round((hourly.windspeed_10m?.[sailingIdx] || 0) * 2.237)
-    : (r.maxWindMph || 0);
-  const waveM = useHourlyForSailing && r.marineData
-    ? (r.marineData.wave_height?.[sailingIdx] ?? r.maxWaveM)
-    : r.maxWaveM;
-  const vis   = useHourlyForSailing
-    ? (hourly.visibility?.[sailingIdx] ?? r.minVisM)
-    : r.minVisM;
-  const code  = useHourlyForSailing
-    ? (hourly.weathercode?.[sailingIdx] ?? r.weatherCode ?? 0)
-    : (r.weatherCode || 0);
-  const snow  = useHourlyForSailing
-    ? (hourly.snowfall?.[sailingIdx] ?? 0)
-    : Math.max(...((hourly.snowfall || []).slice(hour, hour+12).concat([0])));
-  const isTidal  = TIDAL_ROUTES.has(r.name);
+  // These are the exact values calcHourlyRisk uses (m/s converted to mph)
+  const gust = ((hw.windgusts_10m || [])[h] || 0) * 2.237;
+  const wind = ((hw.windspeed_10m || [])[h] || 0) * 2.237;
+  const waveM = hm ? ((hm.wave_height || [])[h] ?? r.maxWaveM) : r.maxWaveM;
+  const vis   = (hw.visibility || [])[h] ?? r.minVisM;
+  const code  = (hw.weathercode || [])[h] ?? r.weatherCode ?? 0;
+  const snow  = (hw.snowfall || [])[h] ?? 0;
+  const isTidal = TIDAL_ROUTES.has(r.name);
   const effThreshold = profile.threshold * season;
 
-  // Wind score (0-40)
+  // Wind score — identical to calcHourlyRisk
   const gustRatio = gust / effThreshold;
   let windScore = 0;
   if      (gustRatio >= 1.1)  windScore = 40;
@@ -1741,13 +1730,17 @@ function openModal(routeName, sailingTime) {
   else if (gustRatio >= 0.6)  windScore = 8;
   else if (gustRatio >= 0.45) windScore = 3;
 
-  // Wave score (0-30)
+  // Wave score — identical to calcHourlyRisk
   let waveScore = 0;
   let waveReason = 'No wave data — estimated from wind';
   if (waveM !== null && waveM !== undefined) {
-    const waveThresh = profile.exposure === 1 ? 3.0 : profile.exposure === 2 ? 2.5 : profile.exposure === 3 ? 2.0 : 1.5;
-    const waveRatio  = waveM / waveThresh;
-    waveReason = waveM.toFixed(1) + 'm waves (threshold ' + waveThresh + 'm for this route)';
+    const swellH = hm ? ((hm.swell_wave_height || [])[h] || 0) : 0;
+    const wavePeriod = hm ? ((hm.wave_period || [])[h] || 8) : 8;
+    const periodFactor = wavePeriod > 12 ? 1.3 : wavePeriod > 8 ? 1.1 : 1.0;
+    const effectiveWave = Math.max(waveM, swellH * 0.8) * periodFactor;
+    const waveThreshold = profile.exposure === 1 ? 3.0 : profile.exposure === 2 ? 2.5 : profile.exposure === 3 ? 2.0 : 1.5;
+    const waveRatio = effectiveWave / waveThreshold;
+    waveReason = waveM.toFixed(1) + 'm waves (threshold ' + waveThreshold + 'm for this route)';
     if      (waveRatio >= 1.2) waveScore = 30;
     else if (waveRatio >= 1.0) waveScore = 22;
     else if (waveRatio >= 0.8) waveScore = 14;
@@ -1761,8 +1754,8 @@ function openModal(routeName, sailingTime) {
     else                { waveReason = 'Calm — estimated ~' + est.toFixed(1) + 'm'; }
   }
 
-  // Visibility score (0-15)
-  let visScore  = 0;
+  // Visibility score — identical to calcHourlyRisk
+  let visScore = 0;
   let visReason = 'Good visibility';
   if (vis !== null && vis !== undefined) {
     if      (vis < 500)  { visScore = 15; visReason = vis + 'm — dense fog, serious risk'; }
@@ -1772,28 +1765,32 @@ function openModal(routeName, sailingTime) {
     else                 { visReason = (vis/1000).toFixed(0) + 'km+ — clear'; }
   }
 
-  // Precipitation / snow score (0-10)
-  let precipScore  = 0;
+  // Precipitation — identical to calcHourlyRisk
+  let precipScore = 0;
   let precipReason = 'No significant precipitation';
-  if      (snow > 2 || code >= 71) { precipScore = 10; precipReason = snow > 0 ? snow.toFixed(1) + 'cm snow forecast' : 'Heavy snow/wintry showers'; }
+  if      (snow > 2  || code >= 71) { precipScore = 10; precipReason = snow > 0 ? snow.toFixed(1) + 'cm snow forecast' : 'Heavy snow/wintry showers'; }
   else if (snow > 0.5 || code >= 61) { precipScore = 4; precipReason = 'Rain or light snow expected'; }
-  else if (code >= 51) { precipScore = 1; precipReason = 'Drizzle expected'; }
+  else if (code >= 51)               { precipScore = 1; precipReason = 'Drizzle expected'; }
 
-  // Season adjustment
-  const seasonScore = season < 1.0 ? Math.round((1 - season) * 30) : 0;
-  const seasonReason = season < 0.9
-    ? 'Winter — thresholds reduced by 15% (winds cancel sailings at lower speeds)'
-    : season < 1.0
-    ? 'Shoulder season — thresholds slightly reduced'
-    : 'Summer — standard thresholds apply';
-
-  // Tidal penalty
+  // Tidal — identical to calcHourlyRisk
   const tidalScore  = isTidal ? 3 : 0;
   const tidalReason = isTidal ? 'This route has known tidal restrictions that can cause cancellations' : 'No tidal restrictions on this route';
 
-  const totalRisk   = Math.min(100, windScore + waveScore + visScore + precipScore + tidalScore);
-  const chance      = Math.max(0, 100 - totalRisk);
-  const colour      = chanceColor(chance);
+  // Season — for display only (already baked into effThreshold)
+  const seasonScore = season < 1.0 ? Math.round((1 - season) * 30) : 0;
+  const seasonReason = season < 0.9
+    ? 'Winter — thresholds reduced by 15% (winds cancel sailings at lower speeds)'
+    : season < 1.0 ? 'Shoulder season — thresholds slightly reduced'
+    : 'Summer — standard thresholds apply';
+
+  // ── SINGLE SOURCE OF TRUTH for percentage ──
+  // Use calcHourlyRisk() — the exact same function the card sailing rows use
+  // Score breakdown rows above are for display only
+  const totalRisk = r.hourlyData
+    ? calcHourlyRisk(r.name, h, hw, hm)
+    : (r.risk || 0);
+  const chance = sailingChance(totalRisk, r.name);
+  const colour = chanceColor(chance);
 
   // Verdict text
   const verdictText = chance >= 75
@@ -1832,7 +1829,7 @@ function openModal(routeName, sailingTime) {
 
   // Build modal content
   const scoreRows = [
-    { icon:'💨', name:'Wind & Gusts', reason: gust + ' mph gusts (threshold ~' + Math.round(effThreshold) + ' mph for this route)', score: windScore, max: 40 },
+    { icon:'💨', name:'Wind & Gusts', reason: Math.round(gust) + ' mph gusts (threshold ~' + Math.round(effThreshold) + ' mph for this route)', score: windScore, max: 40 },
     { icon:'🌊', name:'Wave Height',  reason: waveReason,  score: waveScore,   max: 30 },
     { icon:'🌫', name:'Visibility',   reason: visReason,   score: visScore,    max: 15 },
     { icon:'🌧', name:'Precipitation',reason: precipReason,score: precipScore, max: 10 },
