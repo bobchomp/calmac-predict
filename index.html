@@ -93,6 +93,7 @@
     .chance-pct{font-family:'Syne',sans-serif;font-size:1.8rem;font-weight:800;line-height:1;}
     .chance-lbl{font-size:.65rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-top:1px;}
     .exposure-lbl{font-size:.65rem;color:var(--muted);margin-top:2px;}
+    .calibrated-badge{font-size:.62rem;color:#2e7d32;background:#e8f5e9;border:1px solid #a5d6a7;border-radius:4px;padding:2px 5px;margin-top:3px;font-weight:600;display:inline-block;cursor:help;}
 
     /* Weather row */
     .card-weather{padding:10px 16px;background:var(--offwhite);border-bottom:1px solid var(--light);display:flex;gap:14px;font-size:.82rem;color:var(--muted);}
@@ -423,7 +424,25 @@
   <div class="tab-page" id="tabAbout" style="padding-bottom:80px">
     <div class="about-card">
       <h3>How predictions work</h3>
-      <p>Each route is scored 0–100 using live data from Open-Meteo. The score is converted to a "chance of sailing" percentage. Sailing decisions are then made by CalMac — these are estimates only.</p>
+      <p>Each route is scored 0–100 using live data from Open-Meteo. Where real CalMac cancellation history is available, the weather score is blended with historical reliability (70% weather, 30% history) and capped at the route's real-world track record. Sailing decisions are made by CalMac — these are estimates only.</p>
+    </div>
+    <div class="about-card">
+      <h3>Historical database</h3>
+      <div id="db-stats" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
+        <div style="text-align:center;background:var(--light);border-radius:8px;padding:12px">
+          <div style="font-size:1.6rem;font-weight:800;color:var(--navy)" id="stat-months">–</div>
+          <div style="font-size:.72rem;color:var(--muted);margin-top:2px">Months of<br>cancellation data</div>
+        </div>
+        <div style="text-align:center;background:var(--light);border-radius:8px;padding:12px">
+          <div style="font-size:1.6rem;font-weight:800;color:var(--navy)" id="stat-routes">–</div>
+          <div style="font-size:.72rem;color:var(--muted);margin-top:2px">Routes<br>calibrated</div>
+        </div>
+        <div style="text-align:center;background:var(--light);border-radius:8px;padding:12px">
+          <div style="font-size:1.6rem;font-weight:800;color:var(--navy)" id="stat-reports">–</div>
+          <div style="font-size:.72rem;color:var(--muted);margin-top:2px">User<br>reports</div>
+        </div>
+      </div>
+      <p style="font-size:.78rem;color:var(--muted)">Historical data sourced from official CalMac monthly reliability PDFs. The 📊 Calibrated badge on a route card means its prediction is anchored to real cancellation history.</p>
     </div>
     <div class="about-card">
       <h3>Factors in the algorithm</h3>
@@ -431,6 +450,7 @@
       <div class="factor-row"><div class="factor-icon">🌊</div><div class="factor-text"><div class="factor-name">Wave height & swell</div><div class="factor-desc">Significant wave height + swell period from Marine API</div></div><div class="factor-weight">30 pts</div></div>
       <div class="factor-row"><div class="factor-icon">🌫</div><div class="factor-text"><div class="factor-name">Visibility / fog</div><div class="factor-desc">Poor visibility can disrupt routes independently of wind</div></div><div class="factor-weight">15 pts</div></div>
       <div class="factor-row"><div class="factor-icon">❄️</div><div class="factor-text"><div class="factor-name">Snow & precipitation</div><div class="factor-desc">Heavy snow adds additional risk</div></div><div class="factor-weight">10 pts</div></div>
+      <div class="factor-row"><div class="factor-icon">📊</div><div class="factor-text"><div class="factor-name">Historical calibration</div><div class="factor-desc">Real CalMac cancellation data blended in (70/30 split)</div></div><div class="factor-weight">Blend</div></div>
       <div class="factor-row"><div class="factor-icon">🌙</div><div class="factor-text"><div class="factor-name">Season weighting</div><div class="factor-desc">Winter thresholds are 15% stricter than summer</div></div><div class="factor-weight">×0.85</div></div>
       <div class="factor-row"><div class="factor-icon">🗺</div><div class="factor-text"><div class="factor-name">Route exposure</div><div class="factor-desc">Sheltered routes (Gourock–Dunoon) vs very exposed (Coll/Tiree)</div></div><div class="factor-weight">Profile</div></div>
     </div>
@@ -857,6 +877,44 @@ const TIDAL_ROUTES = new Set([
   'Mallaig - Small Isles',       // Some piers have tidal access windows
 ]);
 
+// ── GOOGLE SHEET INTEGRATION ─────────────────────────────────
+const SHEET_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzTwBxJcIt8gGM-bwYuWYE2GS587nuQeAKhL4hpOx6vJAhuuRGKRNS5LtLqmh3x1QFK/exec';
+
+// Stores historical reliability thresholds fetched from the Sheet.
+// Format: { [routeKey]: { base, winter, summer, shoulder, samples } }
+let historicalThresholds = {};
+let thresholdsLoaded = false;
+
+async function loadHistoricalThresholds() {
+  try {
+    const res = await fetch(`${SHEET_SCRIPT_URL}?action=getThresholds`);
+    const json = await res.json();
+    if (json.thresholds) {
+      historicalThresholds = json.thresholds;
+      thresholdsLoaded = true;
+      console.log(`[CalMac] Loaded historical thresholds for ${Object.keys(historicalThresholds).length} routes`);
+    }
+  } catch (err) {
+    console.warn('[CalMac] Could not load historical thresholds — using weather-only predictions', err);
+  }
+}
+
+// Returns the historical reliability for a route in the current season (0–100),
+// or null if we have no data yet.
+function getHistoricalReliability(routeName) {
+  const t = historicalThresholds[routeName];
+  if (!t || !t.samples || t.samples < 2) return null; // not enough data to trust
+
+  const month = new Date().getMonth() + 1; // 1-based
+  const WINTER   = [11, 12, 1, 2];
+  const SUMMER   = [5, 6, 7, 8, 9];
+
+  if (WINTER.includes(month)  && t.winter)   return parseFloat(t.winter);
+  if (SUMMER.includes(month)  && t.summer)   return parseFloat(t.summer);
+  if (t.shoulder)                            return parseFloat(t.shoulder);
+  return parseFloat(t.base) || null;
+}
+
 // ── SEASON FACTOR ──
 function seasonFactor() {
   const month = new Date().getMonth(); // 0=Jan
@@ -952,8 +1010,23 @@ function calcOverallRisk(routeName, currentHour, hourlyWeather, hourlyMarine) {
   return Math.min(100, Math.round(maxRisk));
 }
 
-function sailingChance(risk) {
-  return Math.max(0, Math.min(100, Math.round(100 - risk)));
+function sailingChance(risk, routeName) {
+  const weatherChance = Math.max(0, Math.min(100, Math.round(100 - risk)));
+
+  // If we have historical data, blend it in.
+  // Historical reliability caps the max possible score AND pulls the
+  // prediction toward the route's real-world track record.
+  // Weight: 70% weather model, 30% historical baseline.
+  const histRel = routeName ? getHistoricalReliability(routeName) : null;
+  if (histRel === null) return weatherChance;
+
+  // Hard cap: can never predict higher than historical reliability + 5%
+  // (small buffer for genuinely good weather days)
+  const cap = Math.min(100, histRel + 5);
+
+  // Blended score
+  const blended = Math.round((weatherChance * 0.7) + (histRel * 0.3));
+  return Math.max(0, Math.min(cap, blended));
 }
 
 function chanceColor(pct) {
@@ -995,7 +1068,7 @@ function sailingRisk(departureTime, routeName, hourlyWeather, hourlyMarine) {
   const [hh] = departureTime.split(':').map(Number);
   const idx = Math.min(hh, 23);
   const risk = calcHourlyRisk(routeName, idx, hourlyWeather, hourlyMarine);
-  return sailingChance(risk);
+  return sailingChance(risk, routeName);
 }
 
 // ── RENDER ──
@@ -1245,6 +1318,7 @@ document.querySelectorAll('.nav-tab').forEach(tab => {
     const showToolbar = target === 'tabRoutes';
     document.querySelector('.toolbar').style.display = showToolbar ? '' : 'none';
     if (target === 'tabFavs') renderFavourites();
+    if (target === 'tabAbout') loadAboutStats();
     window.scrollTo(0, 0);
   });
 });
@@ -1278,7 +1352,7 @@ function buildCard(r, i) {
   const currentMin  = new Date().getMinutes();
   const v        = r.verdict || 'unknown';
   const profile  = ROUTE_PROFILES[r.name] || {threshold:45,exposure:2};
-  const overall  = r.maxGustMph !== undefined ? sailingChance(r.risk || 0) : null;
+  const overall  = r.maxGustMph !== undefined ? sailingChance(r.risk || 0, r.name) : null;
   const colour   = overall !== null ? chanceColor(overall) : 'var(--muted)';
   const gustPct  = Math.min(100, Math.round(((r.maxGustMph||0) / 65) * 100));
   const wc       = windClass(r.maxGustMph || 0);
@@ -1317,6 +1391,7 @@ function buildCard(r, i) {
         <div class="chance-pct" style="color:${colour}">${overall !== null ? overall+'%' : '–'}</div>
         <div class="chance-lbl">Next 12h</div>
         <div class="exposure-lbl">${['','🛡 Sheltered','🌊 Moderate','🌊🌊 Exposed','⚠️ Very exposed'][profile.exposure]}</div>
+        ${(()=>{ const t=historicalThresholds[r.name]; return t&&t.samples>=2 ? `<div class="calibrated-badge" title="Prediction calibrated using ${t.samples} months of real CalMac cancellation data">📊 Calibrated</div>` : ''; })()}
       </div>
     </div>
     <div class="card-weather ${wc}">
@@ -1364,26 +1439,29 @@ function attachFeedbackButtons(container) {
       const routeName = btn.dataset.route;
       const sailed = btn.dataset.sailed === 'true';
       const route = allRoutes.find(r => r.name === routeName);
-      const chance = route ? sailingChance(route.risk || 0) : null;
+      const chance = route ? sailingChance(route.risk || 0, routeName) : null;
 
       // Visual feedback immediately
       row.innerHTML = `<span style="font-size:.8rem;color:var(--green);font-weight:600">✅ Thanks! Your report helps improve predictions.</span>`;
 
-      // Send to our API (logs to Vercel if no sheet configured)
+      // Send directly to Google Sheet
       try {
-        await fetch('/api/feedback', {
+        await fetch(SHEET_SCRIPT_URL, {
           method: 'POST',
+          mode: 'no-cors', // Apps Script requires no-cors from external origins
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            action: 'submitReport',
             route: routeName,
             sailed,
             predictedChance: chance,
-            gustMph: route?.maxGustMph,
-            waveM: route?.maxWaveM,
+            wind_mph: route?.maxGustMph || '',
+            wave_m: route?.maxWaveM || '',
+            notes: '',
           })
         });
       } catch(_) {
-        // Silently ignore network errors — feedback is best-effort
+        // Silently ignore — feedback is best-effort
       }
     });
   });
@@ -1633,21 +1711,42 @@ document.addEventListener('click', async e => {
   row.querySelectorAll('.fb-btn').forEach(b => b.classList.add('fb-sent'));
   row.querySelector('.feedback-label').textContent = sailed ? '✅ Thanks! Marked as sailed.' : '❌ Thanks! Marked as cancelled.';
 
-  // Send to /api/feedback (best-effort — don't block UI)
+  // Send to Google Sheet (best-effort — don't block UI)
   try {
-    await fetch('/api/feedback', {
+    await fetch(SHEET_SCRIPT_URL, {
       method: 'POST',
+      mode: 'no-cors',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        action: 'submitReport',
         route: routeName,
         sailed,
-        predictedChance: route ? sailingChance(route.risk || 0) : null,
-        gustMph: route?.maxGustMph ?? null,
-        waveM:   route?.maxWaveM   ?? null,
+        predictedChance: route ? sailingChance(route.risk || 0, routeName) : null,
+        wind_mph: route?.maxGustMph ?? '',
+        wave_m:   route?.maxWaveM   ?? '',
+        notes: 'modal',
       })
     });
   } catch (_) { /* silent fail */ }
 });
+
+// ── ABOUT TAB STATS ──
+let aboutStatsLoaded = false;
+async function loadAboutStats() {
+  if (aboutStatsLoaded) return;
+  try {
+    const res = await fetch(`${SHEET_SCRIPT_URL}?action=getStats`);
+    const json = await res.json();
+    if (json.reliability_months !== undefined) {
+      document.getElementById('stat-months').textContent  = json.reliability_months;
+      document.getElementById('stat-routes').textContent  = json.routes_calibrated;
+      document.getElementById('stat-reports').textContent = json.user_reports;
+      aboutStatsLoaded = true;
+    }
+  } catch(_) {
+    // Sheet unavailable — leave dashes
+  }
+}
 
 // ── BOOT ──
 // Tie loading screen to actual data fetch
@@ -1675,6 +1774,14 @@ document.addEventListener('click', async e => {
     ls.showError('Taking too long — check your connection');
     setTimeout(fetchData, 100); // still try to render what we have
   }, 45000);
+
+  // Load historical thresholds in parallel with weather — fire and forget.
+  // If it resolves before fetchData finishes, scores will be calibrated.
+  // If it's slower, the page will be correct on next auto-refresh.
+  loadHistoricalThresholds().then(() => {
+    // Re-render if weather data is already loaded when thresholds arrive
+    if (allRoutes.some(r => r.maxGustMph !== undefined)) renderRoutes();
+  });
 
   try {
     await fetchData();
