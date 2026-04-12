@@ -422,16 +422,20 @@
 
   <!-- ── ABOUT TAB ── -->
   <div class="tab-page" id="tabAbout" style="padding-bottom:80px">
-    <div class="about-card">
-      <h3>How predictions work</h3>
-      <p>Each route is scored 0–100 using live data from Open-Meteo. Where real CalMac cancellation history is available, the weather score is blended with historical reliability (70% weather, 30% history) and capped at the route's real-world track record. Sailing decisions are made by CalMac — these are estimates only.</p>
+
+    <!-- HERO INTRO -->
+    <div class="about-card" style="background:linear-gradient(135deg,#0a2540 0%,#1a3a5c 100%);color:#fff">
+      <h3 style="color:#fff;font-size:1.1rem;margin-bottom:8px">Will It Sail? 🚢</h3>
+      <p style="color:rgba(255,255,255,.85);font-size:.88rem;line-height:1.65">An unofficial sailing predictor for CalMac's west coast ferry network. It combines live weather forecasts with real CalMac cancellation history to estimate how likely each sailing is to run — route by route, departure by departure.</p>
     </div>
+
+    <!-- LIVE STATS -->
     <div class="about-card">
-      <h3>Historical database</h3>
-      <div id="db-stats" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
+      <h3>Database</h3>
+      <div id="db-stats" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px">
         <div style="text-align:center;background:var(--light);border-radius:8px;padding:12px">
           <div style="font-size:1.6rem;font-weight:800;color:var(--navy)" id="stat-months">–</div>
-          <div style="font-size:.72rem;color:var(--muted);margin-top:2px">Months of<br>cancellation data</div>
+          <div style="font-size:.72rem;color:var(--muted);margin-top:2px">Months of<br>real data</div>
         </div>
         <div style="text-align:center;background:var(--light);border-radius:8px;padding:12px">
           <div style="font-size:1.6rem;font-weight:800;color:var(--navy)" id="stat-routes">–</div>
@@ -442,28 +446,101 @@
           <div style="font-size:.72rem;color:var(--muted);margin-top:2px">User<br>reports</div>
         </div>
       </div>
-      <p style="font-size:.78rem;color:var(--muted)">Historical data sourced from official CalMac monthly reliability PDFs. The 📊 Calibrated badge on a route card means its prediction is anchored to real cancellation history.</p>
+      <p style="font-size:.78rem;color:var(--muted)">Historical cancellation data comes from official CalMac monthly reliability PDFs published at <a href="https://corporate.calmac.co.uk/en-gb/about-us/route-performance-reports/" target="_blank">corporate.calmac.co.uk</a>. Routes without real PDF data use research-based estimates derived from Transport Scotland reports and FOI releases. The <strong>📊 Calibrated</strong> badge on a route card means its prediction is anchored to real cancellation history.</p>
     </div>
+
+    <!-- STEP-BY-STEP HOW IT WORKS -->
     <div class="about-card">
-      <h3>Factors in the algorithm</h3>
-      <div class="factor-row"><div class="factor-icon">💨</div><div class="factor-text"><div class="factor-name">Wind gusts</div><div class="factor-desc">Compared against each route's known cancellation threshold</div></div><div class="factor-weight">40 pts</div></div>
-      <div class="factor-row"><div class="factor-icon">🌊</div><div class="factor-text"><div class="factor-name">Wave height & swell</div><div class="factor-desc">Significant wave height + swell period from Marine API</div></div><div class="factor-weight">30 pts</div></div>
-      <div class="factor-row"><div class="factor-icon">🌫</div><div class="factor-text"><div class="factor-name">Visibility / fog</div><div class="factor-desc">Poor visibility can disrupt routes independently of wind</div></div><div class="factor-weight">15 pts</div></div>
-      <div class="factor-row"><div class="factor-icon">❄️</div><div class="factor-text"><div class="factor-name">Snow & precipitation</div><div class="factor-desc">Heavy snow adds additional risk</div></div><div class="factor-weight">10 pts</div></div>
-      <div class="factor-row"><div class="factor-icon">📊</div><div class="factor-text"><div class="factor-name">Historical calibration</div><div class="factor-desc">Real CalMac cancellation data blended in (70/30 split)</div></div><div class="factor-weight">Blend</div></div>
-      <div class="factor-row"><div class="factor-icon">🌙</div><div class="factor-text"><div class="factor-name">Season weighting</div><div class="factor-desc">Winter thresholds are 15% stricter than summer</div></div><div class="factor-weight">×0.85</div></div>
-      <div class="factor-row"><div class="factor-icon">🗺</div><div class="factor-text"><div class="factor-name">Route exposure</div><div class="factor-desc">Sheltered routes (Gourock–Dunoon) vs very exposed (Coll/Tiree)</div></div><div class="factor-weight">Profile</div></div>
+      <h3>How the prediction works</h3>
+
+      <p style="font-size:.85rem;color:var(--muted);margin-bottom:14px">Every route gets a <strong>Sailing Chance %</strong> calculated in three stages:</p>
+
+      <!-- Stage 1 -->
+      <div style="display:flex;gap:12px;margin-bottom:16px">
+        <div style="flex-shrink:0;width:28px;height:28px;border-radius:50%;background:var(--navy);color:#fff;font-weight:800;font-size:.85rem;display:flex;align-items:center;justify-content:center">1</div>
+        <div>
+          <div style="font-weight:700;font-size:.9rem;color:var(--text);margin-bottom:4px">Weather risk score (0–100)</div>
+          <p style="font-size:.82rem;color:var(--muted);margin:0;line-height:1.6">Live weather data is fetched from <a href="https://open-meteo.com" target="_blank" style="color:var(--blue);font-weight:600">Open-Meteo</a> for the grid point nearest to each route's midpoint. Four conditions are scored and summed:</p>
+          <div style="margin-top:10px;display:flex;flex-direction:column;gap:0">
+            <div class="factor-row"><div class="factor-icon">💨</div><div class="factor-text"><div class="factor-name">Wind gusts</div><div class="factor-desc">Scored against each route's cancellation threshold (e.g. 40 mph on the exposed Stornoway crossing, 65 mph on the sheltered Gourock–Dunoon run). Scales from 0 → 40 pts as gusts approach and exceed that threshold.</div></div><div class="factor-weight">0–40 pts</div></div>
+            <div class="factor-row"><div class="factor-icon">🌊</div><div class="factor-text"><div class="factor-name">Wave height & swell</div><div class="factor-desc">Significant wave height is combined with swell period (longer-period swells hit harder). Scored against the route's sea exposure rating — sheltered Clyde routes ignore this almost entirely; outer isles routes are very sensitive to it.</div></div><div class="factor-weight">0–30 pts</div></div>
+            <div class="factor-row"><div class="factor-icon">🌫</div><div class="factor-text"><div class="factor-name">Visibility / fog</div><div class="factor-desc">Poor visibility can suspend services independently of wind. Scores 0 pts above 3 km, scaling to 15 pts in dense fog below 200 m.</div></div><div class="factor-weight">0–15 pts</div></div>
+            <div class="factor-row" style="border-bottom:none"><div class="factor-icon">❄️</div><div class="factor-text"><div class="factor-name">Snow & precipitation</div><div class="factor-desc">Heavy snowfall adds additional operational risk, particularly at ports. Up to 10 pts for severe snowfall rates.</div></div><div class="factor-weight">0–10 pts</div></div>
+          </div>
+          <p style="font-size:.78rem;color:var(--muted);margin-top:10px;background:var(--light);border-radius:8px;padding:8px">A score of 0 means perfect conditions. A score of 100 means almost certain cancellation. The score is then converted to a raw sailing chance: <strong>chance = 100 − score</strong>, then adjusted for season.</p>
+        </div>
+      </div>
+
+      <!-- Stage 2 -->
+      <div style="display:flex;gap:12px;margin-bottom:16px">
+        <div style="flex-shrink:0;width:28px;height:28px;border-radius:50%;background:var(--navy);color:#fff;font-weight:800;font-size:.85rem;display:flex;align-items:center;justify-content:center">2</div>
+        <div>
+          <div style="font-weight:700;font-size:.9rem;color:var(--text);margin-bottom:4px">Season & route adjustments</div>
+          <p style="font-size:.82rem;color:var(--muted);margin:0;line-height:1.6">The raw score is adjusted for:</p>
+          <ul style="font-size:.82rem;color:var(--muted);margin:8px 0 0 0;padding-left:18px;line-height:1.7">
+            <li><strong>Season factor</strong> — thresholds are 15% stricter in winter (Nov–Feb) and 7% stricter in shoulder months (Mar, Oct), reflecting CalMac's own increased cancellation rates in those periods.</li>
+            <li><strong>Tidal penalty</strong> — tidal routes like Tarbert–Portavadie face additional operational constraints and receive a small extra penalty.</li>
+            <li><strong>Route exposure profile</strong> — each of the 22 routes has a wind threshold, wave threshold, and exposure rating (1 = sheltered, 4 = fully open ocean) built from a combination of route geography and historical cancellation patterns.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Stage 3 -->
+      <div style="display:flex;gap:12px">
+        <div style="flex-shrink:0;width:28px;height:28px;border-radius:50%;background:var(--navy);color:#fff;font-weight:800;font-size:.85rem;display:flex;align-items:center;justify-content:center">3</div>
+        <div>
+          <div style="font-weight:700;font-size:.9rem;color:var(--text);margin-bottom:4px">Historical calibration blend</div>
+          <p style="font-size:.82rem;color:var(--muted);margin:0;line-height:1.6">For routes with real CalMac data in the database, the weather-based chance is blended with that route's actual historical reliability:</p>
+          <div style="background:var(--light);border-radius:8px;padding:10px 12px;margin-top:8px;font-family:monospace;font-size:.8rem;color:var(--navy)">
+            final = (weather_chance × 0.7) + (history_reliability × 0.3)
+          </div>
+          <p style="font-size:.78rem;color:var(--muted);margin-top:8px;line-height:1.6">The result is then <strong>capped</strong> at the route's real historical reliability + 5% — so even in perfect weather, a route with an 87% track record can't show 99%. This prevents overconfidence on routes with structural reliability issues.</p>
+        </div>
+      </div>
     </div>
+
+    <!-- PER-SAILING TIMETABLE -->
     <div class="about-card">
-      <h3>Disclaimer</h3>
-      <p>This is an <strong>unofficial</strong> community tool, not affiliated with Caledonian MacBrayne. Always check <a href="https://www.calmac.co.uk/service-status" target="_blank">CalMac's official service status</a> before travelling. Weather data by <a href="https://open-meteo.com" target="_blank">Open-Meteo</a>.</p>
+      <h3>Individual sailing predictions</h3>
+      <p style="font-size:.85rem;color:var(--muted);line-height:1.65">Tapping a route card expands a timetable view showing each departure time with its own sailing chance. Each individual sailing re-runs the weather score using the forecast for that specific hour, so a route might show 90% overall but flag a specific afternoon sailing as lower if a squall is forecast to arrive mid-day.</p>
+      <p style="font-size:.85rem;color:var(--muted);line-height:1.65;margin-top:8px">Timetables are based on the CalMac Summer 2026 schedule (27 March – 18 October 2026), verified from official CalMac PDFs.</p>
     </div>
+
+    <!-- DATA SOURCES -->
+    <div class="about-card">
+      <h3>Data sources</h3>
+      <div class="factor-row"><div class="factor-icon">🌤</div><div class="factor-text"><div class="factor-name">Open-Meteo</div><div class="factor-desc">Free, open-source weather API providing hourly forecasts for wind, gusts, wave height, swell, visibility, and precipitation at each route's coordinates. Refreshed automatically every 30 minutes.</div></div></div>
+      <div class="factor-row"><div class="factor-icon">📋</div><div class="factor-text"><div class="factor-name">CalMac Reliability PDFs</div><div class="factor-desc">Official monthly performance reports published by Caledonian MacBrayne at their corporate website. Each PDF contains month-by-month counts of scheduled, operated, diverted, and cancelled sailings for one route. Six routes are currently fully calibrated from these PDFs (72 months of real data).</div></div></div>
+      <div class="factor-row"><div class="factor-icon">🗂</div><div class="factor-text"><div class="factor-name">Transport Scotland / FOI data</div><div class="factor-desc">For routes where CalMac PDFs aren't yet in the database, estimates are derived from Transport Scotland annual reports, published FOI responses, and CalMac's own annual reliability statements.</div></div></div>
+      <div class="factor-row" style="border-bottom:none"><div class="factor-icon">🙋</div><div class="factor-text"><div class="factor-name">User reports</div><div class="factor-desc">The ✅ / ❌ feedback buttons on each route card let you report whether a sailing actually ran. These reports are stored and will be used to refine predictions over time.</div></div></div>
+    </div>
+
+    <!-- LIMITATIONS -->
+    <div class="about-card">
+      <h3>Limitations & honest caveats</h3>
+      <ul style="font-size:.84rem;color:var(--muted);padding-left:18px;line-height:1.8;margin:0">
+        <li><strong>Not all cancellations are weather-related.</strong> CalMac sailings are also cancelled due to mechanical breakdowns, crewing issues, and port problems. This tool only models weather risk — it can't predict a surprise engine failure.</li>
+        <li><strong>The 30-min forecast grid may miss local conditions.</strong> The Minch, Sound of Mull, and Firth of Lorn can have very localised sea states that differ from the nearest forecast point.</li>
+        <li><strong>CalMac has discretion.</strong> Masters have the final say on whether a sailing operates, and CalMac applies its own internal safety thresholds that are not published. Our thresholds are reverse-engineered from cancellation history.</li>
+        <li><strong>Tidal routes are especially uncertain.</strong> Services like Tarbert–Portavadie have complex operational constraints beyond weather alone.</li>
+        <li><strong>Historical data quality varies.</strong> Six routes have full real CalMac PDF data; the rest use research-based estimates which are less precise.</li>
+      </ul>
+    </div>
+
+    <!-- DISCLAIMER -->
+    <div class="about-card" style="border:2px solid #f0a500;background:#fffbf0">
+      <h3 style="color:#b47a00">⚠️ Disclaimer</h3>
+      <p style="font-size:.85rem;color:#7a5500;line-height:1.65">This is an <strong>unofficial</strong> community tool with no affiliation to Caledonian MacBrayne. Predictions are estimates only — always check <a href="https://www.calmac.co.uk/service-status" target="_blank" style="color:#b47a00;font-weight:600">CalMac's official service status</a> before travelling, especially in unsettled weather. Never miss a ferry based solely on this app.</p>
+    </div>
+
+    <!-- DEVELOPER -->
     <div class="about-card" style="text-align:center">
       <h3>Developer</h3>
-      <p style="margin-bottom:8px">Built by <strong style="color:var(--navy)">Ross Mackenzie</strong></p>
-      <p style="font-size:.78rem">Inverness, Scotland 🏴󠁧󠁢󠁳󠁣󠁴󠁿</p>
-      <p style="font-size:.78rem;margin-top:6px">Timetables valid for summer 2026 (27 Mar – 18 Oct 2026). Always verify at <a href="https://www.calmac.co.uk/summer-timetables" target="_blank">calmac.co.uk</a>.</p>
+      <p style="margin-bottom:6px">Built by <strong style="color:var(--navy)">Ross Mackenzie</strong></p>
+      <p style="font-size:.78rem;color:var(--muted)">Inverness, Scotland 🏴󠁧󠁢󠁳󠁣󠁴󠁿</p>
+      <p style="font-size:.78rem;color:var(--muted);margin-top:8px">Timetables valid for summer 2026 (27 Mar – 18 Oct 2026).<br>Always verify at <a href="https://www.calmac.co.uk/summer-timetables" target="_blank">calmac.co.uk</a>.</p>
     </div>
+
   </div>
 </main>
 
