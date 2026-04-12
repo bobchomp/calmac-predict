@@ -8,7 +8,7 @@
     "api/cron.js":     { "maxDuration": 60, "memory": 512 }
   },
   "crons": [
-    { "path": "/api/cron", "schedule": "*/10 * * * *" }
+    { "path": "/api/cron", "schedule": "0 8 * * *" }
   ],
   "routes": [
     { "src": "/api/weather",  "dest": "/api/weather.js" },
