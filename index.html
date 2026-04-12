@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-title" content="Will It Sail?" />
   <meta name="theme-color" content="#003087" />
   <!-- Clerk auth -->
-  <script>window.__CLERK_PUBLISHABLE_KEY__ = 'REPLACE_WITH_YOUR_CLERK_PUBLISHABLE_KEY';</script>
+  <script>window.__CLERK_PUBLISHABLE_KEY__ = 'pk_test_ZGVhci1tdWxsZXQtMC5jbGVyay5hY2NvdW50cy5kZXYk';</script>
   <script async src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -396,7 +396,7 @@
       <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
         <span class="auth-syncing" id="authSyncing" style="display:none;color:rgba(255,255,255,.7);font-size:.72rem;font-style:italic">Syncing…</span>
         <div id="clerkUserBtn"></div>
-        <button class="auth-btn" id="authSignInBtn" style="display:none;border-color:rgba(255,255,255,.6);color:#fff;font-size:.78rem;padding:5px 14px;border-radius:20px;border:1.5px solid rgba(255,255,255,.6);background:rgba(255,255,255,.12);cursor:pointer;font-family:inherit;font-weight:600;backdrop-filter:blur(4px)">Sign in</button>
+      <button class="auth-btn" id="authSignInBtn" style="border-color:rgba(255,255,255,.6);color:#fff;font-size:.78rem;padding:5px 14px;border-radius:20px;border:1.5px solid rgba(255,255,255,.6);background:rgba(255,255,255,.12);cursor:pointer;font-family:inherit;font-weight:600;backdrop-filter:blur(4px)">Sign in to sync</button>
       </div>
     </div>
     <h1>CalMac <span>Sailing</span> Predictor</h1>
@@ -2712,23 +2712,33 @@ async function loadFavsFromServer() {
 }
 
 async function initClerk() {
+  const signInBtn = document.getElementById('authSignInBtn');
+  const userBtnEl = document.getElementById('clerkUserBtn');
+
   // Wait for Clerk to load
   let attempts = 0;
   while (!window.Clerk && attempts < 20) {
     await new Promise(r => setTimeout(r, 200));
     attempts++;
   }
-  if (!window.Clerk) return; // Clerk failed to load — silent fallback
 
   const publishableKey = window.__CLERK_PUBLISHABLE_KEY__;
-  if (!publishableKey || publishableKey.includes('REPLACE_WITH')) return;
+  const keyMissing = !publishableKey || publishableKey.includes('REPLACE_WITH');
+
+  if (!window.Clerk || keyMissing) {
+    // Clerk not available — button still shows, clicking opens CalMac site
+    // (graceful fallback, nothing breaks)
+    if (signInBtn) {
+      signInBtn.addEventListener('click', () => {
+        alert('Sign-in is not yet configured. Add your Clerk Publishable Key to index.html to enable cross-device sync.');
+      });
+    }
+    return;
+  }
 
   try {
     await window.Clerk.load({ publishableKey });
     clerkInstance = window.Clerk;
-
-    const signInBtn = document.getElementById('authSignInBtn');
-    const userBtnEl = document.getElementById('clerkUserBtn');
 
     // Show the sign-in button now that Clerk is ready
     if (signInBtn) signInBtn.style.display = '';
