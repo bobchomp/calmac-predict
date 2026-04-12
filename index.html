@@ -2723,7 +2723,7 @@ async function initClerk() {
   }
 
   const publishableKey = window.__CLERK_PUBLISHABLE_KEY__;
-  const keyMissing = !publishableKey || publishableKey.includes('REPLACE_WITH');
+  const keyMissing = !publishableKey || publishableKey.includes('pk_test_ZGVhci1tdWxsZXQtMC5jbGVyay5hY2NvdW50cy5kZXYk');
 
   if (!window.Clerk || keyMissing) {
     // Clerk not available — button still shows, clicking opens CalMac site
