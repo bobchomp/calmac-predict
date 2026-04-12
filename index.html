@@ -1603,7 +1603,7 @@ function buildCard(r, i) {
 
     if (sailingStatus === 'disrupted' || sailingStatus === 'amber') {
       const label = sailingStatus === 'amber' ? '⚠️ Be Aware' : '⚠️ Disrupted';
-      return `<div class="sailing-row${isPast ? ' sailing-past' : ''}" style="background:#fff8e1;border:1px solid #ffe082;cursor:pointer" onclick="openModal('${r.name.replace(/'/g,"\\'")}','${time}')">
+      return `<div class="sailing-row${isPast ? ' sailing-past' : ''}" style="background:#fff8e1;border:1px solid #ffe082;cursor:pointer" onclick="openModal('${r.name.replace(/'/g,"\\'")}','${time}',${pct !== null ? pct : 'null'})">
         <div class="sailing-time" style="color:#e65100">${time}</div>
         <div class="sailing-direction" style="color:#e65100;flex:1">${s.f} → ${s.to}</div>
         <div class="sailing-bar-wrap">
@@ -1615,7 +1615,7 @@ function buildCard(r, i) {
       </div>`;
     }
 
-    return `<div class="sailing-row${isPast?' sailing-past':''}" style="cursor:pointer" onclick="openModal('${r.name.replace(/'/g,"\\'")}','${time}')">
+    return `<div class="sailing-row${isPast?' sailing-past':''}" style="cursor:pointer" onclick="openModal('${r.name.replace(/'/g,"\\'")}','${time}',${pct !== null ? pct : 'null'})">
       <div class="sailing-time">${time}</div>
       <div class="sailing-direction">${s.f} → ${s.to}</div>
       <div class="sailing-bar-wrap">
@@ -1694,7 +1694,7 @@ document.getElementById('refreshBtn').addEventListener('click', fetchData);
 setInterval(fetchData, 30 * 60 * 1000);
 
 // ── MODAL ──
-function openModal(routeName, sailingTime) {
+function openModal(routeName, sailingTime, precomputedChance) {
   const r = allRoutes.find(x => x.name === routeName);
   if (!r) return;
 
@@ -1784,12 +1784,14 @@ function openModal(routeName, sailingTime) {
     : 'Summer — standard thresholds apply';
 
   // ── SINGLE SOURCE OF TRUTH for percentage ──
-  // Use calcHourlyRisk() — the exact same function the card sailing rows use
-  // Score breakdown rows above are for display only
+  // If the card row pre-computed the chance, use that exact value.
+  // This guarantees card and modal always show the same number.
   const totalRisk = r.hourlyData
     ? calcHourlyRisk(r.name, h, hw, hm)
     : (r.risk || 0);
-  const chance = sailingChance(totalRisk, r.name);
+  const chance = (precomputedChance !== null && precomputedChance !== undefined)
+    ? precomputedChance
+    : sailingChance(totalRisk, r.name);
   const colour = chanceColor(chance);
 
   // Verdict text
@@ -2514,8 +2516,8 @@ function postRenderHook(container) {
 // ── PATCH MODAL: add vessel chip + route info grid ──
 // ─────────────────────────────────────────────────────────────────────────
 const _origOpenModal = openModal;
-window.openModal = function(routeName, sailingTime) {
-  _origOpenModal(routeName, sailingTime);
+window.openModal = function(routeName, sailingTime, precomputedChance) {
+  _origOpenModal(routeName, sailingTime, precomputedChance);
   // After modal content is injected, add vessel chip and route info grid
   setTimeout(() => {
     const body = document.getElementById('modalContent')?.querySelector('.modal-body');
