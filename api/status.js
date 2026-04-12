@@ -1,111 +1,105 @@
-module.exports = async function handler(req, res) {
-res.setHeader(‘Access-Control-Allow-Origin’, ‘*’);
-res.setHeader(‘Cache-Control’, ‘s-maxage=300’);
+// api/status.js — CalMac service status via their internal JSON API
+// Falls back gracefully if no endpoint works
 
-try {
-const response = await fetch(‘https://www.calmac.co.uk/service-status’, {
-headers: {
-‘User-Agent’: ‘Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36’,
-‘Accept’: ‘text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8’,
-‘Accept-Language’: ‘en-GB,en;q=0.9’,
-}
-});
+const CACHE_SECONDS = 300;
 
-```
-if (!response.ok) {
-  return res.status(200).json({ routes: [], debug: 'CalMac returned HTTP ' + response.status });
-}
+const CALMAC_ENDPOINTS = [
+  'https://www.calmac.co.uk/umbraco/api/ServiceStatus/GetRouteStatuses',
+  'https://www.calmac.co.uk/umbraco/api/servicestatus/getall',
+  'https://www.calmac.co.uk/api/service-status',
+  'https://api.calmac.co.uk/v1/service-status',
+  'https://api.calmac.co.uk/servicestatus',
+];
 
-const html = await response.text();
-const routes = parseCalMacStatus(html);
-
-res.status(200).json({
-  routes,
-  fetchedAt: new Date().toISOString(),
-  debug: 'parsed ' + routes.length + ' routes from ' + html.length + ' bytes'
-});
-```
-
-} catch (err) {
-// Return 200 with empty routes rather than 500 — weather still works without this
-res.status(200).json({ routes: [], error: err.message, fetchedAt: new Date().toISOString() });
-}
+const HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/124 Safari/537.36',
+  'Accept': 'application/json, text/plain, */*',
+  'Accept-Language': 'en-GB,en;q=0.9',
+  'Referer': 'https://www.calmac.co.uk/en-gb/service-status/',
 };
 
-function stripTags(str) {
-return str.replace(/<[^>]+>/g, ’ ’).replace(/\s+/g, ’ ’).replace(/&/g, ‘&’).replace(/ /g, ’ ’).replace(/&#\d+;/g, ‘’).trim();
+// Map keywords → our route keys
+const ROUTE_PATTERNS = [
+  [/ardrossan|brodick(?!.*troon)/i, 'Ardrossan - Brodick (Arran)'],
+  [/troon/i, 'Troon - Brodick (Arran)'],
+  [/ullapool|stornoway/i, 'Ullapool - Stornoway (Lewis)'],
+  [/kennacraig|islay|port ellen|port askaig/i, 'Kennacraig - Port Ellen / Port Askaig (Islay)'],
+  [/wemyss|rothesay/i, 'Wemyss Bay - Rothesay (Bute)'],
+  [/gourock|dunoon/i, 'Gourock - Dunoon'],
+  [/tarbert.*portavadie|portavadie/i, 'Tarbert - Portavadie'],
+  [/oban.*craignure|craignure/i, 'Oban - Craignure (Mull)'],
+  [/lochaline|fishnish/i, 'Fishnish - Lochaline'],
+  [/mallaig.*armadale|armadale/i, 'Mallaig - Armadale (Skye)'],
+  [/uig|tarbert.*harris|lochmaddy/i, 'Uig - Tarbert / Lochmaddy'],
+  [/oban.*coll|coll|tiree/i, 'Oban - Coll / Tiree'],
+  [/castlebay|barra|lochboisdale/i, 'Oban - Castlebay / Lochboisdale'],
+  [/colonsay/i, 'Oban - Colonsay'],
+  [/claonaig|lochranza/i, 'Claonaig - Lochranza (Arran)'],
+  [/colintraive|rhubodach/i, 'Colintraive - Rhubodach (Bute)'],
+  [/largs|cumbrae/i, 'Largs - Cumbrae Slip'],
+  [/lismore/i, 'Oban - Lismore'],
+  [/small isles|eigg|muck|rum|canna/i, 'Mallaig - Small Isles'],
+  [/tobermory|kilchoan/i, 'Tobermory - Kilchoan'],
+];
+
+function matchRoute(name) {
+  for (const [re, key] of ROUTE_PATTERNS) {
+    if (re.test(name)) return key;
+  }
+  return null;
 }
 
 function normaliseStatus(raw) {
-const s = (raw || ‘’).toLowerCase();
-if (s.includes(‘cancel’)) return ‘cancelled’;
-if (s.includes(‘disrupt’) || s.includes(‘red’)) return ‘disrupted’;
-if (s.includes(‘amber’) || s.includes(‘warning’)) return ‘amber’;
-return ‘normal’;
+  const s = (raw || '').toLowerCase();
+  if (/cancel|suspend/.test(s)) return 'cancelled';
+  if (/disrupt|red|severe/.test(s)) return 'disrupted';
+  if (/amber|warn|delay/.test(s)) return 'amber';
+  if (/normal|green|operat/.test(s)) return 'normal';
+  return 'unknown';
 }
 
-function parseCalMacStatus(html) {
-const routes = [];
-const seen = new Set();
+function parseResponse(data) {
+  const arr = Array.isArray(data) ? data
+    : Array.isArray(data?.routes) ? data.routes
+    : Array.isArray(data?.data) ? data.data
+    : Array.isArray(data?.statuses) ? data.statuses
+    : (Object.values(data || {})).find(v => Array.isArray(v)) || [];
 
-// Strategy 1: Look for elements with status-related classes containing route names
-const patterns = [
-/<(?:li|div|tr)[^>]*class=”([^”]*(?:amber|disrupted|cancelled|normal|status)[^”]*)”[^>]*>([\s\S]*?)(?=<(?:li|div|tr)[^>]*class=”[^”]*(?:amber|disrupted|cancelled|normal|status)|$)/gi,
-/<(?:li|div)[^>]*data-status=”([^”]+)”[^>]*data-name=”([^”]+)”/gi,
-];
-
-// Try pattern with status in class
-const re = /<(?:li|div|article)[^>]+class=”([^”]*)”[^>]*>([\s\S]{20,400}?)</(?:li|div|article)>/gi;
-let m;
-while ((m = re.exec(html)) !== null) {
-const cls = m[1];
-const inner = m[2];
-if (!/amber|disrupted|cancelled|normal|status/i.test(cls)) continue;
-const name = extractRouteName(inner);
-if (!name || seen.has(name)) continue;
-seen.add(name);
-routes.push({ name, status: normaliseStatus(cls), message: stripTags(inner).slice(0, 120) });
+  return arr.map(item => {
+    const name = item.name || item.routeName || item.route || item.title || '';
+    const status = normaliseStatus(item.status || item.statusColour || item.colour || item.state || '');
+    const message = (item.message || item.statusMessage || item.description || '').slice(0, 200);
+    return { name, routeKey: matchRoute(name), status, message };
+  }).filter(r => r.name);
 }
 
-// Strategy 2: Look for heading + status indicator pairs
-if (routes.length === 0) {
-const headings = html.matchAll(/<h[2-5][^>]*>([\s\S]*?)</h[2-5]>/gi);
-for (const hm of headings) {
-const name = stripTags(hm[1]).trim();
-if (name.length < 5 || name.length > 80) continue;
-if (!name.includes(’-’) && !name.includes(‘to’) && !name.includes(’–’)) continue;
-// Look for status near this heading
-const pos = hm.index;
-const nearby = html.slice(Math.max(0, pos - 50), pos + 300);
-const statusMatch = /class=”([^”]*(?:amber|disrupted|cancelled|normal)[^”]*)”/i.exec(nearby);
-if (!seen.has(name)) {
-seen.add(name);
-routes.push({ name, status: normaliseStatus(statusMatch ? statusMatch[1] : ‘normal’), message: ‘’ });
-}
-}
-}
+module.exports = async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cache-Control', `s-maxage=${CACHE_SECONDS}, stale-while-revalidate=60`);
 
-return routes;
-}
+  for (const url of CALMAC_ENDPOINTS) {
+    try {
+      const resp = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(8000) });
+      if (!resp.ok) continue;
+      const ct = resp.headers.get('content-type') || '';
+      if (!ct.includes('json')) continue;
+      const data = await resp.json();
+      const routes = parseResponse(data);
+      if (routes.length > 0) {
+        return res.status(200).json({
+          routes,
+          disrupted: routes.filter(r => !['normal','unknown'].includes(r.status)),
+          source: url,
+          fetchedAt: new Date().toISOString(),
+        });
+      }
+    } catch (_) { /* try next */ }
+  }
 
-function extractRouteName(html) {
-// Try h2-h5
-const hm = /<h[2-5][^>]*>([\s\S]*?)</h[2-5]>/i.exec(html);
-if (hm) {
-const n = stripTags(hm[1]).trim();
-if (n.length > 4 && n.length < 100) return n;
-}
-// Try anchor text
-const am = /<a[^>]*>([\s\S]*?)</a>/i.exec(html);
-if (am) {
-const n = stripTags(am[1]).trim();
-if (n.length > 4 && n.length < 100) return n;
-}
-// Try strong
-const sm = /<strong[^>]*>([\s\S]*?)</strong>/i.exec(html);
-if (sm) {
-const n = stripTags(sm[1]).trim();
-if (n.length > 4 && n.length < 100) return n;
-}
-return null;
-}
+  return res.status(200).json({
+    routes: [],
+    fallback: true,
+    fallbackUrl: 'https://www.calmac.co.uk/en-gb/service-status/',
+    fetchedAt: new Date().toISOString(),
+  });
+};

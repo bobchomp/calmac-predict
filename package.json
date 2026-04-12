@@ -1,6 +1,9 @@
 {
   "name": "calmac-predictor",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Unofficial CalMac sailing predictor",
-  "engines": { "node": "24.x" }
+  "engines": { "node": "20.x" },
+  "dependencies": {
+    "web-push": "^3.6.7"
+  }
 }

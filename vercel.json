@@ -2,12 +2,22 @@
   "functions": {
     "api/weather.js":  { "maxDuration": 30, "memory": 512 },
     "api/status.js":   { "maxDuration": 15, "memory": 256 },
-    "api/feedback.js": { "maxDuration": 10, "memory": 128 }
+    "api/feedback.js": { "maxDuration": 10, "memory": 128 },
+    "api/vessel.js":   { "maxDuration": 15, "memory": 256 },
+    "api/notify.js":   { "maxDuration": 15, "memory": 256 },
+    "api/cron.js":     { "maxDuration": 60, "memory": 512 }
   },
+  "crons": [
+    { "path": "/api/cron", "schedule": "*/10 * * * *" }
+  ],
   "routes": [
     { "src": "/api/weather",  "dest": "/api/weather.js" },
     { "src": "/api/status",   "dest": "/api/status.js" },
     { "src": "/api/feedback", "dest": "/api/feedback.js" },
+    { "src": "/api/vessel",   "dest": "/api/vessel.js" },
+    { "src": "/api/notify",   "dest": "/api/notify.js" },
+    { "src": "/api/cron",     "dest": "/api/cron.js" },
+    { "src": "/sw.js",        "dest": "/sw.js" },
     { "src": "/(.*)",         "dest": "/index.html" }
   ]
 }
