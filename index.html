@@ -1089,6 +1089,11 @@ const TIDAL_ROUTES = new Set([
   'Mallaig - Small Isles',       // Some piers have tidal access windows
 ]);
 
+// ── SAILING CHANCE CACHE ────────────────────────────────────────────────
+// Pre-computed per-sailing chances: { "RouteName|HH:MM": 79 }
+// Written by buildCard(), read by openModal()
+const sailingChanceCache = {};
+
 // ── LIVE DISRUPTION STATUS ──────────────────────────────────────────────
 // Populated by loadDisruptionBanner() from /api/status
 // Maps routeKey → { status, message }
@@ -1586,6 +1591,8 @@ function buildCard(r, i) {
     const [hh, mm] = time.split(':').map(Number);
     const isPast = (hh < currentHour) || (hh === currentHour && mm <= currentMin);
     const pct = r.hourlyData ? sailingRisk(time, r.name, r.hourlyData, r.marineData) : null;
+    // Store in cache so modal can read the exact same value
+    if (pct !== null) sailingChanceCache[r.name + '|' + time] = pct;
     const col = pct !== null ? chanceColor(pct) : 'var(--muted)';
     const barW = pct !== null ? pct : 0;
     // Per-sailing CalMac status — check specific time then wildcard '*'
@@ -1603,7 +1610,7 @@ function buildCard(r, i) {
 
     if (sailingStatus === 'disrupted' || sailingStatus === 'amber') {
       const label = sailingStatus === 'amber' ? '⚠️ Be Aware' : '⚠️ Disrupted';
-      return `<div class="sailing-row${isPast ? ' sailing-past' : ''}" style="background:#fff8e1;border:1px solid #ffe082;cursor:pointer" onclick="openModal('${r.name.replace(/'/g,"\\'")}','${time}',${pct !== null ? pct : 'null'})">
+      return `<div class="sailing-row${isPast ? ' sailing-past' : ''}" style="background:#fff8e1;border:1px solid #ffe082;cursor:pointer" onclick="openModal('${r.name.replace(/'/g,"\\'")}','${time}')">
         <div class="sailing-time" style="color:#e65100">${time}</div>
         <div class="sailing-direction" style="color:#e65100;flex:1">${s.f} → ${s.to}</div>
         <div class="sailing-bar-wrap">
@@ -1615,7 +1622,7 @@ function buildCard(r, i) {
       </div>`;
     }
 
-    return `<div class="sailing-row${isPast?' sailing-past':''}" style="cursor:pointer" onclick="openModal('${r.name.replace(/'/g,"\\'")}','${time}',${pct !== null ? pct : 'null'})">
+    return `<div class="sailing-row${isPast?' sailing-past':''}" style="cursor:pointer" onclick="openModal('${r.name.replace(/'/g,"\\'")}','${time}')">
       <div class="sailing-time">${time}</div>
       <div class="sailing-direction">${s.f} → ${s.to}</div>
       <div class="sailing-bar-wrap">
@@ -1694,7 +1701,7 @@ document.getElementById('refreshBtn').addEventListener('click', fetchData);
 setInterval(fetchData, 30 * 60 * 1000);
 
 // ── MODAL ──
-function openModal(routeName, sailingTime, precomputedChance) {
+function openModal(routeName, sailingTime) {
   const r = allRoutes.find(x => x.name === routeName);
   if (!r) return;
 
@@ -1784,14 +1791,17 @@ function openModal(routeName, sailingTime, precomputedChance) {
     : 'Summer — standard thresholds apply';
 
   // ── SINGLE SOURCE OF TRUTH for percentage ──
-  // If the card row pre-computed the chance, use that exact value.
-  // This guarantees card and modal always show the same number.
+  // Read from the cache written by buildCard() — guaranteed same value as card row
+  const cacheKey = sailingTime ? r.name + '|' + sailingTime : null;
+  const cached = cacheKey ? sailingChanceCache[cacheKey] : null;
   const totalRisk = r.hourlyData
     ? calcHourlyRisk(r.name, h, hw, hm)
     : (r.risk || 0);
-  const chance = (precomputedChance !== null && precomputedChance !== undefined)
-    ? precomputedChance
-    : sailingChance(totalRisk, r.name);
+  const chance = cached !== undefined && cached !== null
+    ? cached
+    : sailingTime
+      ? sailingChance(calcHourlyRisk(r.name, h, r.hourlyData || {}, r.marineData || null), r.name)
+      : sailingChance(r.risk || 0, r.name);
   const colour = chanceColor(chance);
 
   // Verdict text
@@ -2516,8 +2526,8 @@ function postRenderHook(container) {
 // ── PATCH MODAL: add vessel chip + route info grid ──
 // ─────────────────────────────────────────────────────────────────────────
 const _origOpenModal = openModal;
-window.openModal = function(routeName, sailingTime, precomputedChance) {
-  _origOpenModal(routeName, sailingTime, precomputedChance);
+window.openModal = function(routeName, sailingTime) {
+  _origOpenModal(routeName, sailingTime);
   // After modal content is injected, add vessel chip and route info grid
   setTimeout(() => {
     const body = document.getElementById('modalContent')?.querySelector('.modal-body');
