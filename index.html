@@ -315,35 +315,6 @@
     .factor-weight{font-family:'Syne',sans-serif;font-weight:700;font-size:.85rem;color:var(--blue);margin-left:auto;flex-shrink:0;}
 
 /* ── FEEDBACK ROW ── */
-.feedback-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  background: var(--offwhite);
-  border-top: 1px solid var(--light);
-}
-.feedback-label {
-  font-size: .78rem;
-  color: var(--muted);
-  flex: 1;
-}
-.fb-btn {
-  padding: 5px 12px;
-  border-radius: 20px;
-  border: 1.5px solid var(--light);
-  background: var(--white);
-  font-family: inherit;
-  font-size: .78rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all .18s;
-  -webkit-tap-highlight-color: transparent;
-}
-.fb-btn:hover { border-color: var(--blue); }
-.fb-btn.fb-yes:hover { background: #e6f5ed; border-color: var(--green); color: var(--green); }
-.fb-btn.fb-no:hover  { background: #fceaed; border-color: var(--red);   color: var(--red);   }
-.fb-btn.fb-sent { opacity: .5; pointer-events: none; }
 
 /* ── DISRUPTION BANNER ── */
 .disruption-banner{background:#fceaed;border:1.5px solid #e57373;border-radius:10px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:flex-start;gap:10px;font-size:.83rem;color:#b71c1c;}
@@ -503,20 +474,14 @@
           <div style="font-size:.72rem;color:var(--muted);margin-top:2px">Routes<br>calibrated</div>
         </div>
         <div style="text-align:center;background:var(--light);border-radius:8px;padding:12px">
-          <div style="font-size:1.6rem;font-weight:800;color:var(--navy)" id="stat-reports">–</div>
-          <div style="font-size:.72rem;color:var(--muted);margin-top:2px">User<br>reports</div>
+          <div style="font-size:1.6rem;font-weight:800;color:var(--navy)">🟢</div>
+          <div style="font-size:.72rem;color:var(--muted);margin-top:2px">Live CalMac<br>status API</div>
         </div>
       </div>
       <p style="font-size:.78rem;color:var(--muted)">Historical cancellation data comes from official CalMac monthly reliability PDFs at <a href="https://corporate.calmac.co.uk/en-gb/about-us/route-performance-reports/" target="_blank">corporate.calmac.co.uk</a>. Routes without PDF data use research-based estimates from Transport Scotland reports and FOI releases. The <strong>📊 Calibrated</strong> badge means a route's prediction is anchored to real cancellation history.</p>
     </div>
 
-    <!-- YOUR ACCURACY -->
-    <div class="about-card">
-      <h3>Your prediction accuracy</h3>
-      <div id="accuracy-section">
-        <p style="font-size:.82rem;color:var(--muted)">No reports yet — use the ✅ / ❌ buttons on route cards after you travel to start tracking accuracy. Your score appears here after 5 reports.</p>
-      </div>
-    </div>
+
 
     <!-- HOW IT WORKS -->
     <div class="about-card">
@@ -626,14 +591,7 @@
         <p style="font-size:.83rem;color:var(--muted);line-height:1.6;margin:0">The detail modal for each route includes a Route details section showing crossing time, service type, scheduled vessel, and a contextual note — for example flagging that Kennacraig–Islay serves two different ports, or that Claonaig–Lochranza is a seasonal summer-only service.</p>
       </div>
 
-      <!-- Accuracy tracker -->
-      <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--light)">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <span style="font-size:1.1rem">📈</span>
-          <span style="font-weight:700;font-size:.9rem;color:var(--text)">Personal accuracy tracker</span>
-        </div>
-        <p style="font-size:.83rem;color:var(--muted);line-height:1.6;margin:0">Every time you submit a ✅ or ❌ report on a route card, the app records your report alongside what it predicted at that moment. After 5 reports, your personal prediction accuracy score appears at the top of this About page — showing how often the model's predictions matched reality for the sailings you've personally checked. This data stays on your device only.</p>
-      </div>
+
 
       <!-- Offline / PWA -->
       <div>
@@ -660,7 +618,7 @@
       <div class="factor-row"><div class="factor-icon">🛳</div><div class="factor-text"><div class="factor-name">AIS vessel tracking (aisstream.io)</div><div class="factor-desc">Live vessel position data from AIS receivers via aisstream.io. Used to identify which vessel is currently operating each route, updated when you open a route's detail view.</div></div></div>
       <div class="factor-row"><div class="factor-icon">📋</div><div class="factor-text"><div class="factor-name">CalMac Reliability PDFs</div><div class="factor-desc">Official monthly performance reports from CalMac's corporate site. Each PDF contains month-by-month operated and cancelled sailing counts for one route. Six routes are currently fully calibrated (72 months of verified data).</div></div></div>
       <div class="factor-row"><div class="factor-icon">🗂</div><div class="factor-text"><div class="factor-name">Transport Scotland / FOI data</div><div class="factor-desc">For routes where CalMac PDFs aren't yet in the database, estimates come from Transport Scotland annual reports and published FOI responses.</div></div></div>
-      <div class="factor-row" style="border-bottom:none"><div class="factor-icon">🙋</div><div class="factor-text"><div class="factor-name">User reports</div><div class="factor-desc">The ✅ / ❌ buttons on each route card let you report whether a sailing ran. Reports are written to a Google Sheet and will be used to refine predictions over time. They also power your personal accuracy score on this page.</div></div></div>
+      <div class="factor-row" style="border-bottom:none"><div class="factor-icon">🙋</div><div class="factor-text"><div class="factor-name">CalMac historical PDFs</div><div class="factor-desc">Official monthly performance reports from CalMac's corporate site. Each PDF contains month-by-month operated and cancelled sailing counts. Six routes are currently fully calibrated (72 months of verified data).</div></div></div>
     </div>
 
     <!-- LIMITATIONS -->
@@ -1137,6 +1095,11 @@ const TIDAL_ROUTES = new Set([
   'Uig - Tarbert / Lochmaddy',  // Harris/Berneray tidal restrictions
   'Mallaig - Small Isles',       // Some piers have tidal access windows
 ]);
+
+// ── LIVE DISRUPTION STATUS ──────────────────────────────────────────────
+// Populated by loadDisruptionBanner() from /api/status
+// Maps routeKey → { status, message }
+let liveDisruptions = {};
 
 // ── GOOGLE SHEET INTEGRATION ─────────────────────────────────
 const SHEET_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzTwBxJcIt8gGM-bwYuWYE2GS587nuQeAKhL4hpOx6vJAhuuRGKRNS5LtLqmh3x1QFK/exec';
@@ -1629,6 +1592,33 @@ function buildCard(r, i) {
     const pct = r.hourlyData ? sailingRisk(time, r.name, r.hourlyData, r.marineData) : null;
     const col = pct !== null ? chanceColor(pct) : 'var(--muted)';
     const barW = pct !== null ? pct : 0;
+    // Check if CalMac has flagged this route as cancelled/disrupted
+    const disruption = liveDisruptions[r.name];
+    const isCancelled = disruption?.status === 'cancelled';
+    const isDisrupted = disruption?.status === 'disrupted' || disruption?.status === 'amber';
+
+    if (isCancelled) {
+      return `<div class="sailing-row${isPast ? ' sailing-past' : ''}" style="background:#fceaed;border:1px solid #ffcdd2;">
+        <div class="sailing-time" style="color:#c62828">${time}</div>
+        <div class="sailing-direction" style="color:#c62828;text-decoration:line-through">${s.f} → ${s.to}</div>
+        <div class="sailing-bar-wrap" style="flex:1"></div>
+        <div class="sailing-pct-label" style="color:#c62828;font-size:.72rem;width:auto">🚨 Cancelled</div>
+      </div>`;
+    }
+
+    if (isDisrupted) {
+      return `<div class="sailing-row${isPast ? ' sailing-past' : ''}" style="background:#fff8e1;border:1px solid #ffe082;">
+        <div class="sailing-time" style="color:#e65100">${time}</div>
+        <div class="sailing-direction" style="color:#e65100">${s.f} → ${s.to}</div>
+        <div class="sailing-bar-wrap">
+          <div class="sailing-bar-track">
+            <div class="sailing-bar-fill" style="width:${barW}%;background:${col}"></div>
+          </div>
+        </div>
+        <div class="sailing-pct-label" style="color:#e65100">${pct !== null ? pct+'%' : '–'} ⚠️</div>
+      </div>`;
+    }
+
     return `<div class="sailing-row${isPast?' sailing-past':''}">
       <div class="sailing-time">${time}</div>
       <div class="sailing-direction">${s.f} → ${s.to}</div>
@@ -1675,11 +1665,7 @@ function buildCard(r, i) {
       </div>
       <span>Updated ${lastFetched ? lastFetched.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '–'}</span>
     </div>
-    <div class="feedback-row" data-route="${r.name}">
-      <span class="feedback-label">Did it sail?</span>
-      <button class="fb-btn fb-yes" data-route="${r.name}" data-sailed="true" title="Yes, it sailed">✅ Yes</button>
-      <button class="fb-btn fb-no"  data-route="${r.name}" data-sailed="false" title="No, it was cancelled">❌ No</button>
-    </div>
+
   </div>`;
 }
 
@@ -1693,39 +1679,6 @@ function attachFavButtons(container) {
 }
 
 function attachFeedbackButtons(container) {
-  container.querySelectorAll('.fb-btn').forEach(btn => {
-    btn.addEventListener('click', async e => {
-      e.stopPropagation();
-      const row = btn.closest('.feedback-row');
-      const routeName = btn.dataset.route;
-      const sailed = btn.dataset.sailed === 'true';
-      const route = allRoutes.find(r => r.name === routeName);
-      const chance = route ? sailingChance(route.risk || 0, routeName) : null;
-
-      // Visual feedback immediately
-      row.innerHTML = `<span style="font-size:.8rem;color:var(--green);font-weight:600">✅ Thanks! Your report helps improve predictions.</span>`;
-
-      // Send directly to Google Sheet
-      try {
-        await fetch(SHEET_SCRIPT_URL, {
-          method: 'POST',
-          mode: 'no-cors', // Apps Script requires no-cors from external origins
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'submitReport',
-            route: routeName,
-            sailed,
-            predictedChance: chance,
-            wind_mph: route?.maxGustMph || '',
-            wave_m: route?.maxWaveM || '',
-            notes: '',
-          })
-        });
-      } catch(_) {
-        // Silently ignore — feedback is best-effort
-      }
-    });
-  });
 }
 
 // ── EVENTS ──
@@ -1958,38 +1911,7 @@ function attachCardClicks(container) {
 }
 
 
-// ── FEEDBACK SUBMISSION ──
-document.addEventListener('click', async e => {
-  const btn = e.target.closest('.fb-btn');
-  if (!btn) return;
-  e.stopPropagation();
-  const sailed = btn.dataset.sailed === 'true';
-  const routeName = btn.dataset.route;
-  const route = allRoutes.find(r => r.name === routeName);
 
-  // Mark both buttons as sent
-  const row = btn.closest('.feedback-row');
-  row.querySelectorAll('.fb-btn').forEach(b => b.classList.add('fb-sent'));
-  row.querySelector('.feedback-label').textContent = sailed ? '✅ Thanks! Marked as sailed.' : '❌ Thanks! Marked as cancelled.';
-
-  // Send to Google Sheet (best-effort — don't block UI)
-  try {
-    await fetch(SHEET_SCRIPT_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'submitReport',
-        route: routeName,
-        sailed,
-        predictedChance: route ? sailingChance(route.risk || 0, routeName) : null,
-        wind_mph: route?.maxGustMph ?? '',
-        wave_m:   route?.maxWaveM   ?? '',
-        notes: 'modal',
-      })
-    });
-  } catch (_) { /* silent fail */ }
-});
 
 // ── ABOUT TAB STATS ──
 let aboutStatsLoaded = false;
@@ -2270,18 +2192,16 @@ async function loadDisruptionBanner() {
     const res = await fetch('/api/status');
     const data = await res.json();
 
-    if (data.fallback) {
-      // CalMac API unavailable — show soft link
-      banner.innerHTML = `<div class="disruption-banner amber-alert"><div class="db-icon">ℹ️</div><div class="db-body"><div class="db-title">Live service status unavailable</div>Always check <span class="db-link" onclick="window.open('${data.fallbackUrl}','_blank')">CalMac's official status page</span> before travelling.</div></div>`;
-      banner.style.display = 'block';
-      return;
-    }
-
+    // If fallback or no disruptions, hide the banner silently
     const disrupted = data.disrupted || [];
-    if (disrupted.length === 0) {
+    if (data.fallback || disrupted.length === 0) {
       banner.style.display = 'none';
       return;
     }
+
+    // Store for use in sailing row rendering
+    liveDisruptions = {};
+    disrupted.forEach(d => { if (d.routeKey) liveDisruptions[d.routeKey] = d; });
 
     const isSevere = disrupted.some(d => d.status === 'cancelled' || d.status === 'disrupted');
     const cls = isSevere ? 'disruption-banner' : 'disruption-banner amber-alert';
@@ -2552,32 +2472,6 @@ document.getElementById('tripDate').addEventListener('change', updateTripResult)
 // ── FORECAST ACCURACY TRACKER ──
 // Stores prediction vs reality, surfaces on About tab
 // ─────────────────────────────────────────────────────────────────────────
-function recordFeedbackAccuracy(routeName, sailed, predictedChance) {
-  if (predictedChance === null || predictedChance === undefined) return;
-  const key = 'accuracy_log';
-  const log = JSON.parse(localStorage.getItem(key) || '[]');
-  log.push({
-    route: routeName,
-    sailed,
-    predicted: predictedChance,
-    ts: Date.now(),
-  });
-  // Keep last 200 entries
-  if (log.length > 200) log.splice(0, log.length - 200);
-  localStorage.setItem(key, JSON.stringify(log));
-}
-
-function getLocalAccuracy() {
-  const log = JSON.parse(localStorage.getItem('accuracy_log') || '[]');
-  if (log.length < 5) return null;
-
-  let correct = 0;
-  log.forEach(entry => {
-    const predictedSail = entry.predicted >= 70;
-    if (predictedSail === entry.sailed) correct++;
-  });
-  return { pct: Math.round((correct / log.length) * 100), n: log.length };
-}
 
 // ─────────────────────────────────────────────────────────────────────────
 // ── PATCH: renderRoutes — inject card-actions after each card ──
@@ -2644,54 +2538,7 @@ window.openModal = function(routeName) {
   }, 50);
 };
 
-// ─────────────────────────────────────────────────────────────────────────
-// ── PATCH FEEDBACK HANDLER ── record accuracy
-// ─────────────────────────────────────────────────────────────────────────
-// (feedback click handler already exists — add accuracy tracking to it)
-document.addEventListener('click', e => {
-  const btn = e.target.closest('.fb-btn');
-  if (!btn) return;
-  const sailed = btn.dataset.sailed === 'true';
-  const routeName = btn.dataset.route;
-  const route = allRoutes.find(r => r.name === routeName);
-  if (route) {
-    const predicted = sailingChance(route.risk || 0, routeName);
-    recordFeedbackAccuracy(routeName, sailed, predicted);
-  }
-}, true); // capture phase so it runs before existing handler
 
-// ─────────────────────────────────────────────────────────────────────────
-// ── ABOUT TAB: accuracy section ──
-// ─────────────────────────────────────────────────────────────────────────
-function renderAccuracySection() {
-  const acc = getLocalAccuracy();
-  const el = document.getElementById('accuracy-section');
-  if (!el) return;
-  if (!acc) {
-    el.innerHTML = '<p style="font-size:.82rem;color:var(--muted)">Not enough reports yet — tap ✅/❌ on route cards when you travel to help calibrate the model. After 5 reports, your local accuracy score will appear here.</p>';
-    return;
-  }
-  const color = acc.pct >= 80 ? 'var(--green)' : acc.pct >= 65 ? 'var(--amber)' : 'var(--red)';
-  const r = 28; const circ = 2 * Math.PI * r;
-  const offset = circ * (1 - acc.pct / 100);
-  el.innerHTML = `
-    <div class="acc-ring-wrap">
-      <div class="acc-ring">
-        <svg width="64" height="64" viewBox="0 0 64 64">
-          <circle cx="32" cy="32" r="${r}" fill="none" stroke="var(--light)" stroke-width="6"/>
-          <circle cx="32" cy="32" r="${r}" fill="none" stroke="${color}" stroke-width="6" stroke-dasharray="${circ}" stroke-dashoffset="${offset}" stroke-linecap="round"/>
-        </svg>
-        <div class="acc-ring-num" style="color:${color}">${acc.pct}%</div>
-      </div>
-      <div>
-        <div style="font-weight:700;font-size:.92rem;color:var(--text)">Your prediction accuracy</div>
-        <div style="font-size:.78rem;color:var(--muted);margin-top:3px">Based on ${acc.n} sailing report${acc.n !== 1 ? 's' : ''} you've submitted</div>
-        <div style="font-size:.78rem;color:var(--muted);margin-top:3px">A prediction of ≥70% is counted as "will sail" — if the ferry actually ran, that's a correct prediction.</div>
-      </div>
-    </div>`;
-}
-
-// ─────────────────────────────────────────────────────────────────────────
 // ── HOOK POST-RENDER ──
 // ─────────────────────────────────────────────────────────────────────────
 // We need to call postRenderHook after renderRoutes. 
@@ -2719,7 +2566,7 @@ document.querySelectorAll('.nav-tab').forEach(btn => {
   btn.addEventListener('click', () => {
     const tab = btn.dataset.tab;
     if (tab === 'tabAbout') {
-      renderAccuracySection();
+      
     }
     if (tab === 'tabRoutes' || tab === 'tabFavs') {
       setTimeout(() => {

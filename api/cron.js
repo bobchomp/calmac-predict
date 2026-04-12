@@ -1,6 +1,7 @@
-// api/cron.js
-// Vercel cron job — runs every 10 minutes via vercel.json
-// Checks weather for all routes with active subscribers, sends push if < 70%
+// api/cron.js — daily 8am UTC
+// 1. Fetches live CalMac service status via GraphQL
+// 2. Records any cancellations/disruptions to Google Sheet (ground truth log)
+// 3. Sends push notifications to subscribers of affected routes
 
 const BASE_URL = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -8,8 +9,9 @@ const BASE_URL = process.env.VERCEL_URL
 
 const KV_URL   = process.env.UPSTASH_REDIS_REST_URL   || '';
 const KV_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || '';
+const SHEET_URL = process.env.FEEDBACK_SHEET_URL || ''; // reuse same sheet endpoint
 
-const NOTIFY_THRESHOLD = 70; // send push when chance falls below this %
+const NOTIFY_THRESHOLD = 70;
 
 // ── Upstash helpers ──────────────────────────────────────────────────────
 async function kvGet(key) {
@@ -38,7 +40,7 @@ async function kvKeys(pattern) {
   return j.result || [];
 }
 
-// ── Route midpoint coords for weather lookup ──────────────────────────────
+// ── Route coords for weather lookup ────────────────────────────────────
 const ROUTE_COORDS = {
   'Ullapool - Stornoway (Lewis)':                      { lat: 58.05, lon: -5.85 },
   'Troon - Brodick (Arran)':                           { lat: 55.60, lon: -5.00 },
@@ -62,84 +64,104 @@ const ROUTE_COORDS = {
   'Tobermory - Kilchoan':                              { lat: 56.69, lon: -6.07 },
 };
 
-async function getLastSent(route) {
-  const key = `lastsent:${route.replace(/[^a-z0-9]/gi, '_')}`;
-  const val = await kvGet(key);
-  return val ? parseInt(val) : 0;
+// ── Write a cancellation record to Google Sheet ────────────────────────
+async function recordToSheet(route, calMacStatus, predictedChance) {
+  if (!SHEET_URL) return;
+  const row = {
+    timestamp:       new Date().toISOString(),
+    route,
+    sailed:          calMacStatus === 'cancelled' ? 'NO' : 'YES',
+    calMacStatus,
+    predictedChance: predictedChance ?? '',
+    source:          'calmac-graphql-api',
+  };
+  try {
+    await fetch(SHEET_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(row),
+      signal: AbortSignal.timeout(8000),
+    });
+  } catch (err) {
+    console.error('Sheet write failed:', err.message);
+  }
 }
 
-async function setLastSent(route) {
-  const key = `lastsent:${route.replace(/[^a-z0-9]/gi, '_')}`;
-  await kvSet(key, Date.now());
-}
-
-// ── Handler ──────────────────────────────────────────────────────────────
 module.exports = async function handler(req, res) {
-  // Vercel cron auth
   if (req.headers['authorization'] !== `Bearer ${process.env.CRON_SECRET}`) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  if (!KV_URL) return res.status(200).json({ ok: true, note: 'KV not configured' });
+  const results = [];
 
   try {
-    const subKeys = await kvKeys('subs:*');
-    if (!subKeys.length) return res.status(200).json({ ok: true, checked: 0 });
+    // ── Step 1: fetch live CalMac status ──
+    const statusResp = await fetch(`${BASE_URL}/api/status`, {
+      signal: AbortSignal.timeout(12000),
+    });
+    const statusData = statusResp.ok ? await statusResp.json() : { routes: [], disrupted: [] };
+    const disrupted = statusData.disrupted || [];
 
-    const results = [];
+    // ── Step 2: for each disrupted route, get predicted chance & record to sheet ──
+    for (const disruption of disrupted) {
+      const routeKey = disruption.routeKey;
+      if (!routeKey || !ROUTE_COORDS[routeKey]) continue;
 
-    for (const key of subKeys) {
-      // Derive route name from key — e.g. "subs:Ullapool___Stornoway__Lewis_"
-      const routeSlug = key.replace(/^subs:/, '');
-      // Find matching route by comparing slugified names
-      const route = Object.keys(ROUTE_COORDS).find(r =>
-        r.replace(/[^a-z0-9]/gi, '_') === routeSlug
-      );
-      if (!route) continue;
-
-      const coords = ROUTE_COORDS[route];
+      const coords = ROUTE_COORDS[routeKey];
+      let predictedChance = null;
 
       try {
         const weatherResp = await fetch(
-          `${BASE_URL}/api/weather?lat=${coords.lat}&lon=${coords.lon}&route=${encodeURIComponent(route)}`,
+          `${BASE_URL}/api/weather?lat=${coords.lat}&lon=${coords.lon}&route=${encodeURIComponent(routeKey)}`,
           { signal: AbortSignal.timeout(10000) }
         );
-        if (!weatherResp.ok) continue;
-
-        const weather = await weatherResp.json();
-        const chance = weather?.sailingChance ?? weather?.chance ?? 100;
-
-        if (chance < NOTIFY_THRESHOLD) {
-          const lastSent = await getLastSent(route);
-          const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
-
-          if (lastSent > twoHoursAgo) {
-            results.push({ route, chance, skipped: 'cooldown' });
-            continue;
-          }
-
-          const notifyResp = await fetch(`${BASE_URL}/api/notify`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              action: 'send',
-              route,
-              chance,
-              message: `Sailing chance is ${chance}% — conditions may cause disruption.`,
-            }),
-          });
-          const notifyResult = await notifyResp.json();
-          await setLastSent(route);
-          results.push({ route, chance, sent: notifyResult.sent });
-        } else {
-          results.push({ route, chance, ok: true });
+        if (weatherResp.ok) {
+          const weather = await weatherResp.json();
+          predictedChance = weather?.sailingChance ?? weather?.chance ?? null;
         }
-      } catch (err) {
-        results.push({ route, error: err.message });
+      } catch (_) {}
+
+      // Record to Google Sheet as ground truth
+      await recordToSheet(routeKey, disruption.status, predictedChance);
+      results.push({ route: routeKey, calMacStatus: disruption.status, predictedChance, recorded: true });
+
+      // ── Step 3: send push notifications if subscribed & below threshold ──
+      if (predictedChance !== null && predictedChance < NOTIFY_THRESHOLD && KV_URL) {
+        const subKey = `subs:${routeKey.replace(/[^a-z0-9]/gi, '_')}`;
+        const subs = (await kvGet(subKey)) || [];
+        if (subs.length > 0) {
+          const lastSent = (await kvGet(`lastsent:${routeKey.replace(/[^a-z0-9]/gi, '_')}`)) || 0;
+          const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
+          if (lastSent < twoHoursAgo) {
+            try {
+              const notifyResp = await fetch(`${BASE_URL}/api/notify`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  action: 'send',
+                  route: routeKey,
+                  chance: predictedChance,
+                  message: disruption.status === 'cancelled'
+                    ? `All sailings cancelled on ${routeKey} today.`
+                    : `Disruptions reported on ${routeKey}. Sailing chance: ${predictedChance}%.`,
+                }),
+              });
+              const notifyResult = await notifyResp.json();
+              await kvSet(`lastsent:${routeKey.replace(/[^a-z0-9]/gi, '_')}`, Date.now());
+              results[results.length - 1].pushed = notifyResult.sent;
+            } catch (_) {}
+          }
+        }
       }
     }
 
-    return res.status(200).json({ ok: true, checked: subKeys.length, results });
+    return res.status(200).json({
+      ok: true,
+      disrupted: disrupted.length,
+      recorded: results.filter(r => r.recorded).length,
+      results,
+    });
+
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
