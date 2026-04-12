@@ -1,4 +1,5 @@
 {
+  "buildCommand": "npm run build",
   "functions": {
     "api/weather.js": { "maxDuration": 30, "memory": 512 },
     "api/status.js":  { "maxDuration": 15, "memory": 256 },
