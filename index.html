@@ -2322,9 +2322,27 @@ function attachCardActions(container) {
     });
   });
   container.querySelectorAll('.notif-btn').forEach(btn => {
-    btn.addEventListener('click', e => {
+    btn.addEventListener('click', async e => {
       e.stopPropagation();
-      if (!pushSupported) { alert('Push notifications require HTTPS and a modern browser.'); return; }
+      // If pushSupported is still false, it may just be that initPush() hasn't finished yet
+      // Wait up to 3s for it to complete before giving up
+      if (!pushSupported) {
+        let waited = 0;
+        while (!pushSupported && waited < 3000) {
+          await new Promise(r => setTimeout(r, 200));
+          waited += 200;
+        }
+      }
+      // Check browser capabilities directly as a fallback
+      const browserSupports = 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window;
+      if (!pushSupported && !browserSupports) {
+        alert('Push notifications require HTTPS and a modern browser.');
+        return;
+      }
+      // If browser supports it but VAPID key not loaded yet, try fetching again
+      if (!pushSupported && browserSupports) {
+        await initPush();
+      }
       toggleRouteNotification(btn.dataset.route, btn);
     });
   });
