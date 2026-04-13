@@ -1,6 +1,6 @@
 // api/status.js — CalMac live service status via GraphQL
-// Returns per-sailing cancellation data using startDateTime/endDateTime windows
-// and parses time mentions from detail text for specific sailing flags
+// Returns per-sailing cancellation data for all disruption reasons:
+// Weather, Technical, Operational, Tidal, Other
 
 const CACHE_SECONDS = 120;
 
@@ -22,7 +22,6 @@ const GRAPHQL_QUERY = `{
   }
 }`;
 
-// CalMac route name → our internal route key
 const ROUTE_MAP = {
   'Gourock - Dunoon':                                          'Gourock - Dunoon',
   'Wemyss Bay - Rothesay':                                     'Wemyss Bay - Rothesay (Bute)',
@@ -55,36 +54,58 @@ const ROUTE_MAP = {
 function normaliseTopStatus(status) {
   const s = (status || '').toUpperCase();
   if (s === 'ALL_SAILINGS_CANCELLED') return 'cancelled';
-  if (s === 'DISRUPTIONS') return 'disrupted';
-  if (s === 'BE_AWARE') return 'amber';
-  if (s === 'NORMAL') return 'normal';
+  if (s === 'DISRUPTIONS')            return 'disrupted';
+  if (s === 'BE_AWARE')               return 'amber';
+  if (s === 'NORMAL')                 return 'normal';
   return 'unknown';
 }
 
-// Extract times mentioned in detail text e.g. "06:55 sailing" "the 10:00 and 14:00"
+// subStatus → our status
+function normaliseSubStatus(subStatus) {
+  const s = (subStatus || '').toUpperCase();
+  if (s === 'ALL_SAILINGS_CANCELLED') return 'cancelled';
+  if (s === 'DISRUPTIONS')            return 'disrupted';
+  if (s === 'BE_AWARE')               return 'amber';
+  return 'disrupted'; // default for any SAILING entry
+}
+
+// Extract HH:MM times mentioned in detail text
 function extractMentionedTimes(detail) {
   if (!detail) return [];
   const times = [];
-  // Match HH:MM or H:MM patterns
   const matches = detail.matchAll(/\b(\d{1,2}):(\d{2})\b/g);
   for (const m of matches) {
     const h = m[1].padStart(2, '0');
-    const min = m[2];
-    times.push(`${h}:${min}`);
+    times.push(`${h}:${m[2]}`);
   }
   return [...new Set(times)];
 }
 
-// Check if a sailing time (HH:MM) falls within a routeStatus window
-// windowStart/End are ISO strings, sailingTime is "HH:MM" for today
-function sailingInWindow(sailingTime, windowStart, windowEnd) {
-  if (!windowStart || !windowEnd) return false;
-  const today = new Date().toISOString().substring(0, 10); // YYYY-MM-DD
-  const [hh, mm] = sailingTime.split(':').map(Number);
-  const sailingMs = new Date(`${today}T${sailingTime}:00Z`).getTime();
-  const startMs = new Date(windowStart).getTime();
-  const endMs = new Date(windowEnd).getTime();
-  return sailingMs >= startMs && sailingMs <= endMs;
+// Does the detail text say specific sailings are cancelled?
+// Looks for "cancelled" near time mentions or "all sailings cancelled" etc.
+function detailImpliesCancelled(detail) {
+  if (!detail) return false;
+  const lower = detail.toLowerCase();
+  return lower.includes('cancel') || lower.includes('no service') || lower.includes('not operat');
+}
+
+// Clean markdown from detail text
+function cleanDetail(detail) {
+  if (!detail) return '';
+  return detail
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // [text](url) → text
+    .replace(/\[(\d+)\]:/g, '')              // [1]: footnotes
+    .replace(/\*\*/g, '')                    // bold
+    .replace(/\*/g, '')                      // italic
+    .trim()
+    .substring(0, 350);
+}
+
+// Check if a routeStatus window covers today
+function coversToday(startDateTime, endDateTime) {
+  if (!startDateTime || !endDateTime) return false;
+  const now = new Date();
+  return now >= new Date(startDateTime) && now <= new Date(endDateTime);
 }
 
 module.exports = async function handler(req, res) {
@@ -110,52 +131,53 @@ module.exports = async function handler(req, res) {
     const rawRoutes = json?.data?.routes || [];
     if (!rawRoutes.length) throw new Error('Empty routes');
 
-    const todayStr = new Date().toISOString().substring(0, 10);
-
     const routes = rawRoutes
       .filter(r => !r.name?.toLowerCase().includes('freight'))
       .map(r => {
         const routeKey = ROUTE_MAP[r.name] || null;
         const topStatus = normaliseTopStatus(r.status);
 
-        // Find today's SAILING-type routeStatus entries
-        const todaySailingEntries = (r.routeStatuses || []).filter(s => {
-          if (s.status !== 'SAILING') return false;
-          // Check if today falls within this entry's window
-          const start = new Date(s.startDateTime);
-          const end = new Date(s.endDateTime);
-          const now = new Date();
-          return now >= start && now <= end;
-        });
+        // ── Process all routeStatus entries active today ──────────────────
+        // We care about SAILING entries (actual service disruptions)
+        // and ignore INFORMATION/SERVICE entries (general notices)
+        const activeEntries = (r.routeStatuses || []).filter(s =>
+          s.status === 'SAILING' && coversToday(s.startDateTime, s.endDateTime)
+        );
 
-        // Build per-sailing status map: { "HH:MM": { status, detail, reason } }
         const sailingStatuses = {};
 
-        for (const entry of todaySailingEntries) {
+        for (const entry of activeEntries) {
           const subStatus = (entry.subStatus || '').toUpperCase();
-          const entryStatus = subStatus === 'ALL_SAILINGS_CANCELLED' ? 'cancelled'
-            : subStatus === 'DISRUPTIONS' ? 'disrupted'
-            : subStatus === 'BE_AWARE' ? 'amber'
-            : 'disrupted'; // default for SAILING entries
+          const detail = cleanDetail(entry.detail);
+          const reason = entry.disruptionReason || null;
 
+          // Determine status — ALL_SAILINGS_CANCELLED at subStatus level means whole route
+          if (subStatus === 'ALL_SAILINGS_CANCELLED') {
+            // All sailings cancelled — mark with wildcard
+            sailingStatuses['*'] = { status: 'cancelled', detail, reason };
+            continue;
+          }
+
+          // For DISRUPTIONS/BE_AWARE, check if detail text mentions specific times
           const mentionedTimes = extractMentionedTimes(entry.detail);
+          // Does the text explicitly say "cancelled" or "no service"?
+          const textSaysCancelled = detailImpliesCancelled(entry.detail);
+          // Status for specific sailings — upgrade to cancelled if text says so
+          const sailingStatus = textSaysCancelled ? 'cancelled' : normaliseSubStatus(subStatus);
 
-          if (mentionedTimes.length > 0 && subStatus !== 'ALL_SAILINGS_CANCELLED') {
-            // Only specific sailings mentioned — flag those
+          if (mentionedTimes.length > 0) {
+            // Specific sailings mentioned — flag those individually
             for (const t of mentionedTimes) {
-              sailingStatuses[t] = {
-                status: entryStatus,
-                detail: entry.detail?.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')?.replace(/\[(\d+)\]:/g, '')?.replace(/\*\*/g, '').trim().substring(0, 300),
-                reason: entry.disruptionReason || null,
-              };
+              // Don't downgrade an existing cancelled entry
+              if (sailingStatuses[t]?.status === 'cancelled') continue;
+              sailingStatuses[t] = { status: sailingStatus, detail, reason };
             }
           } else {
-            // All sailings in window affected — use sentinel '*' meaning all
-            sailingStatuses['*'] = {
-              status: entryStatus,
-              detail: entry.detail?.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')?.replace(/\[(\d+)\]:/g, '')?.replace(/\*\*/g, '').trim().substring(0, 300),
-              reason: entry.disruptionReason || null,
-            };
+            // No specific times — affects all sailings in window
+            // Don't downgrade existing wildcard cancelled entry
+            if (sailingStatuses['*']?.status !== 'cancelled') {
+              sailingStatuses['*'] = { status: sailingStatus, detail, reason };
+            }
           }
         }
 
@@ -163,7 +185,7 @@ module.exports = async function handler(req, res) {
           name: r.name,
           routeKey,
           status: topStatus,
-          sailingStatuses,   // { "HH:MM": {...} } and/or { "*": {...} }
+          sailingStatuses,
           isUpcoming: r.isStatusChangeUpcoming || false,
           raw: r.status,
         };

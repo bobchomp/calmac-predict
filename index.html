@@ -1083,6 +1083,9 @@ const ROUTE_PROFILES = {
   'Oban - Lismore':                                { threshold: 55, exposure: 2 },
   'Seil - Luing':                                  { threshold: 60, exposure: 1 },
   'Port Askaig - Feolin (Jura)':                   { threshold: 58, exposure: 1 },
+  'Tayinloan - Gigha':                             { threshold: 62, exposure: 1 },
+  'Sconser - Raasay':                              { threshold: 55, exposure: 2 },
+  'Fionnphort - Iona':                             { threshold: 60, exposure: 1 },
 };
 
 // Routes with tidal restrictions that can cause cancellations independently of weather
@@ -1694,8 +1697,7 @@ function attachFavButtons(container) {
   });
 }
 
-function attachFeedbackButtons(container) {
-}
+
 
 // ── EVENTS ──
 document.getElementById('search').addEventListener('input', e => { searchQuery = e.target.value; renderRoutes(); });
@@ -1840,9 +1842,16 @@ function openModal(routeName, sailingTime) {
     const bdr   = sailingIsCancelled ? '#ffcdd2' : '#ffe082';
     const col   = sailingIsCancelled ? '#c62828' : '#e65100';
     const icon  = sailingIsCancelled ? '🚨' : '⚠️';
-    const title = sailingIsCancelled ? 'Cancelled by CalMac' : sailingInfo.status === 'amber' ? 'Be Aware — CalMac advisory' : 'Disrupted — CalMac advisory';
+    // Reason-specific icons
+    const reasonIcons = { Weather: '🌊', Technical: '🔧', Operational: '🛳️', Tidal: '🌊', Other: 'ℹ️' };
+    const reasonIcon = sailingInfo.reason ? (reasonIcons[sailingInfo.reason] || 'ℹ️') : '';
+    const title = sailingIsCancelled
+      ? `Cancelled — ${sailingInfo.reason || 'CalMac advisory'}`
+      : sailingInfo.status === 'amber'
+        ? 'Be Aware — CalMac advisory'
+        : `Disrupted — ${sailingInfo.reason || 'CalMac advisory'}`;
     const detail = (sailingInfo.detail || '').trim();
-    const reason = sailingInfo.reason ? `<div style="font-size:.75rem;color:${col};margin-top:4px;opacity:.8">Reason: ${sailingInfo.reason}</div>` : '';
+    const reason = sailingInfo.reason ? `<div style="font-size:.75rem;color:${col};margin-top:6px;opacity:.85">${reasonIcon} Reason: <strong>${sailingInfo.reason}</strong></div>` : '';
     return `<div style="background:${bg};border:1.5px solid ${bdr};border-radius:10px;padding:12px 14px;margin-bottom:16px">
       <div style="font-weight:700;color:${col};font-size:.9rem;margin-bottom:4px">${icon} ${title}</div>
       <div style="font-size:.82rem;color:${col};line-height:1.55">${detail}</div>
@@ -2526,12 +2535,7 @@ document.getElementById('tripDate').addEventListener('change', updateTripResult)
 // ─────────────────────────────────────────────────────────────────────────
 // ── PATCH: renderRoutes — inject card-actions after each card ──
 // ─────────────────────────────────────────────────────────────────────────
-const _origRenderRoutes = typeof renderRoutes === 'function' ? renderRoutes : null;
-
-// Monkey-patch card builder — append action row after feedback row
-const _origBuildCard = typeof buildRouteCard === 'function' ? buildRouteCard : null;
-
-// We'll hook into the grid render instead
+// Hook into the grid render to add card actions
 function postRenderHook(container) {
   // Add card-actions to every card that doesn't already have one
   container.querySelectorAll('.route-card:not([data-actions])').forEach(card => {
