@@ -10,9 +10,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black" />
   <meta name="apple-mobile-web-app-title" content="Will It Sail?" />
   <meta name="theme-color" content="#003087" />
-  <!-- Clerk auth -->
-  <script>window.__CLERK_PUBLISHABLE_KEY__ = 'pk_test_ZGVhci1tdWxsZXQtMC5jbGVyay5hY2NvdW50cy5kZXYk';</script>
-  <script async src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"></script>
+
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet" />
   <style>
@@ -173,9 +171,7 @@
     .ls-status{margin-top:12px;font-size:.78rem;color:rgba(255,255,255,.55);letter-spacing:.03em;}
 
     /* ── BOTTOM NAV ── */
-    /* ── CLERK AUTH ── */
-    .auth-btn{font-family:inherit;font-size:.78rem;font-weight:600;padding:5px 14px;border-radius:20px;cursor:pointer;transition:all .18s;}
-    .auth-btn:hover{background:rgba(255,255,255,.25)!important;}
+
     .bottom-nav{
       position:fixed;bottom:0;left:0;right:0;z-index:200;
       background:var(--white);border-top:1px solid var(--light);
@@ -392,12 +388,6 @@
     <div class="header-logo">
       <div class="ferry-icon">⛴️</div>
       <div class="site-name">Will It Sail?</div>
-      <!-- Auth button sits in top-right of header -->
-      <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
-        <span class="auth-syncing" id="authSyncing" style="display:none;color:rgba(255,255,255,.7);font-size:.72rem;font-style:italic">Syncing…</span>
-        <div id="clerkUserBtn"></div>
-      <button class="auth-btn" id="authSignInBtn" style="border-color:rgba(255,255,255,.6);color:#fff;font-size:.78rem;padding:5px 14px;border-radius:20px;border:1.5px solid rgba(255,255,255,.6);background:rgba(255,255,255,.12);cursor:pointer;font-family:inherit;font-weight:600;backdrop-filter:blur(4px)">Sign in to sync</button>
-      </div>
     </div>
     <h1>CalMac <span>Sailing</span> Predictor</h1>
     <p class="subtitle">Unofficial weather-based predictions for all CalMac routes across Scotland's west coast and islands.</p>
@@ -1503,8 +1493,6 @@ let favourites = JSON.parse(localStorage.getItem('wis_favs') || '[]');
 
 function saveFavourites() {
   localStorage.setItem('wis_favs', JSON.stringify(favourites));
-  // If signed in, sync to server in the background
-  syncFavsToServer();
 }
 
 function isFav(name) { return favourites.includes(name); }
@@ -2668,137 +2656,6 @@ document.querySelectorAll('.nav-tab').forEach(btn => {
   }
 })();
 
-
-// ─────────────────────────────────────────────────────────────────────────
-// ── CLERK AUTH + FAVOURITES SYNC ──
-// ─────────────────────────────────────────────────────────────────────────
-let clerkInstance = null;
-let clerkToken = null;
-
-async function syncFavsToServer() {
-  if (!clerkToken) return;
-  const syncing = document.getElementById('authSyncing');
-  if (syncing) syncing.style.display = '';
-  try {
-    await fetch('/api/user', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + clerkToken },
-      body: JSON.stringify({ favs: favourites }),
-    });
-  } catch (_) {}
-  if (syncing) syncing.style.display = 'none';
-}
-
-async function loadFavsFromServer() {
-  if (!clerkToken) return;
-  const syncing = document.getElementById('authSyncing');
-  if (syncing) syncing.style.display = '';
-  try {
-    const res = await fetch('/api/user', {
-      headers: { 'Authorization': 'Bearer ' + clerkToken },
-    });
-    if (!res.ok) return;
-    const data = await res.json();
-    if (Array.isArray(data.favs) && data.favs.length > 0) {
-      // Merge server favs with local — union of both
-      const merged = [...new Set([...favourites, ...data.favs])];
-      favourites = merged;
-      localStorage.setItem('wis_favs', JSON.stringify(favourites));
-      renderRoutes();
-      renderFavourites();
-    }
-  } catch (_) {}
-  if (syncing) syncing.style.display = 'none';
-}
-
-async function initClerk() {
-  const signInBtn = document.getElementById('authSignInBtn');
-  const userBtnEl = document.getElementById('clerkUserBtn');
-
-  // Wait for Clerk to load
-  let attempts = 0;
-  while (!window.Clerk && attempts < 20) {
-    await new Promise(r => setTimeout(r, 200));
-    attempts++;
-  }
-
-  const publishableKey = window.__CLERK_PUBLISHABLE_KEY__;
-  const keyMissing = !publishableKey || publishableKey.includes('pk_test_ZGVhci1tdWxsZXQtMC5jbGVyay5hY2NvdW50cy5kZXYk');
-
-  if (!window.Clerk || keyMissing) {
-    // Clerk not available — button still shows, clicking opens CalMac site
-    // (graceful fallback, nothing breaks)
-    if (signInBtn) {
-      signInBtn.addEventListener('click', () => {
-        alert('Sign-in is not yet configured. Add your Clerk Publishable Key to index.html to enable cross-device sync.');
-      });
-    }
-    return;
-  }
-
-  try {
-    await window.Clerk.load({ publishableKey });
-    clerkInstance = window.Clerk;
-
-    // Show the sign-in button now that Clerk is ready
-    if (signInBtn) signInBtn.style.display = '';
-
-    const updateAuthUI = async () => {
-      const user = clerkInstance.user;
-      if (user) {
-        // Signed in — get token and show user button
-        try {
-          clerkToken = await clerkInstance.session.getToken();
-        } catch (_) { clerkToken = null; }
-
-        if (signInBtn) signInBtn.style.display = 'none';
-
-        // Mount Clerk's user button (avatar + dropdown with sign out)
-        if (userBtnEl && !userBtnEl.dataset.mounted) {
-          userBtnEl.dataset.mounted = '1';
-          clerkInstance.mountUserButton(userBtnEl, {
-            afterSignOutUrl: location.href,
-          });
-        }
-
-        // Load server favs and merge
-        await loadFavsFromServer();
-      } else {
-        // Signed out
-        clerkToken = null;
-        if (signInBtn) signInBtn.style.display = '';
-        if (userBtnEl) userBtnEl.innerHTML = '';
-        userBtnEl.dataset.mounted = '';
-      }
-    };
-
-    // Sign-in button click
-    if (signInBtn) {
-      signInBtn.addEventListener('click', () => {
-        clerkInstance.openSignIn({
-          afterSignInUrl: location.href,
-          afterSignUpUrl: location.href,
-        });
-      });
-    }
-
-    // Listen for auth state changes
-    clerkInstance.addListener(updateAuthUI);
-
-    // Initial check
-    await updateAuthUI();
-
-  } catch (err) {
-    console.warn('[Clerk] Failed to initialise:', err.message);
-  }
-}
-
-// Kick off Clerk after page load
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initClerk);
-} else {
-  initClerk();
-}
 
 </script>
 </body>

@@ -6,8 +6,7 @@
     "api/status.js":  { "maxDuration": 15, "memory": 256 },
     "api/vessel.js":  { "maxDuration": 15, "memory": 256 },
     "api/notify.js":  { "maxDuration": 15, "memory": 256 },
-    "api/cron.js":    { "maxDuration": 60, "memory": 512 },
-    "api/user.js":    { "maxDuration": 10, "memory": 128 }
+    "api/cron.js":    { "maxDuration": 60, "memory": 512 }
   },
   "routes": [
     { "src": "/api/weather", "dest": "/api/weather.js" },
@@ -15,7 +14,6 @@
     { "src": "/api/vessel",  "dest": "/api/vessel.js" },
     { "src": "/api/notify",  "dest": "/api/notify.js" },
     { "src": "/api/cron",    "dest": "/api/cron.js" },
-    { "src": "/api/user",    "dest": "/api/user.js" },
     { "src": "/sw.js",       "dest": "/sw.js" },
     { "src": "/(.*)",        "dest": "/index.html" }
   ]
