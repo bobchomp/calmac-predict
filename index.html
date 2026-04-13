@@ -489,12 +489,12 @@
           <div style="font-weight:700;font-size:.9rem;color:var(--text);margin-bottom:4px">Weather risk score (0–100)</div>
           <p style="font-size:.82rem;color:var(--muted);margin:0;line-height:1.6">Live data fetched from <a href="https://open-meteo.com" target="_blank" style="color:var(--blue);font-weight:600">Open-Meteo</a> every 30 minutes. Four conditions scored and summed:</p>
           <div style="margin-top:10px">
-            <div class="factor-row"><div class="factor-icon">💨</div><div class="factor-text"><div class="factor-name">Wind gusts</div><div class="factor-desc">Scored against each route's threshold (40 mph Stornoway crossing vs 65 mph sheltered Gourock–Dunoon). Scales 0→40 pts as gusts approach and exceed that threshold.</div></div><div class="factor-weight">0–40 pts</div></div>
-            <div class="factor-row"><div class="factor-icon">🌊</div><div class="factor-text"><div class="factor-name">Wave height & swell</div><div class="factor-desc">Significant wave height combined with swell period — longer-period swells are more disruptive at the same height. Scaled by route sea exposure (1–4).</div></div><div class="factor-weight">0–30 pts</div></div>
-            <div class="factor-row"><div class="factor-icon">🌫</div><div class="factor-text"><div class="factor-name">Visibility / fog</div><div class="factor-desc">0 pts above 3 km, up to 15 pts in dense fog below 200 m. CalMac can suspend sailings in fog independently of wind.</div></div><div class="factor-weight">0–15 pts</div></div>
-            <div class="factor-row" style="border-bottom:none"><div class="factor-icon">❄️</div><div class="factor-text"><div class="factor-name">Snow & precipitation</div><div class="factor-desc">Heavy snowfall adds operational risk at ports. Up to 10 pts for severe snowfall.</div></div><div class="factor-weight">0–10 pts</div></div>
+            <div class="factor-row"><div class="factor-icon">💨</div><div class="factor-text"><div class="factor-name">Wind gusts</div><div class="factor-desc">Compared against each route's specific cancellation threshold — 40 mph for the exposed Stornoway crossing, 65 mph for the sheltered Gourock–Dunoon run. The score scales smoothly from 3 pts at 45% of threshold up to 40 pts when gusts exceed 120% of threshold.</div></div><div class="factor-weight">0–40 pts</div></div>
+            <div class="factor-row"><div class="factor-icon">🌊</div><div class="factor-text"><div class="factor-name">Wave height & swell</div><div class="factor-desc">Significant wave height combined with swell period — long-period Atlantic swells are weighted more heavily than short wind chop at the same height. Threshold varies by route exposure (1 = sheltered, 4 = open ocean).</div></div><div class="factor-weight">0–30 pts</div></div>
+            <div class="factor-row"><div class="factor-icon">🌫</div><div class="factor-text"><div class="factor-name">Visibility / fog</div><div class="factor-desc">CalMac can suspend sailings in fog independently of wind. 0 pts above 5 km, scaling to 15 pts in dense fog below 500 m.</div></div><div class="factor-weight">0–15 pts</div></div>
+            <div class="factor-row" style="border-bottom:none"><div class="factor-icon">🌧</div><div class="factor-text"><div class="factor-name">Precipitation & snow</div><div class="factor-desc">Heavy rain adds 2 pts, heavy snow adds 5 pts, and blizzard conditions (WMO code ≥ 71) add the full 10 pts. Accounts for port access and loading difficulties.</div></div><div class="factor-weight">0–10 pts</div></div>
           </div>
-          <p style="font-size:.78rem;color:var(--muted);margin-top:10px;background:var(--light);border-radius:8px;padding:8px">Score 0 = perfect conditions. Score 100 = almost certain cancellation. Raw chance = 100 − score, then adjusted for season.</p>
+          <p style="font-size:.78rem;color:var(--muted);margin-top:10px;background:var(--light);border-radius:8px;padding:8px">The <strong>overall route score</strong> is the average of the three worst hours in the next 12 — so one gusty hour doesn't tank a mostly calm day. Each individual <strong>sailing row</strong> shows that departure's specific hour score.</p>
         </div>
       </div>
 
@@ -503,9 +503,9 @@
         <div>
           <div style="font-weight:700;font-size:.9rem;color:var(--text);margin-bottom:4px">Season & route adjustments</div>
           <ul style="font-size:.82rem;color:var(--muted);margin:6px 0 0 0;padding-left:18px;line-height:1.7">
-            <li><strong>Season factor</strong> — 15% stricter in winter (Nov–Feb), 7% stricter in shoulder months (Mar, Oct)</li>
-            <li><strong>Tidal penalty</strong> — tidal routes get a small background risk for operational constraints</li>
-            <li><strong>Route exposure profile</strong> — each route has a wind threshold, wave threshold and exposure rating (1 = sheltered, 4 = open ocean)</li>
+            <li><strong>Season factor</strong> — cancellation thresholds are 15% stricter in winter (Nov–Feb), 7% stricter in shoulder months (Mar, Sep, Oct), and standard in summer (Apr–Aug). This reflects CalMac's real-world higher cancellation rates in winter.</li>
+            <li><strong>Route exposure profile</strong> — each of the 22 routes has a wind threshold (mph), wave threshold, and exposure rating built from route geography and historical cancellation data.</li>
+            <li><strong>Tidal penalty</strong> — a small fixed penalty for routes with known tidal constraints (Uig triangle, Small Isles) that can cause cancellations independently of weather.</li>
           </ul>
         </div>
       </div>
@@ -514,9 +514,9 @@
         <div style="flex-shrink:0;width:28px;height:28px;border-radius:50%;background:var(--navy);color:#fff;font-weight:800;font-size:.85rem;display:flex;align-items:center;justify-content:center">3</div>
         <div>
           <div style="font-weight:700;font-size:.9rem;color:var(--text);margin-bottom:4px">Historical calibration blend</div>
-          <p style="font-size:.82rem;color:var(--muted);margin:0;line-height:1.6">For calibrated routes, the weather score is blended with real cancellation history:</p>
+          <p style="font-size:.82rem;color:var(--muted);margin:0;line-height:1.6">For routes with a 📊 Calibrated badge, the weather score is blended with real CalMac reliability data — seasonal figures from official monthly performance PDFs:</p>
           <div style="background:var(--light);border-radius:8px;padding:10px 12px;margin-top:8px;font-family:monospace;font-size:.8rem;color:var(--navy)">final = (weather × 0.7) + (history × 0.3)</div>
-          <p style="font-size:.78rem;color:var(--muted);margin-top:8px;line-height:1.6">The result is <strong>capped</strong> at historical reliability + 5%, so a route with an 87% track record can never show 99% — even in perfect weather.</p>
+          <p style="font-size:.78rem;color:var(--muted);margin-top:8px;line-height:1.6">The result is capped at that route's historical reliability + 10% — so even in perfect weather, a structurally unreliable route can't show an unrealistically high score. Routes without PDF data use weather-only predictions.</p>
         </div>
       </div>
     </div>
@@ -1142,11 +1142,12 @@ function getHistoricalReliability(routeName) {
 // ── SEASON FACTOR ──
 function seasonFactor() {
   const month = new Date().getMonth(); // 0=Jan
-  // Winter (Nov-Mar): sailings cancel at lower wind speeds
-  if (month >= 10 || month <= 2) return 0.85;
-  // Autumn/Spring: slightly reduced
-  if (month >= 8 || month <= 4) return 0.93;
-  return 1.0; // Summer
+  // Winter Nov-Feb (months 10,11,0,1): sailings cancel at lower wind speeds
+  if (month >= 10 || month <= 1) return 0.85;
+  // Early spring Mar, late autumn Sep-Oct (months 2,8,9): slightly reduced
+  if (month === 2 || month === 8 || month === 9) return 0.93;
+  // Summer May-Aug + shoulder Apr (months 3,4,5,6,7): standard
+  return 1.0;
 }
 
 // ── CORE RISK ALGORITHM ──
@@ -1163,11 +1164,12 @@ function calcHourlyRisk(routeName, hour, hourlyWeather, hourlyMarine) {
   const gust = ((hourlyWeather.windgusts_10m || [])[hour] || 0) * 2.237;
   const wind = ((hourlyWeather.windspeed_10m || [])[hour] || 0) * 2.237;
   const gustRatio = gust / effectiveThreshold; // >1 means likely cancelled
-  if (gustRatio >= 1.1)      risk += 40;
-  else if (gustRatio >= 0.9) risk += 30;
-  else if (gustRatio >= 0.75) risk += 18;
-  else if (gustRatio >= 0.6)  risk += 8;
-  else if (gustRatio >= 0.45) risk += 3;
+  if      (gustRatio >= 1.2)  risk += 40; // Well over threshold — very likely cancelled
+  else if (gustRatio >= 1.0)  risk += 34; // At or just over threshold
+  else if (gustRatio >= 0.9)  risk += 26; // 90% of threshold — high risk
+  else if (gustRatio >= 0.75) risk += 16; // 75% — moderate risk
+  else if (gustRatio >= 0.6)  risk += 8;  // 60% — low-moderate risk
+  else if (gustRatio >= 0.45) risk += 3;  // 45% — minimal risk
 
   // ── WAVE HEIGHT (0-30 pts) ──
   // Significant wave height is often more decisive than wind alone
@@ -1208,11 +1210,12 @@ function calcHourlyRisk(routeName, hour, hourlyWeather, hourlyMarine) {
   }
 
   // ── PRECIPITATION / SNOW (0-10 pts) ──
-  const snow = (hourlyWeather.snowfall || [])[hour] || 0;
+  const snow   = (hourlyWeather.snowfall      || [])[hour] || 0;
   const precip = (hourlyWeather.precipitation || [])[hour] || 0;
-  const code = (hourlyWeather.weathercode || [])[hour] || 0;
-  if (snow > 2 || code >= 71)      risk += 10; // Significant snow
-  else if (snow > 0.5 || code >= 61) risk += 4; // Light snow or heavy rain
+  const code   = (hourlyWeather.weathercode   || [])[hour] || 0;
+  if (snow > 2 || code >= 71)                risk += 10; // Heavy snow/blizzard
+  else if (snow > 0.5 || code >= 61)         risk += 5;  // Light snow or heavy rain
+  else if (precip > 5  || code >= 51)        risk += 2;  // Moderate rain/drizzle
 
   // ── TIDAL PENALTY (0-5 pts) ──
   // Routes with known tidal restrictions get a small background risk
@@ -1224,15 +1227,20 @@ function calcHourlyRisk(routeName, hour, hourlyWeather, hourlyMarine) {
 // ── 12-HOUR OVERALL RISK ──
 // Takes the worst risk across the next 12 hours (weighted toward nearer hours)
 function calcOverallRisk(routeName, currentHour, hourlyWeather, hourlyMarine) {
-  let maxRisk = 0;
+  const risks = [];
   for (let i = 0; i < 12; i++) {
     const h = Math.min(currentHour + i, 23);
     const r = calcHourlyRisk(routeName, h, hourlyWeather, hourlyMarine);
-    // Weight nearer hours slightly higher
+    // Weight nearer hours slightly higher — next 3 hours matter most
     const weighted = i < 3 ? r * 1.1 : r;
-    if (weighted > maxRisk) maxRisk = weighted;
+    risks.push(weighted);
   }
-  return Math.min(100, Math.round(maxRisk));
+  risks.sort((a, b) => b - a);
+  // Use average of the 3 worst hours — more robust than pure max
+  // (single gusty hour shouldn't tank an otherwise calm day)
+  const worst3 = risks.slice(0, 3);
+  const score = worst3.reduce((a, b) => a + b, 0) / worst3.length;
+  return Math.min(100, Math.round(score));
 }
 
 function sailingChance(risk, routeName) {
@@ -1245,11 +1253,11 @@ function sailingChance(risk, routeName) {
   const histRel = routeName ? getHistoricalReliability(routeName) : null;
   if (histRel === null) return weatherChance;
 
-  // Hard cap: can never predict higher than historical reliability + 5%
-  // (small buffer for genuinely good weather days)
-  const cap = Math.min(100, histRel + 5);
+  // Hard cap: can never predict higher than historical reliability + 10%
+  // Allows genuinely calm days to score a bit higher than the route's average
+  const cap = Math.min(100, histRel + 10);
 
-  // Blended score
+  // Blended score: 70% weather model, 30% historical baseline
   const blended = Math.round((weatherChance * 0.7) + (histRel * 0.3));
   return Math.max(0, Math.min(cap, blended));
 }
@@ -1261,9 +1269,9 @@ function chanceColor(pct) {
 }
 
 function verdictFromRisk(risk) {
-  if (risk >= 55) return 'unlikely';
-  if (risk >= 25) return 'caution';
-  return 'likely';
+  if (risk >= 50) return 'unlikely'; // >50% risk score = unlikely to sail
+  if (risk >= 20) return 'caution';  // 20-49% = use caution
+  return 'likely';                    // <20% = likely to sail
 }
 
 function verdictEmoji(v) { return {likely:'✅',caution:'⚠️',unlikely:'❌',unknown:'❓'}[v]||'❓'; }
