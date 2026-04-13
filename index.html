@@ -337,34 +337,28 @@
 .ri-value{font-size:.88rem;font-weight:600;color:var(--text);}
 
 /* ── MY TRIP MODAL ── */
-.trip-modal-overlay{position:fixed;inset:0;z-index:600;background:rgba(0,18,60,0.55);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);display:flex;align-items:flex-end;justify-content:center;opacity:0;visibility:hidden;transition:opacity .25s,visibility .25s;}
-.trip-modal-overlay.open{opacity:1;visibility:visible;}
-.trip-modal{background:var(--white);width:100%;max-width:480px;border-radius:22px 22px 0 0;max-height:88vh;overflow-y:auto;-webkit-overflow-scrolling:touch;transform:translateY(40px);transition:transform .28s cubic-bezier(.32,1.1,.42,1);padding:0 0 env(safe-area-inset-bottom);}
-.trip-modal-overlay.open .trip-modal{transform:translateY(0);}
-.trip-header{padding:16px 20px 12px;border-bottom:1px solid var(--light);}
-.trip-header h3{font-family:'Syne',sans-serif;font-size:1rem;font-weight:800;color:var(--navy);}
-.trip-header p{font-size:.8rem;color:var(--muted);margin-top:3px;}
-.trip-body{padding:16px 20px 24px;display:flex;flex-direction:column;gap:12px;}
-.trip-field label{display:block;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:5px;}
-.trip-field select,.trip-field input[type=date]{width:100%;padding:9px 12px;border:1.5px solid var(--light);border-radius:8px;font-family:inherit;font-size:.9rem;color:var(--text);background:var(--offwhite);outline:none;transition:border-color .2s;}
-.trip-field select:focus,.trip-field input[type=date]:focus{border-color:var(--blue);background:var(--white);}
-.trip-result{background:var(--offwhite);border-radius:10px;padding:14px;text-align:center;min-height:80px;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+
+
+
+
+
+
+
+
+
+
+
+
 .trip-chance-num{font-family:'Syne',sans-serif;font-size:2.8rem;font-weight:800;line-height:1;}
 .trip-chance-lbl{font-size:.8rem;color:var(--muted);margin-top:4px;}
 .trip-forecast-note{font-size:.75rem;color:var(--muted);margin-top:6px;font-style:italic;}
-.trip-share-btn{display:flex;align-items:center;justify-content:center;gap:6px;padding:11px;border-radius:10px;border:none;background:var(--blue);color:var(--white);font-family:inherit;font-size:.88rem;font-weight:600;cursor:pointer;transition:background .18s;}
-.trip-share-btn:hover{background:var(--navy);}
-.trip-close-btn{display:flex;align-items:center;justify-content:center;gap:6px;padding:11px;border-radius:10px;border:1.5px solid var(--light);background:var(--white);color:var(--muted);font-family:inherit;font-size:.88rem;font-weight:600;cursor:pointer;}
+
+
+
 
 /* ── SHARE TOAST ── */
 .share-toast{position:fixed;bottom:calc(80px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%) translateY(20px);background:#1a2c4e;color:#fff;padding:10px 18px;border-radius:20px;font-size:.85rem;font-weight:600;opacity:0;transition:all .3s;pointer-events:none;z-index:999;white-space:nowrap;}
-.share-toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
-
-/* ── MY TRIP FAB ── */
-.trip-fab{position:fixed;right:16px;bottom:calc(80px + env(safe-area-inset-bottom) + 12px);width:52px;height:52px;border-radius:50%;background:var(--navy);color:#fff;border:none;font-size:1.4rem;cursor:pointer;box-shadow:0 4px 16px rgba(0,48,135,0.35);display:flex;align-items:center;justify-content:center;transition:transform .18s,background .18s;z-index:150;-webkit-tap-highlight-color:transparent;}
-.trip-fab:hover{background:var(--blue);transform:scale(1.07);}
-
-/* ── ACCURACY RING ── */
+.share-toast.show{opacity:1;transform:translateX(-50%) translateY(0);}/* ── ACCURACY RING ── */
 .acc-ring-wrap{display:flex;align-items:center;gap:14px;padding:10px 0;}
 .acc-ring{position:relative;width:64px;height:64px;flex-shrink:0;}
 .acc-ring svg{transform:rotate(-90deg);}
@@ -396,6 +390,12 @@
     <path d="M0,20 C240,40 480,0 720,20 C960,40 1200,0 1440,20 L1440,40 L0,40 Z" fill="#f4f7fb"/>
   </svg>
 </header>
+
+<!-- ── SHARE BANNER ── shown when someone opens a shared link -->
+<div id="shareBanner" style="display:none;background:var(--navy);color:#fff;padding:10px 16px;font-size:.85rem;display:flex;align-items:center;gap:10px;justify-content:center">
+  <span id="shareBannerText"></span>
+  <button onclick="document.getElementById('shareBanner').style.display='none'" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:12px;padding:3px 10px;font-size:.78rem;cursor:pointer;font-family:inherit">✕ Dismiss</button>
+</div>
 
 <div class="toolbar">
   <div class="toolbar-inner">
@@ -534,14 +534,7 @@
         <p style="font-size:.83rem;color:var(--muted);line-height:1.6;margin:0">A disruption banner appears at the top of the Routes tab whenever CalMac is reporting active cancellations or delays on any route, pulled automatically from CalMac's internal service status API. Affected route cards are flagged with a status pill. If the CalMac API is unavailable, a fallback link to their official status page is shown instead.</p>
       </div>
 
-      <!-- My Trip -->
-      <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--light)">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <span style="font-size:1.1rem">🗓</span>
-          <span style="font-weight:700;font-size:.9rem;color:var(--text)">My Trip — future sailing planner</span>
-        </div>
-        <p style="font-size:.83rem;color:var(--muted);line-height:1.6;margin:0">Tap the calendar button (bottom right) to pick any route and date. For dates within the next 7 days, a prediction is generated using the available forecast. Beyond 7 days the forecast isn't yet available — check back closer to your travel date and the prediction will appear automatically. You can share a trip link with anyone, and it'll open straight to that route and date.</p>
-      </div>
+
 
       <!-- Share -->
       <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--light)">
@@ -549,7 +542,7 @@
           <span style="font-size:1.1rem">🔗</span>
           <span style="font-weight:700;font-size:.9rem;color:var(--text)">Share links</span>
         </div>
-        <p style="font-size:.83rem;color:var(--muted);line-height:1.6;margin:0">Every route card and modal has a Share button. On iOS and Android it opens the native share sheet. On desktop it copies the link to your clipboard. Shared links open directly to that route's detail view — or to a specific date if shared from My Trip.</p>
+        <p style="font-size:.83rem;color:var(--muted);line-height:1.6;margin:0">Every route card and modal has a Share button. Tap it, enter your name, and a unique link is generated. On iOS and Android it opens the native share sheet; on desktop it copies the link to clipboard. When the recipient opens the link it shows your name at the top — <em>"Ross shared Ardrossan – Brodick with you 🚢"</em> — and opens directly to that route.</p>
       </div>
 
       <!-- Push notifications -->
@@ -646,40 +639,8 @@
   </div>
 </main>
 
-<!-- ── MY TRIP FAB ── -->
-<button class="trip-fab" id="tripFab" title="Plan a trip" aria-label="Plan a trip">🗓</button>
-
-<!-- ── MY TRIP MODAL ── -->
-<div class="trip-modal-overlay" id="tripModalOverlay">
-  <div class="trip-modal">
-    <div class="modal-handle"></div>
-    <div class="trip-header">
-      <h3>🗓 Plan a Trip</h3>
-      <p>Check the sailing chance for a specific date &amp; route — updates as forecast improves.</p>
-    </div>
-    <div class="trip-body">
-      <div class="trip-field">
-        <label>Route</label>
-        <select id="tripRoute"></select>
-      </div>
-      <div class="trip-field">
-        <label>Date</label>
-        <input type="date" id="tripDate" />
-      </div>
-      <div class="trip-result" id="tripResult">
-        <div style="color:var(--muted);font-size:.85rem">Select a route and date above</div>
-      </div>
-      <button class="trip-share-btn" id="tripShareBtn" style="display:none">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-        Share this sailing
-      </button>
-      <button class="trip-close-btn" id="tripCloseBtn">Close</button>
-    </div>
-  </div>
-</div>
-
 <!-- ── SHARE TOAST ── -->
-<div class="share-toast" id="shareToast">✅ Link copied to clipboard</div>
+<div class="share-toast" id="shareToast">✅ Link copied!</div>
 
 <!-- ── BOTTOM NAV ── -->
 <nav class="bottom-nav">
@@ -2027,8 +1988,8 @@ function parseShareLink() {
   if (route) {
     // After data loads, open modal or trip modal
     window._shareRoute   = route;
-    window._shareDate    = date;
     window._shareSailing = sailing;
+    window._shareFrom    = params.get('from') || null;
   }
 }
 parseShareLink();
@@ -2036,12 +1997,21 @@ parseShareLink();
 function handleShareDeepLink() {
   if (!window._shareRoute) return;
   const route = window._shareRoute;
-  const date  = window._shareDate;
-  if (date) {
-    openTripModal(route, date);
-  } else {
-    setTimeout(() => openModal(route), 400);
+  const from  = window._shareFrom;
+
+  // Show the share banner
+  const banner = document.getElementById('shareBanner');
+  const text   = document.getElementById('shareBannerText');
+  if (banner && text) {
+    text.textContent = from
+      ? `${from} shared "${route}" with you 🚢`
+      : `Someone shared "${route}" with you 🚢`;
+    banner.style.display = 'flex';
   }
+
+  // Open the route modal
+  setTimeout(() => openModal(route, window._shareSailing || null), 400);
+
   // Clean URL without reloading
   history.replaceState(null, '', location.pathname);
 }
@@ -2049,17 +2019,27 @@ function handleShareDeepLink() {
 // ─────────────────────────────────────────────────────────────────────────
 // ── SHARE BUTTON ──
 // ─────────────────────────────────────────────────────────────────────────
-function shareRoute(routeName, date, sailing) {
+function shareRoute(routeName, sailing) {
+  // Ask for the sharer's name
+  const name = prompt('Your name (shown to the recipient):', '');
+  if (name === null) return; // user cancelled
+
   const params = new URLSearchParams({ route: routeName });
-  if (date)    params.set('date', date);
-  if (sailing) params.set('sailing', sailing);
+  if (sailing)         params.set('sailing', sailing);
+  if (name.trim())     params.set('from', name.trim());
+
   const url = `${location.origin}${location.pathname}?${params}`;
+  const title = `Will It Sail? — ${routeName}`;
+  const text  = name.trim()
+    ? `${name.trim()} shared a CalMac route with you`
+    : `Check this CalMac route on Will It Sail?`;
 
   if (navigator.share) {
-    navigator.share({ title: `Will It Sail? — ${routeName}`, url }).catch(() => {});
+    navigator.share({ title, text, url }).catch(() => {});
   } else {
     navigator.clipboard.writeText(url).then(() => {
       const toast = document.getElementById('shareToast');
+      toast.textContent = '✅ Link copied!';
       toast.classList.add('show');
       setTimeout(() => toast.classList.remove('show'), 2500);
     }).catch(() => {
@@ -2400,132 +2380,7 @@ async function enrichModalWithVessel(routeName) {
 // ─────────────────────────────────────────────────────────────────────────
 // ── MY TRIP MODAL ──
 // ─────────────────────────────────────────────────────────────────────────
-function openTripModal(preRoute, preDate) {
-  const overlay = document.getElementById('tripModalOverlay');
-  const routeSel = document.getElementById('tripRoute');
-  const dateInput = document.getElementById('tripDate');
 
-  // Populate route select if empty
-  if (routeSel.options.length === 0) {
-    const routes = Object.keys(TIMETABLE).sort();
-    routes.forEach(r => {
-      const opt = document.createElement('option');
-      opt.value = r; opt.textContent = r;
-      routeSel.appendChild(opt);
-    });
-  }
-
-  if (preRoute) routeSel.value = preRoute;
-  if (preDate)  dateInput.value = preDate;
-
-  // Set min date to today, max to +14 days
-  const today = new Date();
-  dateInput.min = today.toISOString().split('T')[0];
-  const max = new Date(today); max.setDate(max.getDate() + 14);
-  dateInput.max = max.toISOString().split('T')[0];
-  if (!dateInput.value) dateInput.value = dateInput.min;
-
-  overlay.classList.add('open');
-  document.body.style.overflow = 'hidden';
-  updateTripResult();
-}
-
-function closeTripModal() {
-  document.getElementById('tripModalOverlay').classList.remove('open');
-  document.body.style.overflow = '';
-}
-
-async function updateTripResult() {
-  const routeName = document.getElementById('tripRoute').value;
-  const dateStr   = document.getElementById('tripDate').value;
-  const result    = document.getElementById('tripResult');
-  const shareBtn  = document.getElementById('tripShareBtn');
-
-  if (!routeName || !dateStr) {
-    result.innerHTML = '<div style="color:var(--muted);font-size:.85rem">Select a route and date above</div>';
-    shareBtn.style.display = 'none';
-    return;
-  }
-
-  const targetDate = new Date(dateStr);
-  const today = new Date(); today.setHours(0,0,0,0);
-  const diffDays = Math.round((targetDate - today) / 86400000);
-
-  // Beyond 7-day forecast window
-  if (diffDays > 7) {
-    const formattedDate = targetDate.toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long' });
-    result.innerHTML = `
-      <div style="font-size:2rem;margin-bottom:8px">🗓</div>
-      <div class="trip-chance-lbl" style="font-size:.9rem;color:var(--text);font-weight:600">${formattedDate}</div>
-      <div class="trip-forecast-note">Forecast not yet available — weather data covers the next 7 days only.<br>Check back closer to your travel date.</div>`;
-    shareBtn.style.display = 'flex';
-    shareBtn.onclick = () => shareRoute(routeName, dateStr);
-    return;
-  }
-
-  // Show loading
-  result.innerHTML = '<div class="ls-spinner" style="width:28px;height:28px;border-width:2px;margin:0 auto"></div>';
-
-  // Use cached weather data if available for today, else fetch
-  const route = allRoutes.find(r => r.name === routeName);
-  let chance = null;
-  let note = '';
-
-  if (diffDays === 0 && route) {
-    // Today — use live data
-    chance = sailingChance(route.risk || 0, routeName);
-    note = 'Based on live forecast';
-  } else if (allRoutes.length > 0 && route) {
-    // Future — use daily risk from pre-fetched data if available
-    // (Open-Meteo daily data fetched in fetchData)
-    const profile = ROUTE_PROFILES[routeName] || { threshold: 45, exposure: 2 };
-    const dailyData = route._dailyWeather;
-    if (dailyData && dailyData.daily) {
-      const idx = diffDays;
-      const maxGust = (dailyData.daily.windgusts_10m_max || [])[idx] || 0;
-      const effectiveThreshold = profile.threshold * seasonFactor();
-      const gustRatio = maxGust / effectiveThreshold;
-      let risk = 0;
-      if (gustRatio >= 1.1) risk = 80;
-      else if (gustRatio >= 0.9) risk = 55;
-      else if (gustRatio >= 0.75) risk = 35;
-      else if (gustRatio >= 0.6) risk = 18;
-      else if (gustRatio >= 0.45) risk = 8;
-      const weatherChance = Math.max(0, Math.min(100, 100 - risk));
-      const histRel = getHistoricalReliability(routeName);
-      chance = histRel !== null
-        ? Math.min(histRel + 5, Math.round(weatherChance * 0.7 + histRel * 0.3))
-        : weatherChance;
-      note = `Based on ${targetDate.toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short' })} forecast`;
-    } else {
-      chance = null;
-      note = 'Detailed forecast unavailable for this date';
-    }
-  }
-
-  const color = chance === null ? 'var(--muted)' : chance >= 80 ? 'var(--green)' : chance >= 60 ? 'var(--amber)' : 'var(--red)';
-  const label = chance === null ? '—'
-              : chance >= 80 ? 'Likely to sail'
-              : chance >= 60 ? 'Use caution'
-              : 'At risk of cancellation';
-
-  result.innerHTML = `
-    <div class="trip-chance-num" style="color:${color}">${chance !== null ? chance + '%' : '?'}</div>
-    <div class="trip-chance-lbl" style="color:${color};font-weight:700">${label}</div>
-    <div class="trip-forecast-note">${note}</div>`;
-
-  shareBtn.style.display = 'flex';
-  shareBtn.onclick = () => shareRoute(routeName, dateStr);
-}
-
-// Wire up trip modal events
-document.getElementById('tripFab').addEventListener('click', () => openTripModal());
-document.getElementById('tripCloseBtn').addEventListener('click', closeTripModal);
-document.getElementById('tripModalOverlay').addEventListener('click', e => {
-  if (e.target === document.getElementById('tripModalOverlay')) closeTripModal();
-});
-document.getElementById('tripRoute').addEventListener('change', updateTripResult);
-document.getElementById('tripDate').addEventListener('change', updateTripResult);
 
 // ─────────────────────────────────────────────────────────────────────────
 // ── FORECAST ACCURACY TRACKER ──
@@ -2580,7 +2435,7 @@ window.openModal = function(routeName, sailingTime) {
         const shareDiv = document.createElement('div');
         shareDiv.style.cssText = 'display:flex;gap:8px;margin-top:10px;';
         shareDiv.innerHTML = `
-          <button id="modalShareBtn" class="modal-calmac-link" style="flex:1;background:var(--offwhite);color:var(--navy);border:1.5px solid var(--light);" onclick="shareRoute('${routeName.replace(/'/g,"\'")}')">
+          <button id="modalShareBtn" class="modal-calmac-link" style="flex:1;background:var(--offwhite);color:var(--navy);border:1.5px solid var(--light);" onclick="shareRoute('${routeName.replace(/'/g,"\'")}'${sailingTime ? ",'" + sailingTime + "'" : ''})">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
             Share
           </button>`;
