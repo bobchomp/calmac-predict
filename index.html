@@ -11,6 +11,7 @@
   <meta name="apple-mobile-web-app-title" content="Will It Sail?" />
   <meta name="theme-color" content="#003087" />
 
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet" />
   <style>
@@ -372,6 +373,12 @@
 
 
 /* ── MAP TAB ── */
+    .leaflet-container{font-family:inherit;}
+    #tabMap.active{display:flex!important;}
+    .map-legend{position:absolute;bottom:20px;left:12px;z-index:1000;background:var(--white);border-radius:10px;padding:8px 12px;box-shadow:var(--shadow);font-size:.72rem;color:var(--text);}
+    .map-legend-item{display:flex;align-items:center;gap:6px;margin-bottom:3px;}
+    .map-legend-item:last-child{margin-bottom:0;}
+    .map-legend-dot{width:14px;height:4px;border-radius:2px;flex-shrink:0;}
     .map-tab-wrap{padding:0 0 80px;}
     .map-search-bar{padding:12px 16px 8px;position:sticky;top:0;background:var(--white);z-index:10;border-bottom:1px solid var(--light);}
     .map-search-input{width:100%;padding:9px 12px 9px 34px;border:1.5px solid var(--light);border-radius:10px;font-family:inherit;font-size:.88rem;background:var(--offwhite);outline:none;transition:border-color .2s;}
@@ -463,6 +470,10 @@
       <button class="filter-btn" data-filter="caution">⚠️ Caution</button>
       <button class="filter-btn" data-filter="unlikely">❌ Unlikely</button>
     </div>
+    <button class="refresh-btn" id="tomorrowToggleBtn" onclick="toggleTomorrowGlobal()" style="background:var(--offwhite);color:var(--muted);border:1.5px solid var(--light)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      Tomorrow
+    </button>
     <button class="refresh-btn" id="refreshBtn">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
       Refresh
@@ -706,16 +717,22 @@
   </div>
 
   <!-- ── MAP TAB ── -->
-  <div class="tab-page" id="tabMap" style="padding-bottom:80px">
-    <div class="map-tab-wrap">
-      <div class="map-search-bar">
-        <div style="position:relative">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2" style="position:absolute;left:10px;top:50%;transform:translateY(-50%)"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input class="map-search-input" id="mapSearch" type="text" placeholder="Search routes…" oninput="filterMapRoutes(this.value)" autocomplete="off" />
+  <div class="tab-page" id="tabMap" style="padding-bottom:80px;display:flex;flex-direction:column;height:calc(100vh - 56px - env(safe-area-inset-bottom))">
+    <div id="leafletMap" style="flex:1;min-height:0;width:100%;"></div>
+    <!-- Route info panel (shown on line click) -->
+    <div id="mapInfoPanel" style="display:none;background:var(--white);border-top:1px solid var(--light);padding:14px 16px;flex-shrink:0">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div>
+          <div id="mapPanelName" style="font-family:'Syne',sans-serif;font-weight:800;font-size:.95rem;color:var(--navy)"></div>
+          <div id="mapPanelSub" style="font-size:.75rem;color:var(--muted);margin-top:2px"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div id="mapPanelPct" style="font-family:'Syne',sans-serif;font-size:1.6rem;font-weight:800"></div>
+          <button onclick="document.getElementById('mapInfoPanel').style.display='none'" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--muted);padding:4px">✕</button>
         </div>
       </div>
-      <div class="map-route-list" id="mapRouteList">
-        <!-- filled by renderMapTab() -->
+      <div style="display:flex;gap:8px">
+        <button onclick="openMapRouteModal()" id="mapViewBtn" style="flex:1;padding:9px;border-radius:10px;background:var(--blue);color:#fff;border:none;font-family:inherit;font-size:.82rem;font-weight:600;cursor:pointer">View full forecast →</button>
       </div>
     </div>
   </div>
@@ -1098,6 +1115,33 @@ const ROUTES = [
   { name: 'Seil - Luing',                                 lat: 56.23, lon: -5.62 },
   { name: 'Port Askaig - Feolin (Jura)',                  lat: 55.85, lon: -6.10 },
 ];
+
+// ── ROUTE LINES ── actual port-to-port coordinates for Leaflet polylines
+const ROUTE_LINES = [
+  { name: 'Ardrossan - Brodick (Arran)',                   from: [55.642, -4.824], to: [55.574, -5.142] },
+  { name: 'Troon - Brodick (Arran)',                       from: [55.546, -4.681], to: [55.574, -5.142] },
+  { name: 'Kennacraig - Port Ellen / Port Askaig (Islay)', from: [55.897, -5.494], to: [55.628, -6.190] },
+  { name: 'Oban - Craignure (Mull)',                       from: [56.415, -5.473], to: [56.459, -5.713] },
+  { name: 'Oban - Coll / Tiree',                          from: [56.415, -5.473], to: [56.615, -6.526] },
+  { name: 'Oban - Colonsay',                              from: [56.415, -5.473], to: [56.075, -6.186] },
+  { name: 'Oban - Castlebay / Lochboisdale',              from: [56.415, -5.473], to: [57.007, -7.311] },
+  { name: 'Mallaig - Armadale (Skye)',                    from: [57.006, -5.830], to: [57.064, -5.991] },
+  { name: 'Ullapool - Stornoway (Lewis)',                  from: [57.895, -5.160], to: [58.208, -6.387] },
+  { name: 'Uig - Tarbert / Lochmaddy',                    from: [57.583, -6.362], to: [57.900, -6.799] },
+  { name: 'Gourock - Dunoon',                             from: [55.958, -4.819], to: [55.948, -4.924] },
+  { name: 'Wemyss Bay - Rothesay (Bute)',                 from: [55.874, -4.889], to: [55.837, -5.052] },
+  { name: 'Colintraive - Rhubodach (Bute)',               from: [55.921, -5.153], to: [55.923, -5.176] },
+  { name: 'Largs - Cumbrae Slip',                         from: [55.793, -4.869], to: [55.775, -4.924] },
+  { name: 'Tarbert - Portavadie',                         from: [55.868, -5.406], to: [55.876, -5.319] },
+  { name: 'Claonaig - Lochranza (Arran)',                 from: [55.754, -5.396], to: [55.703, -5.296] },
+  { name: 'Tobermory - Kilchoan',                         from: [56.624, -6.068], to: [56.701, -6.120] },
+  { name: 'Fishnish - Lochaline',                         from: [56.515, -5.698], to: [56.534, -5.776] },
+  { name: 'Mallaig - Small Isles',                        from: [57.006, -5.830], to: [56.879, -6.170] },
+  { name: 'Oban - Lismore',                               from: [56.415, -5.473], to: [56.504, -5.497] },
+  { name: 'Seil - Luing',                                 from: [56.234, -5.614], to: [56.218, -5.637] },
+  { name: 'Port Askaig - Feolin (Jura)',                  from: [55.852, -6.105], to: [55.849, -6.131] },
+];
+
 const ROUTE_NAMES = ROUTES.map(r => r.name);
 
 // ── STATE ──
@@ -1155,6 +1199,7 @@ const sailingChanceCache = {};
 // Populated by loadDisruptionBanner() from /api/status
 // Maps routeKey → { status, message }
 let liveDisruptions = {};
+let showingTomorrowGlobal = false;
 let lastDisruptionFetch = null;
 
 // ── GOOGLE SHEET INTEGRATION ─────────────────────────────────
@@ -1689,7 +1734,15 @@ function buildCard(r, i) {
   const currentMin  = new Date().getMinutes();
   const v        = r.verdict || 'unknown';
   const profile  = ROUTE_PROFILES[r.name] || {threshold:45,exposure:2};
-  const overall  = r.maxGustMph !== undefined ? sailingChance(r.risk || 0, r.name) : null;
+  // Use tomorrow data if global toggle is active
+  const _useTomorrow = showingTomorrowGlobal && r.tomorrow?.maxGustMph !== null;
+  const _tomorrowNoon = 12;
+  const _tomorrowRisk = _useTomorrow && r.tomorrow?.hourly
+    ? calcOverallRisk(r.name, _tomorrowNoon, r.tomorrow.hourly, r.tomorrow.marine)
+    : null;
+  const overall  = r.maxGustMph !== undefined
+    ? (_useTomorrow && _tomorrowRisk !== null ? sailingChance(_tomorrowRisk, r.name) : sailingChance(r.risk || 0, r.name))
+    : null;
   const colour   = overall !== null ? chanceColor(overall) : 'var(--muted)';
   const gustPct  = Math.min(100, Math.round(((r.maxGustMph||0) / 65) * 100));
   const wc       = windClass(r.maxGustMph || 0);
@@ -1720,7 +1773,9 @@ function buildCard(r, i) {
     const [hh, mm] = time.split(':').map(Number);
     const isPast = (hh < currentHour) || (hh === currentHour && mm <= currentMin);
     const isNext = time === nextSailingTime;
-    const pct = r.hourlyData ? sailingRisk(time, r.name, r.hourlyData, r.marineData) : null;
+    const _sailHourly = _useTomorrow && r.tomorrow?.hourly ? r.tomorrow.hourly : r.hourlyData;
+    const _sailMarine = _useTomorrow && r.tomorrow?.marine ? r.tomorrow.marine : r.marineData;
+    const pct = _sailHourly ? sailingRisk(time, r.name, _sailHourly, _sailMarine) : null;
     // Store in cache so modal can read the exact same value
     if (pct !== null) sailingChanceCache[r.name + '|' + time] = pct;
     const col = pct !== null ? chanceColor(pct) : 'var(--muted)';
@@ -1788,7 +1843,7 @@ function buildCard(r, i) {
         ${allCancelled
           ? `<div class="chance-pct" style="color:var(--red);font-size:1.1rem;line-height:1.2">Cancelled</div>`
           : `<div class="chance-pct" style="color:${colour}">${overall !== null ? overall+'%' : '–'}</div>`}
-        <div class="chance-lbl">Next 12h</div>
+        <div class="chance-lbl">${_useTomorrow ? "Tomorrow" : "Next 12h"}</div>
         <div class="exposure-lbl">${['','🛡 Sheltered','🌊 Moderate','🌊🌊 Exposed','⚠️ Very exposed'][profile.exposure]}</div>
         ${calMacStatus === 'cancelled' ? '<div class="calibrated-badge" style="background:#fceaed;color:#c62828;border-color:#ffcdd2">🚨 Cancelled</div>' : ''}
         ${calMacStatus === 'disrupted' ? '<div class="calibrated-badge" style="background:#fff3e0;color:#e65100;border-color:#ffe082">⚠️ Disrupted</div>' : ''}
@@ -1806,8 +1861,8 @@ function buildCard(r, i) {
       </div>
     </div>
     <div class="card-weather ${wc}">
-      <div class="wx-item">💨 <strong>${r.maxGustMph !== undefined ? r.maxGustMph+' mph' : '–'}</strong>${r.windDirDeg !== null && r.windDirDeg !== undefined ? ` <span style="opacity:.6;font-size:.78rem">${windDirLabel(r.windDirDeg)}</span>` : ''}</div>
-      <div class="wx-item">🌊 <strong>${r.maxWaveM !== null && r.maxWaveM !== undefined ? r.maxWaveM+'m' : '–'}</strong></div>
+      <div class="wx-item">💨 <strong>${(_useTomorrow && r.tomorrow?.maxGustMph !== null ? r.tomorrow.maxGustMph : r.maxGustMph) !== undefined ? (_useTomorrow && r.tomorrow?.maxGustMph !== null ? r.tomorrow.maxGustMph : r.maxGustMph)+' mph' : '–'}</strong>${r.windDirDeg !== null && r.windDirDeg !== undefined ? ` <span style="opacity:.6;font-size:.78rem">${windDirLabel(r.windDirDeg)}</span>` : ''}</div>
+      <div class="wx-item">🌊 <strong>${(_useTomorrow ? r.tomorrow?.maxWaveM : r.maxWaveM) !== null && (_useTomorrow ? r.tomorrow?.maxWaveM : r.maxWaveM) !== undefined ? (_useTomorrow ? r.tomorrow.maxWaveM : r.maxWaveM)+'m' : '–'}</strong></div>
       ${r.minVisM !== null && r.minVisM !== undefined && r.minVisM < 5000 ? `<div class="wx-item">🌫 <strong>${r.minVisM < 1000 ? (r.minVisM+'m') : (Math.round(r.minVisM/1000*10)/10+'km')} vis</strong></div>` : ''}
       <div class="wx-item">${r.weatherCode !== undefined ? weatherDesc(r.weatherCode, r.minVisM) : ''}</div>
     </div>
@@ -1815,7 +1870,7 @@ function buildCard(r, i) {
       <div class="wind-bar-track"><div class="wind-bar-fill" style="width:${gustPct}%"></div></div>
     </div>
     ${sailings.length > 0 ? `<div class="sailings-section">
-      <div class="sailings-title">Today's sailings</div>
+      <div class="sailings-title">${_useTomorrow ? "Tomorrow's sailings" : "Today's sailings"}</div>
       <div class="sailings-list">${sailingRows}</div>
     </div>` : `<div class="sailings-section">
       <div class="sailings-title">Today's sailings</div>
@@ -2430,7 +2485,10 @@ async function loadDisruptionBanner() {
     allRoutes_status.forEach(d => { if (d.routeKey) liveDisruptions[d.routeKey] = d; });
     lastDisruptionFetch = new Date();
     // Re-render so sailing rows reflect live CalMac status
-    if (Object.keys(liveDisruptions).length > 0 && allRoutes.length > 0) renderRoutes();
+    if (Object.keys(liveDisruptions).length > 0 && allRoutes.length > 0) {
+      renderRoutes();
+      updateLeafletColors();
+    }
   } catch (_) {}
 }
 
@@ -2490,10 +2548,6 @@ function buildCardActions(routeName) {
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
         <span>Share</span>
       </button>
-      ${hasTomorrow ? `<button class="card-action-btn tomorrow-btn" data-route="${routeName}" title="Toggle tomorrow's forecast">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-        <span class="tomorrow-label">Tomorrow</span>
-      </button>` : ''}
       <button class="card-action-btn notif-btn${notifOn ? ' notif-on' : ''}" data-route="${routeName}" title="${bellTitle}">
         <span>🔔</span>
         <span>${notifOn ? `Alerts <${threshold}%` : 'Alert me'}</span>
@@ -2509,12 +2563,7 @@ function attachCardActions(container) {
       shareRoute(btn.dataset.route);
     });
   });
-  container.querySelectorAll('.tomorrow-btn').forEach(btn => {
-    btn.addEventListener('click', e => {
-      e.stopPropagation();
-      toggleTomorrowView(btn);
-    });
-  });
+
   container.querySelectorAll('.notif-btn').forEach(btn => {
     btn.addEventListener('click', async e => {
       e.stopPropagation();
@@ -2606,53 +2655,28 @@ function showThresholdPicker(routeName, btn) {
   }, 100);
 }
 
-// ── TOMORROW VIEW TOGGLE ──
-function toggleTomorrowView(btn) {
-  const routeName = btn.dataset.route;
-  const card = btn.closest('.route-card');
-  if (!card) return;
-  const isTomorrow = card.dataset.showingTomorrow === '1';
-  const r = allRoutes.find(x => x.name === routeName);
-  if (!r?.tomorrow) return;
-
-  if (!isTomorrow) {
-    card.dataset.showingTomorrow = '1';
-    btn.classList.add('notif-on');
-    btn.style.borderColor = 'var(--blue)';
-    btn.style.color = 'var(--blue)';
-    btn.style.background = '#e8f0fc';
-    btn.querySelector('.tomorrow-label').textContent = 'Today';
-    // Update weather row
-    const wxGust = card.querySelector('.wx-item strong');
-    if (wxGust && r.tomorrow.maxGustMph !== null) wxGust.textContent = r.tomorrow.maxGustMph + ' mph';
-    // Update chance % and risk using tomorrow midday (hour 36 from now = index 12 in tomorrow hourly)
-    const tomorrowNoon = 12; // use noon as representative hour for tomorrow
-    const tRisk = r.tomorrow.hourly
-      ? calcOverallRisk(r.name, tomorrowNoon, r.tomorrow.hourly, r.tomorrow.marine)
-      : r.risk || 0;
-    const tChance = sailingChance(tRisk, r.name);
-    const tColour = chanceColor(tChance);
-    const pctEl = card.querySelector('.chance-pct');
-    if (pctEl) { pctEl.textContent = tChance + '%'; pctEl.style.color = tColour; }
-    const lbl = card.querySelector('.chance-lbl');
-    if (lbl) lbl.textContent = 'Tomorrow';
-  } else {
-    card.dataset.showingTomorrow = '0';
-    btn.classList.remove('notif-on');
-    btn.style.borderColor = '';
-    btn.style.color = '';
-    btn.style.background = '';
-    btn.querySelector('.tomorrow-label').textContent = 'Tomorrow';
-    // Restore today values
-    const overall = sailingChance(r.risk || 0, r.name);
-    const colour = chanceColor(overall);
-    const pctEl = card.querySelector('.chance-pct');
-    if (pctEl) { pctEl.textContent = overall + '%'; pctEl.style.color = colour; }
-    const wxGust = card.querySelector('.wx-item strong');
-    if (wxGust && r.maxGustMph !== null) wxGust.textContent = r.maxGustMph + ' mph';
-    const lbl = card.querySelector('.chance-lbl');
-    if (lbl) lbl.textContent = 'Next 12h';
+// ── TOMORROW GLOBAL TOGGLE ──
+function toggleTomorrowGlobal() {
+  showingTomorrowGlobal = !showingTomorrowGlobal;
+  const btn = document.getElementById('tomorrowToggleBtn');
+  if (btn) {
+    if (showingTomorrowGlobal) {
+      btn.style.background = 'var(--blue)';
+      btn.style.color = '#fff';
+      btn.style.borderColor = 'var(--blue)';
+      btn.querySelector('svg').style.stroke = '#fff';
+      btn.querySelector('svg').nextSibling && (btn.lastChild.textContent = ' Today');
+      btn.querySelector('span') ? btn.querySelector('span').textContent = 'Today' : null;
+    } else {
+      btn.style.background = 'var(--offwhite)';
+      btn.style.color = 'var(--muted)';
+      btn.style.borderColor = 'var(--light)';
+      btn.querySelector('span') ? btn.querySelector('span').textContent = 'Tomorrow' : null;
+    }
   }
+  // Re-render all cards with tomorrow data
+  renderRoutes();
+  if (activeTab === 'tabFavs') renderFavourites();
 }
 
 
@@ -2961,48 +2985,115 @@ async function runStatusCheck() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// ── MAP TAB ──
+// ── MAP TAB (Leaflet) ──
 // ─────────────────────────────────────────────────────────────────────────
-let mapSearchQuery = '';
-let selectedMapRoute = null;
+let leafletMap = null;
+let leafletLayers = {}; // routeName → polyline layer
+let selectedMapRouteName = null;
+
+function getRouteLineColor(routeName) {
+  const r = allRoutes.find(x => x.name === routeName);
+  if (!r || r.maxGustMph === undefined) return '#6b82a0';
+  const pct = sailingChance(r.risk || 0, r.name);
+  const disruption = liveDisruptions[routeName];
+  if (disruption?.status === 'cancelled') return '#c8102e';
+  if (pct >= 75) return '#00843d';
+  if (pct >= 45) return '#e8a000';
+  return '#c8102e';
+}
+
+function getRouteLineWeight(routeName) {
+  return selectedMapRouteName === routeName ? 7 : 4;
+}
 
 function renderMapTab() {
-  filterMapRoutes(mapSearchQuery);
-}
+  const container = document.getElementById('leafletMap');
+  if (!container) return;
 
-function filterMapRoutes(q) {
-  mapSearchQuery = q || '';
-  const list = document.getElementById('mapRouteList');
-  if (!list) return;
-  const filtered = allRoutes.filter(r =>
-    r.name.toLowerCase().includes(mapSearchQuery.toLowerCase())
-  );
-  if (filtered.length === 0) {
-    list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:.85rem">No routes found</div>';
-    return;
+  if (!leafletMap) {
+    leafletMap = L.map('leafletMap', {
+      center: [56.8, -5.6],
+      zoom: 7,
+      zoomControl: true,
+    });
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      maxZoom: 18,
+    }).addTo(leafletMap);
+
+    // Legend
+    const legend = L.control({ position: 'bottomleft' });
+    legend.onAdd = () => {
+      const div = L.DomUtil.create('div', 'map-legend');
+      div.innerHTML = `
+        <div class="map-legend-item"><div class="map-legend-dot" style="background:#00843d"></div> Likely sailing</div>
+        <div class="map-legend-item"><div class="map-legend-dot" style="background:#e8a000"></div> Use caution</div>
+        <div class="map-legend-item"><div class="map-legend-dot" style="background:#c8102e"></div> At risk / Cancelled</div>
+        <div class="map-legend-item"><div class="map-legend-dot" style="background:#6b82a0"></div> Loading…</div>
+      `;
+      return div;
+    };
+    legend.addTo(leafletMap);
   }
-  list.innerHTML = filtered.map(r => {
-    const pct = r.maxGustMph !== undefined ? sailingChance(r.risk || 0, r.name) : null;
-    const col = pct !== null ? chanceColor(pct) : 'var(--muted)';
-    const v = r.verdict || 'unknown';
-    const disruption = liveDisruptions[r.name];
-    const calMacStatus = disruption?.status || null;
-    const statusIcon = calMacStatus === 'cancelled' ? '🚨 ' : calMacStatus === 'disrupted' ? '⚠️ ' : calMacStatus === 'amber' ? '⚠️ ' : '';
-    const coords = ROUTES.find(x => x.name === r.name);
-    return `<div class="map-route-item${selectedMapRoute === r.name ? ' active' : ''}" data-route="${r.name}" data-lat="${coords?.lat || 57}" data-lon="${coords?.lon || -5.5}" onclick="selectMapRoute('${r.name.replace(/'/g,"\\'")}', ${coords?.lat||57}, ${coords?.lon||-5.5})">
-      <div class="map-route-dot ${v}"></div>
-      <div class="map-route-name">${statusIcon}${r.name}</div>
-      <div class="map-route-pct" style="color:${col}">${pct !== null ? pct+'%' : '–'}</div>
-    </div>`;
-  }).join('');
+
+  // Draw / update route lines
+  ROUTE_LINES.forEach(rl => {
+    const color = getRouteLineColor(rl.name);
+    const weight = getRouteLineWeight(rl.name);
+
+    if (leafletLayers[rl.name]) {
+      leafletLayers[rl.name].setStyle({ color, weight });
+    } else {
+      const line = L.polyline([rl.from, rl.to], {
+        color,
+        weight,
+        opacity: 0.9,
+        lineCap: 'round',
+      }).addTo(leafletMap);
+
+      // Port dots
+      [rl.from, rl.to].forEach(pt => {
+        L.circleMarker(pt, {
+          radius: 5,
+          fillColor: color,
+          color: '#fff',
+          weight: 2,
+          opacity: 1,
+          fillOpacity: 1,
+        }).addTo(leafletMap);
+      });
+
+      line.on('click', () => selectLeafletRoute(rl.name, line));
+      line.on('mouseover', () => { if (selectedMapRouteName !== rl.name) line.setStyle({ weight: 6 }); });
+      line.on('mouseout',  () => { if (selectedMapRouteName !== rl.name) line.setStyle({ weight: 4 }); });
+      leafletLayers[rl.name] = line;
+    }
+  });
+
+  // Force map to recalculate size (it may have been hidden)
+  setTimeout(() => leafletMap.invalidateSize(), 100);
 }
 
-function selectMapRoute(routeName, lat, lon) {
-  selectedMapRoute = routeName;
-  // Update active state
-  document.querySelectorAll('.map-route-item').forEach(el => {
-    el.classList.toggle('active', el.dataset.route === routeName);
+function updateLeafletColors() {
+  if (!leafletMap) return;
+  ROUTE_LINES.forEach(rl => {
+    const layer = leafletLayers[rl.name];
+    if (!layer) return;
+    layer.setStyle({
+      color: getRouteLineColor(rl.name),
+      weight: getRouteLineWeight(rl.name),
+    });
   });
+}
+
+function selectLeafletRoute(routeName, layer) {
+  // Deselect previous
+  if (selectedMapRouteName && leafletLayers[selectedMapRouteName]) {
+    leafletLayers[selectedMapRouteName].setStyle({ weight: 4 });
+  }
+  selectedMapRouteName = routeName;
+  layer.setStyle({ weight: 7 });
 
   const r = allRoutes.find(x => x.name === routeName);
   const pct = r ? sailingChance(r.risk || 0, r.name) : null;
@@ -3010,40 +3101,36 @@ function selectMapRoute(routeName, lat, lon) {
   const disruption = liveDisruptions[routeName];
   const calMacStatus = disruption?.status || null;
 
-  // Show map panel at bottom of list
-  let panel = document.getElementById('mapPanel');
-  if (!panel) {
-    panel = document.createElement('div');
-    panel.id = 'mapPanel';
-    panel.className = 'map-panel open';
-    document.getElementById('mapRouteList').after(panel);
+  // Show info panel
+  const panel = document.getElementById('mapInfoPanel');
+  const nameEl = document.getElementById('mapPanelName');
+  const subEl = document.getElementById('mapPanelSub');
+  const pctEl = document.getElementById('mapPanelPct');
+
+  nameEl.textContent = routeName;
+  pctEl.textContent = pct !== null ? pct + '%' : '–';
+  pctEl.style.color = col;
+
+  if (calMacStatus === 'cancelled') {
+    subEl.innerHTML = '<span style="color:#c62828;font-weight:700">🚨 All sailings cancelled</span>';
+  } else if (calMacStatus === 'disrupted') {
+    subEl.innerHTML = '<span style="color:#e65100;font-weight:700">⚠️ Disruptions reported</span>';
+  } else if (calMacStatus === 'amber') {
+    subEl.innerHTML = '<span style="color:#e65100;font-weight:700">⚠️ Be aware</span>';
+  } else if (r?.maxGustMph !== undefined) {
+    const dir = r.windDirDeg !== null && r.windDirDeg !== undefined ? ' ' + windDirLabel(r.windDirDeg) : '';
+    subEl.textContent = `💨 ${r.maxGustMph} mph gusts${dir} · 🌊 ${r.maxWaveM ?? '–'}m`;
+  } else {
+    subEl.textContent = 'Loading weather…';
   }
-  panel.className = 'map-panel open';
 
-  // Build OpenStreetMap embed with route midpoint
-  const zoom = 9;
-  const mapUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${lon-0.8},${lat-0.5},${lon+0.8},${lat+0.5}&layer=mapnik&marker=${lat},${lon}`;
+  panel.style.display = 'block';
+}
 
-  panel.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-      <div>
-        <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:.95rem;color:var(--navy)">${routeName}</div>
-        <div style="font-size:.75rem;color:var(--muted);margin-top:1px">
-          ${calMacStatus === 'cancelled' ? '<span style="color:#c62828;font-weight:700">🚨 All sailings cancelled</span>' :
-            calMacStatus === 'disrupted' ? '<span style="color:#e65100;font-weight:700">⚠️ Disruptions reported</span>' :
-            calMacStatus === 'amber' ? '<span style="color:#e65100;font-weight:700">⚠️ Be aware</span>' :
-            r?.maxGustMph !== undefined ? `💨 ${r.maxGustMph} mph gusts · 🌊 ${r.maxWaveM ?? '–'}m` : 'Loading…'}
-        </div>
-      </div>
-      <div style="font-family:'Syne',sans-serif;font-size:1.6rem;font-weight:800;color:${col}">${pct !== null ? pct+'%' : '–'}</div>
-    </div>
-    <iframe class="map-embed" src="${mapUrl}" title="Map of ${routeName}"></iframe>
-    <div style="display:flex;gap:8px;margin-top:10px">
-      <a href="https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=${zoom}/${lat}/${lon}" target="_blank" rel="noopener" style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:9px;border-radius:10px;background:var(--offwhite);color:var(--blue);font-size:.8rem;font-weight:600;text-decoration:none;border:1.5px solid var(--light)">🗺 Open in maps</a>
-      <button onclick="openModal('${routeName.replace(/'/g,"\\'")}', null)" style="flex:1;padding:9px;border-radius:10px;background:var(--blue);color:#fff;border:none;font-family:inherit;font-size:.8rem;font-weight:600;cursor:pointer">View forecast →</button>
-    </div>
-  `;
-  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+// Store route for modal open from map panel
+window._mapSelectedRoute = null;
+function openMapRouteModal() {
+  if (selectedMapRouteName) openModal(selectedMapRouteName, null);
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -3171,6 +3258,7 @@ function dismissInstallBanner() {
       handleShareDeepLink();
       // Refresh map if it's already open
       if (document.getElementById('tabMap')?.classList.contains('active')) renderMapTab();
+      else updateLeafletColors(); // update line colours even if map tab not active
     }, 200);
   } catch(e) {
     clearInterval(ticker);
@@ -3182,5 +3270,6 @@ function dismissInstallBanner() {
 
 
 </script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV/XN/WLs=" crossorigin=""></script>
 </body>
 </html>
