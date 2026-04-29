@@ -147,6 +147,21 @@
       main{padding:16px 12px 100px;}
       .toolbar-inner{padding:8px 12px;}
       .routes-grid{grid-template-columns:1fr;}
+      /* Card actions: wrap on very small screens */
+      .card-actions{flex-wrap:wrap;gap:5px;}
+      .card-action-btn{font-size:.7rem;padding:5px 8px;}
+      /* Sailing rows: tighten on small screens */
+      .sailing-direction{width:100px;}
+      .sailing-time{width:38px;font-size:.8rem;}
+      /* Map embed height */
+      .map-embed{height:180px;}
+      /* Summary cards: 2-col on mobile */
+      .summary-cards{grid-template-columns:repeat(2,1fr);}
+      /* Card head: prevent overflow */
+      .card-head{padding:12px 14px 10px 36px;}
+      .chance-pct{font-size:1.5rem;}
+      /* Route name truncate on very small */
+      .route-name{font-size:.85rem;}
     }
 
     /* ── LOADING SCREEN ── */
@@ -181,12 +196,12 @@
     }
     .nav-tab{
       flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-      padding:10px 4px 8px;cursor:pointer;border:none;background:none;
-      font-family:inherit;transition:all .18s;gap:3px;
-      -webkit-tap-highlight-color:transparent;
+      padding:8px 2px 6px;cursor:pointer;border:none;background:none;
+      font-family:inherit;transition:all .18s;gap:2px;
+      -webkit-tap-highlight-color:transparent;min-width:0;
     }
-    .nav-tab svg{transition:all .18s;}
-    .nav-tab .nav-label{font-size:.65rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);transition:color .18s;}
+    .nav-tab svg{transition:all .18s;width:20px;height:20px;}
+    .nav-tab .nav-label{font-size:.58rem;font-weight:600;text-transform:uppercase;letter-spacing:.02em;color:var(--muted);transition:color .18s;white-space:nowrap;}
     .nav-tab.active .nav-label{color:var(--blue);}
     .nav-tab.active svg{stroke:var(--blue);}
     .nav-tab:not(.active) svg{stroke:var(--muted);}
@@ -355,6 +370,25 @@
 
 
 
+
+/* ── MAP TAB ── */
+    .map-tab-wrap{padding:0 0 80px;}
+    .map-search-bar{padding:12px 16px 8px;position:sticky;top:0;background:var(--white);z-index:10;border-bottom:1px solid var(--light);}
+    .map-search-input{width:100%;padding:9px 12px 9px 34px;border:1.5px solid var(--light);border-radius:10px;font-family:inherit;font-size:.88rem;background:var(--offwhite);outline:none;transition:border-color .2s;}
+    .map-search-input:focus{border-color:var(--blue);background:var(--white);}
+    .map-route-list{padding:8px 12px 0;}
+    .map-route-item{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;cursor:pointer;transition:background .15s;border:1.5px solid transparent;margin-bottom:6px;}
+    .map-route-item:hover,.map-route-item.active{background:var(--light);border-color:var(--blue);}
+    .map-route-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;}
+    .map-route-dot.likely{background:var(--green);}
+    .map-route-dot.caution{background:var(--amber);}
+    .map-route-dot.unlikely{background:var(--red);}
+    .map-route-dot.unknown{background:var(--muted);}
+    .map-route-name{font-size:.85rem;font-weight:600;color:var(--text);flex:1;}
+    .map-route-pct{font-family:'Syne',sans-serif;font-size:.9rem;font-weight:800;}
+    .map-panel{background:var(--white);border-top:1px solid var(--light);padding:14px 16px;display:none;}
+    .map-panel.open{display:block;}
+    .map-embed{width:100%;border-radius:10px;border:none;height:220px;margin-top:10px;}
 
 /* ── STATUS PAGE ── */
     .status-page{padding:0 0 80px;}
@@ -671,6 +705,21 @@
     </div>
   </div>
 
+  <!-- ── MAP TAB ── -->
+  <div class="tab-page" id="tabMap" style="padding-bottom:80px">
+    <div class="map-tab-wrap">
+      <div class="map-search-bar">
+        <div style="position:relative">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2" style="position:absolute;left:10px;top:50%;transform:translateY(-50%)"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input class="map-search-input" id="mapSearch" type="text" placeholder="Search routes…" oninput="filterMapRoutes(this.value)" autocomplete="off" />
+        </div>
+      </div>
+      <div class="map-route-list" id="mapRouteList">
+        <!-- filled by renderMapTab() -->
+      </div>
+    </div>
+  </div>
+
 </main>
 
 <!-- ── SHARE TOAST ── -->
@@ -679,20 +728,24 @@
 <!-- ── BOTTOM NAV ── -->
 <nav class="bottom-nav">
   <button class="nav-tab active" data-tab="tabRoutes" id="navRoutes">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
     <span class="nav-label">Routes</span>
   </button>
   <button class="nav-tab" data-tab="tabFavs" id="navFavs">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
     <span class="nav-label">Favourites</span>
   </button>
   <button class="nav-tab" data-tab="tabAbout" id="navAbout">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
     <span class="nav-label">About</span>
   </button>
   <button class="nav-tab" data-tab="tabStatus" id="navStatus">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
     <span class="nav-label">Status</span>
+  </button>
+  <button class="nav-tab" data-tab="tabMap" id="navMap">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+    <span class="nav-label">Map</span>
   </button>
 </nav>
 
@@ -1142,6 +1195,36 @@ function getHistoricalReliability(routeName) {
   return parseFloat(t.base) || null;
 }
 
+// ── WIND DIRECTION ──
+function windDirLabel(deg) {
+  if (deg === null || deg === undefined) return null;
+  const dirs = ['N','NE','E','SE','S','SW','W','NW'];
+  return dirs[Math.round(deg / 45) % 8];
+}
+
+// ── SUNRISE / SUNSET ──
+// Simple civil twilight calculation (accurate to ~5 min for Scottish latitudes)
+function getSunriseSunset(lat, lon, date) {
+  const d = date || new Date();
+  const dayOfYear = Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 86400000);
+  const B = (360 / 365) * (dayOfYear - 81) * (Math.PI / 180);
+  const eqTime = 9.87 * Math.sin(2*B) - 7.53 * Math.cos(B) - 1.5 * Math.sin(B);
+  const solarNoon = 720 - 4 * lon - eqTime;
+  const declination = 23.45 * Math.sin(B) * (Math.PI / 180);
+  const latRad = lat * (Math.PI / 180);
+  const hourAngle = Math.acos(-Math.tan(latRad) * Math.tan(declination)) * (180 / Math.PI);
+  const sunrise = (solarNoon - 4 * hourAngle) / 60; // hours UTC
+  const sunset  = (solarNoon + 4 * hourAngle) / 60;
+  // Convert to local (UK = UTC+1 in summer, UTC in winter)
+  const tzOffset = d.getTimezoneOffset() / -60;
+  return { sunrise: sunrise + tzOffset, sunset: sunset + tzOffset };
+}
+
+function isBeforeDawn(hour, lat, lon) {
+  const { sunrise } = getSunriseSunset(lat, lon);
+  return hour < Math.ceil(sunrise);
+}
+
 // ── SEASON FACTOR ──
 function seasonFactor() {
   const month = new Date().getMonth(); // 0=Jan
@@ -1365,10 +1448,10 @@ async function fetchAllWeather() {
   async function fetchOne(route) {
     const baseParams = '?latitude=' + route.lat + '&longitude=' + route.lon
       + '&forecast_days=1&timezone=Europe%2FLondon';
-    const windUrl = 'https://api.open-meteo.com/v1/forecast' + baseParams
-      + '&hourly=windspeed_10m,windgusts_10m,weathercode,visibility,precipitation,snowfall'
+    const windUrl = 'https://api.open-meteo.com/v1/forecast' + baseParams.replace('forecast_days=1','forecast_days=2')
+      + '&hourly=windspeed_10m,windgusts_10m,winddirection_10m,weathercode,visibility,precipitation,snowfall'
       + '&windspeed_unit=mph';
-    const marineUrl = 'https://marine-api.open-meteo.com/v1/marine' + baseParams
+    const marineUrl = 'https://marine-api.open-meteo.com/v1/marine' + baseParams.replace('forecast_days=1','forecast_days=2')
       + '&hourly=wave_height,wave_period,swell_wave_height';
 
     const [windResp, marineResp] = await Promise.allSettled([
@@ -1382,12 +1465,21 @@ async function fetchAllWeather() {
     const marine = marineResp.status === 'fulfilled' ? (marineResp.value.hourly || null) : null;
 
     const slice = arr => (arr || []).slice(hour, hour + 12).filter(v => v != null);
+    const sliceFrom = (arr, start) => (arr || []).slice(start, start + 24).filter(v => v != null);
     const mx = arr => arr.length ? Math.max(...arr) : null;
     const mn = arr => arr.length ? Math.min(...arr) : null;
     const gusts  = slice(hourly.windgusts_10m);
     const winds  = slice(hourly.windspeed_10m);
     const waves  = marine ? slice(marine.wave_height) : [];
     const swells = marine ? slice(marine.swell_wave_height) : [];
+    // Wind direction: average in next 12h
+    const dirs = (hourly.winddirection_10m || []).slice(hour, hour + 12).filter(v => v != null);
+    const windDirDeg = dirs.length ? Math.round(dirs.reduce((a,b)=>a+b,0)/dirs.length) : null;
+    // Tomorrow data: hours 24-47 (full day)
+    const tomorrowStart = 24;
+    const tGusts = sliceFrom(hourly.windgusts_10m, tomorrowStart);
+    const tWinds = sliceFrom(hourly.windspeed_10m, tomorrowStart);
+    const tWaves = marine ? sliceFrom(marine.wave_height, tomorrowStart) : [];
 
     return {
       route: route.name, hourly, marine,
@@ -1400,6 +1492,13 @@ async function fetchAllWeather() {
       maxWaveM:   mx(waves)  !== null ? Math.round(mx(waves)  * 10) / 10 : null,
       maxSwellM:  mx(swells) !== null ? Math.round(mx(swells) * 10) / 10 : null,
       hasMarine:  marine !== null,
+      windDirDeg,
+      tomorrow: {
+        maxGustMph: mx(tGusts) !== null ? Math.round(mx(tGusts) * 2.237) : null,
+        maxWaveM:   mx(tWaves) !== null ? Math.round(mx(tWaves) * 10) / 10 : null,
+        hourly:     hourly,
+        marine:     marine,
+      },
     };
   }
 
@@ -1473,6 +1572,8 @@ async function fetchData() {
       route.hasMarine   = w.hasMarine;
       route.hourlyData  = w.hourly;
       route.marineData  = w.marine;
+      route.windDirDeg  = w.windDirDeg;
+      route.tomorrow    = w.tomorrow || null;
       // Compute risk using the full algorithm
       route.risk = calcOverallRisk(route.name, hour, w.hourly || {}, w.marine || null);
     });
@@ -1554,6 +1655,7 @@ document.querySelectorAll('.nav-tab').forEach(tab => {
     if (target === 'tabFavs') renderFavourites();
     if (target === 'tabAbout') loadAboutStats();
     if (target === 'tabStatus') runStatusCheck();
+    if (target === 'tabMap') renderMapTab();
     window.scrollTo(0, 0);
   });
 });
@@ -1592,6 +1694,7 @@ function buildCard(r, i) {
   const gustPct  = Math.min(100, Math.round(((r.maxGustMph||0) / 65) * 100));
   const wc       = windClass(r.maxGustMph || 0);
   const pips     = r.maxGustMph !== undefined ? (r.hasMarine ? 3 : 2) : 1;
+  const routeCoords = ROUTES.find(x => x.name === r.name) || { lat: 57, lon: -5.5 };
   const delay    = Math.min(i * 30, 350);
   const favStar  = isFav(r.name) ? '★' : '☆';
 
@@ -1663,7 +1766,7 @@ function buildCard(r, i) {
       <div class="sailing-time">${time}</div>
       <div style="flex:1;min-width:0">
         <div class="sailing-direction">${s.f} → ${s.to}</div>
-        ${isNext ? `<div style="font-size:.6rem;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.05em;margin-top:1px">Next sailing</div>` : ''}
+        ${isNext ? `<div style="font-size:.6rem;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.05em;margin-top:1px">${isBeforeDawn(hh, routeCoords.lat, routeCoords.lon) ? '🌙 Pre-dawn · Next' : 'Next sailing'}</div>` : ''}
       </div>
       <div class="sailing-bar-wrap">
         <div class="sailing-bar-track">
@@ -1690,6 +1793,7 @@ function buildCard(r, i) {
         ${calMacStatus === 'cancelled' ? '<div class="calibrated-badge" style="background:#fceaed;color:#c62828;border-color:#ffcdd2">🚨 Cancelled</div>' : ''}
         ${calMacStatus === 'disrupted' ? '<div class="calibrated-badge" style="background:#fff3e0;color:#e65100;border-color:#ffe082">⚠️ Disrupted</div>' : ''}
         ${calMacStatus === 'amber' ? '<div class="calibrated-badge" style="background:#fff8e1;color:#e65100;border-color:#ffe082">⚠️ Be Aware</div>' : ''}
+        ${disruption?.isUpcoming && !['cancelled','disrupted','amber'].includes(calMacStatus) ? '<div class="calibrated-badge" style="background:#fff8e1;color:#e65100;border-color:#ffe082">⏰ Change coming</div>' : ''}
         ${(()=>{
           const t = historicalThresholds[r.name];
           if (!t || t.samples < 2) return '';
@@ -1702,7 +1806,7 @@ function buildCard(r, i) {
       </div>
     </div>
     <div class="card-weather ${wc}">
-      <div class="wx-item">💨 <strong>${r.maxGustMph !== undefined ? r.maxGustMph+' mph' : '–'}</strong></div>
+      <div class="wx-item">💨 <strong>${r.maxGustMph !== undefined ? r.maxGustMph+' mph' : '–'}</strong>${r.windDirDeg !== null && r.windDirDeg !== undefined ? ` <span style="opacity:.6;font-size:.78rem">${windDirLabel(r.windDirDeg)}</span>` : ''}</div>
       <div class="wx-item">🌊 <strong>${r.maxWaveM !== null && r.maxWaveM !== undefined ? r.maxWaveM+'m' : '–'}</strong></div>
       ${r.minVisM !== null && r.minVisM !== undefined && r.minVisM < 5000 ? `<div class="wx-item">🌫 <strong>${r.minVisM < 1000 ? (r.minVisM+'m') : (Math.round(r.minVisM/1000*10)/10+'km')} vis</strong></div>` : ''}
       <div class="wx-item">${r.weatherCode !== undefined ? weatherDesc(r.weatherCode, r.minVisM) : ''}</div>
@@ -1751,6 +1855,7 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
 });
 document.getElementById('refreshBtn').addEventListener('click', fetchData);
 setInterval(fetchData, 30 * 60 * 1000);
+setInterval(loadDisruptionBanner, 10 * 60 * 1000); // refresh CalMac disruptions every 10 min
 
 // ── MODAL ──
 function openModal(routeName, sailingTime) {
@@ -2211,7 +2316,7 @@ async function toggleRouteNotification(routeName, btn) {
       await fetch('/api/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'subscribe', route: routeName, subscription: sub.toJSON() }),
+        body: JSON.stringify({ action: 'subscribe', route: routeName, subscription: sub.toJSON(), threshold: getNotifThreshold(routeName) }),
       });
       notifiedRoutes.push(routeName);
       localStorage.setItem('notifRoutes', JSON.stringify(notifiedRoutes));
@@ -2376,16 +2481,22 @@ const ROUTE_INFO = {
 // ─────────────────────────────────────────────────────────────────────────
 function buildCardActions(routeName) {
   const notifOn = isRouteNotified(routeName);
-  const bellTitle = notifOn ? 'Notifications on — tap to turn off' : 'Get notified if this route drops below 70%';
+  const threshold = getNotifThreshold(routeName);
+  const bellTitle = notifOn ? `Alerts on (below ${threshold}%) — tap to turn off` : 'Get notified if sailing chance drops';
+  const hasTomorrow = allRoutes.find(r => r.name === routeName)?.tomorrow?.maxGustMph !== null;
   return `
     <div class="card-actions">
       <button class="card-action-btn share-btn" data-route="${routeName}" title="Share this route">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
         <span>Share</span>
       </button>
+      ${hasTomorrow ? `<button class="card-action-btn tomorrow-btn" data-route="${routeName}" title="Toggle tomorrow's forecast">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <span class="tomorrow-label">Tomorrow</span>
+      </button>` : ''}
       <button class="card-action-btn notif-btn${notifOn ? ' notif-on' : ''}" data-route="${routeName}" title="${bellTitle}">
-        <span>${notifOn ? '🔔' : '🔔'}</span>
-        <span>${notifOn ? 'Alerts on' : 'Alert me'}</span>
+        <span>🔔</span>
+        <span>${notifOn ? `Alerts <${threshold}%` : 'Alert me'}</span>
       </button>
     </div>`;
 }
@@ -2398,32 +2509,152 @@ function attachCardActions(container) {
       shareRoute(btn.dataset.route);
     });
   });
+  container.querySelectorAll('.tomorrow-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      toggleTomorrowView(btn);
+    });
+  });
   container.querySelectorAll('.notif-btn').forEach(btn => {
     btn.addEventListener('click', async e => {
       e.stopPropagation();
-      // If pushSupported is still false, it may just be that initPush() hasn't finished yet
-      // Wait up to 3s for it to complete before giving up
-      if (!pushSupported) {
-        let waited = 0;
-        while (!pushSupported && waited < 3000) {
-          await new Promise(r => setTimeout(r, 200));
-          waited += 200;
-        }
-      }
-      // Check browser capabilities directly as a fallback
-      const browserSupports = 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window;
-      if (!pushSupported && !browserSupports) {
-        alert('Push notifications require HTTPS and a modern browser.');
+      const routeName = btn.dataset.route;
+      const isOn = isRouteNotified(routeName);
+      if (isOn) {
+        // Already on — long-press would set threshold, single tap turns off
+        // Check if they held for >500ms (threshold edit) vs quick tap (toggle off)
+        toggleRouteNotification(routeName, btn);
         return;
       }
-      // If browser supports it but VAPID key not loaded yet, try fetching again
-      if (!pushSupported && browserSupports) {
-        await initPush();
-      }
-      toggleRouteNotification(btn.dataset.route, btn);
+      // Show threshold picker before subscribing
+      showThresholdPicker(routeName, btn);
     });
   });
 }
+
+// ── SMART NOTIFICATION THRESHOLD ──
+function getNotifThreshold(routeName) {
+  const thresholds = JSON.parse(localStorage.getItem('notifThresholds') || '{}');
+  return thresholds[routeName] || 70;
+}
+function setNotifThreshold(routeName, value) {
+  const thresholds = JSON.parse(localStorage.getItem('notifThresholds') || '{}');
+  thresholds[routeName] = value;
+  localStorage.setItem('notifThresholds', JSON.stringify(thresholds));
+}
+
+function showThresholdPicker(routeName, btn) {
+  // Remove any existing picker
+  document.querySelectorAll('.threshold-picker').forEach(p => p.remove());
+
+  const current = getNotifThreshold(routeName);
+  const picker = document.createElement('div');
+  picker.className = 'threshold-picker';
+  picker.style.cssText = `
+    position:fixed;bottom:calc(80px + env(safe-area-inset-bottom) + 8px);left:50%;transform:translateX(-50%);
+    background:var(--white);border-radius:16px;box-shadow:0 8px 40px rgba(0,48,135,0.18);
+    padding:18px 20px;z-index:900;width:min(320px,90vw);
+  `;
+  picker.innerHTML = `
+    <div style="font-weight:700;font-size:.9rem;color:var(--navy);margin-bottom:4px">Alert threshold for</div>
+    <div style="font-size:.8rem;color:var(--muted);margin-bottom:14px">${routeName}</div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+      <span style="font-size:.8rem;color:var(--muted)">Always</span>
+      <input type="range" min="30" max="90" step="5" value="${current}" id="threshSlider" style="flex:1;accent-color:var(--blue)">
+      <span style="font-size:.8rem;color:var(--muted)">Never</span>
+    </div>
+    <div style="text-align:center;font-family:'Syne',sans-serif;font-size:1.4rem;font-weight:800;color:var(--blue);margin-bottom:16px" id="threshVal">Below <span id="threshNum">${current}</span>%</div>
+    <div style="display:flex;gap:8px">
+      <button onclick="document.querySelector('.threshold-picker').remove()" style="flex:1;padding:10px;border-radius:10px;border:1.5px solid var(--light);background:var(--white);font-family:inherit;font-size:.85rem;font-weight:600;cursor:pointer">Cancel</button>
+      <button id="threshConfirm" style="flex:1;padding:10px;border-radius:10px;border:none;background:var(--blue);color:#fff;font-family:inherit;font-size:.85rem;font-weight:600;cursor:pointer">Enable alerts</button>
+    </div>
+  `;
+  document.body.appendChild(picker);
+
+  const slider = picker.querySelector('#threshSlider');
+  const numEl = picker.querySelector('#threshNum');
+  slider.addEventListener('input', () => { numEl.textContent = slider.value; });
+
+  picker.querySelector('#threshConfirm').addEventListener('click', async () => {
+    const val = parseInt(slider.value);
+    setNotifThreshold(routeName, val);
+    picker.remove();
+    // Now proceed with subscription
+    if (!pushSupported) {
+      let waited = 0;
+      while (!pushSupported && waited < 3000) {
+        await new Promise(r => setTimeout(r, 200));
+        waited += 200;
+      }
+    }
+    if (!pushSupported && !('PushManager' in window)) {
+      alert('Push notifications require HTTPS and a modern browser.');
+      return;
+    }
+    if (!pushSupported) await initPush();
+    toggleRouteNotification(routeName, btn);
+  });
+
+  // Dismiss on outside tap
+  setTimeout(() => {
+    document.addEventListener('click', function dismiss(e) {
+      if (!picker.contains(e.target) && e.target !== btn) {
+        picker.remove();
+        document.removeEventListener('click', dismiss);
+      }
+    });
+  }, 100);
+}
+
+// ── TOMORROW VIEW TOGGLE ──
+function toggleTomorrowView(btn) {
+  const routeName = btn.dataset.route;
+  const card = btn.closest('.route-card');
+  if (!card) return;
+  const isTomorrow = card.dataset.showingTomorrow === '1';
+  const r = allRoutes.find(x => x.name === routeName);
+  if (!r?.tomorrow) return;
+
+  if (!isTomorrow) {
+    card.dataset.showingTomorrow = '1';
+    btn.classList.add('notif-on');
+    btn.style.borderColor = 'var(--blue)';
+    btn.style.color = 'var(--blue)';
+    btn.style.background = '#e8f0fc';
+    btn.querySelector('.tomorrow-label').textContent = 'Today';
+    // Update weather row
+    const wxGust = card.querySelector('.wx-item strong');
+    if (wxGust && r.tomorrow.maxGustMph !== null) wxGust.textContent = r.tomorrow.maxGustMph + ' mph';
+    // Update chance % and risk using tomorrow midday (hour 36 from now = index 12 in tomorrow hourly)
+    const tomorrowNoon = 12; // use noon as representative hour for tomorrow
+    const tRisk = r.tomorrow.hourly
+      ? calcOverallRisk(r.name, tomorrowNoon, r.tomorrow.hourly, r.tomorrow.marine)
+      : r.risk || 0;
+    const tChance = sailingChance(tRisk, r.name);
+    const tColour = chanceColor(tChance);
+    const pctEl = card.querySelector('.chance-pct');
+    if (pctEl) { pctEl.textContent = tChance + '%'; pctEl.style.color = tColour; }
+    const lbl = card.querySelector('.chance-lbl');
+    if (lbl) lbl.textContent = 'Tomorrow';
+  } else {
+    card.dataset.showingTomorrow = '0';
+    btn.classList.remove('notif-on');
+    btn.style.borderColor = '';
+    btn.style.color = '';
+    btn.style.background = '';
+    btn.querySelector('.tomorrow-label').textContent = 'Tomorrow';
+    // Restore today values
+    const overall = sailingChance(r.risk || 0, r.name);
+    const colour = chanceColor(overall);
+    const pctEl = card.querySelector('.chance-pct');
+    if (pctEl) { pctEl.textContent = overall + '%'; pctEl.style.color = colour; }
+    const wxGust = card.querySelector('.wx-item strong');
+    if (wxGust && r.maxGustMph !== null) wxGust.textContent = r.maxGustMph + ' mph';
+    const lbl = card.querySelector('.chance-lbl');
+    if (lbl) lbl.textContent = 'Next 12h';
+  }
+}
+
 
 // ─────────────────────────────────────────────────────────────────────────
 // ── MODAL: ADD VESSEL + ROUTE INFO ──
@@ -2730,6 +2961,169 @@ async function runStatusCheck() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// ── MAP TAB ──
+// ─────────────────────────────────────────────────────────────────────────
+let mapSearchQuery = '';
+let selectedMapRoute = null;
+
+function renderMapTab() {
+  filterMapRoutes(mapSearchQuery);
+}
+
+function filterMapRoutes(q) {
+  mapSearchQuery = q || '';
+  const list = document.getElementById('mapRouteList');
+  if (!list) return;
+  const filtered = allRoutes.filter(r =>
+    r.name.toLowerCase().includes(mapSearchQuery.toLowerCase())
+  );
+  if (filtered.length === 0) {
+    list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:.85rem">No routes found</div>';
+    return;
+  }
+  list.innerHTML = filtered.map(r => {
+    const pct = r.maxGustMph !== undefined ? sailingChance(r.risk || 0, r.name) : null;
+    const col = pct !== null ? chanceColor(pct) : 'var(--muted)';
+    const v = r.verdict || 'unknown';
+    const disruption = liveDisruptions[r.name];
+    const calMacStatus = disruption?.status || null;
+    const statusIcon = calMacStatus === 'cancelled' ? '🚨 ' : calMacStatus === 'disrupted' ? '⚠️ ' : calMacStatus === 'amber' ? '⚠️ ' : '';
+    const coords = ROUTES.find(x => x.name === r.name);
+    return `<div class="map-route-item${selectedMapRoute === r.name ? ' active' : ''}" data-route="${r.name}" data-lat="${coords?.lat || 57}" data-lon="${coords?.lon || -5.5}" onclick="selectMapRoute('${r.name.replace(/'/g,"\\'")}', ${coords?.lat||57}, ${coords?.lon||-5.5})">
+      <div class="map-route-dot ${v}"></div>
+      <div class="map-route-name">${statusIcon}${r.name}</div>
+      <div class="map-route-pct" style="color:${col}">${pct !== null ? pct+'%' : '–'}</div>
+    </div>`;
+  }).join('');
+}
+
+function selectMapRoute(routeName, lat, lon) {
+  selectedMapRoute = routeName;
+  // Update active state
+  document.querySelectorAll('.map-route-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.route === routeName);
+  });
+
+  const r = allRoutes.find(x => x.name === routeName);
+  const pct = r ? sailingChance(r.risk || 0, r.name) : null;
+  const col = pct !== null ? chanceColor(pct) : 'var(--muted)';
+  const disruption = liveDisruptions[routeName];
+  const calMacStatus = disruption?.status || null;
+
+  // Show map panel at bottom of list
+  let panel = document.getElementById('mapPanel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'mapPanel';
+    panel.className = 'map-panel open';
+    document.getElementById('mapRouteList').after(panel);
+  }
+  panel.className = 'map-panel open';
+
+  // Build OpenStreetMap embed with route midpoint
+  const zoom = 9;
+  const mapUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${lon-0.8},${lat-0.5},${lon+0.8},${lat+0.5}&layer=mapnik&marker=${lat},${lon}`;
+
+  panel.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div>
+        <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:.95rem;color:var(--navy)">${routeName}</div>
+        <div style="font-size:.75rem;color:var(--muted);margin-top:1px">
+          ${calMacStatus === 'cancelled' ? '<span style="color:#c62828;font-weight:700">🚨 All sailings cancelled</span>' :
+            calMacStatus === 'disrupted' ? '<span style="color:#e65100;font-weight:700">⚠️ Disruptions reported</span>' :
+            calMacStatus === 'amber' ? '<span style="color:#e65100;font-weight:700">⚠️ Be aware</span>' :
+            r?.maxGustMph !== undefined ? `💨 ${r.maxGustMph} mph gusts · 🌊 ${r.maxWaveM ?? '–'}m` : 'Loading…'}
+        </div>
+      </div>
+      <div style="font-family:'Syne',sans-serif;font-size:1.6rem;font-weight:800;color:${col}">${pct !== null ? pct+'%' : '–'}</div>
+    </div>
+    <iframe class="map-embed" src="${mapUrl}" title="Map of ${routeName}"></iframe>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <a href="https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=${zoom}/${lat}/${lon}" target="_blank" rel="noopener" style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:9px;border-radius:10px;background:var(--offwhite);color:var(--blue);font-size:.8rem;font-weight:600;text-decoration:none;border:1.5px solid var(--light)">🗺 Open in maps</a>
+      <button onclick="openModal('${routeName.replace(/'/g,"\\'")}', null)" style="flex:1;padding:9px;border-radius:10px;background:var(--blue);color:#fff;border:none;font-family:inherit;font-size:.8rem;font-weight:600;cursor:pointer">View forecast →</button>
+    </div>
+  `;
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// ── OFFLINE BANNER ──
+// ─────────────────────────────────────────────────────────────────────────
+let offlineBannerShown = false;
+let lastOnlineTime = null;
+
+function updateOfflineBanner() {
+  let banner = document.getElementById('offlineBanner');
+  if (!navigator.onLine) {
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'offlineBanner';
+      banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9998;background:#1a2c4e;color:#fff;text-align:center;padding:10px 16px;font-size:.82rem;font-weight:600;padding-top:calc(10px + env(safe-area-inset-top))';
+      banner.innerHTML = `📵 You're offline — showing cached data${lastOnlineTime ? ' from ' + lastOnlineTime.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : ''}`;
+      document.body.prepend(banner);
+    }
+  } else {
+    lastOnlineTime = new Date();
+    if (banner) { banner.remove(); }
+  }
+}
+
+window.addEventListener('online', updateOfflineBanner);
+window.addEventListener('offline', updateOfflineBanner);
+updateOfflineBanner();
+
+// ─────────────────────────────────────────────────────────────────────────
+// ── PWA INSTALL PROMPT ──
+// ─────────────────────────────────────────────────────────────────────────
+let deferredInstallPrompt = null;
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  // Only show if not dismissed before and not already installed
+  if (!localStorage.getItem('pwaInstallDismissed')) {
+    showInstallBanner();
+  }
+});
+
+function showInstallBanner() {
+  if (document.getElementById('installBanner')) return;
+  const banner = document.createElement('div');
+  banner.id = 'installBanner';
+  banner.style.cssText = `
+    position:fixed;bottom:calc(72px + env(safe-area-inset-bottom));left:12px;right:12px;z-index:800;
+    background:var(--navy);color:#fff;border-radius:14px;
+    padding:14px 16px;box-shadow:0 8px 32px rgba(0,48,135,.25);
+    display:flex;align-items:center;gap:12px;
+    animation:fadeUp .3s ease;
+  `;
+  banner.innerHTML = `
+    <div style="font-size:1.4rem">📱</div>
+    <div style="flex:1">
+      <div style="font-weight:700;font-size:.88rem">Add to Home Screen</div>
+      <div style="font-size:.75rem;opacity:.8;margin-top:2px">Get faster access and offline support</div>
+    </div>
+    <button onclick="installPWA()" style="padding:8px 14px;border-radius:10px;background:var(--sky);border:none;color:var(--navy);font-family:inherit;font-size:.8rem;font-weight:700;cursor:pointer;white-space:nowrap">Install</button>
+    <button onclick="dismissInstallBanner()" style="background:none;border:none;color:rgba(255,255,255,.6);font-size:1.2rem;cursor:pointer;padding:4px;line-height:1">✕</button>
+  `;
+  document.body.appendChild(banner);
+}
+
+async function installPWA() {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  const { outcome } = await deferredInstallPrompt.userChoice;
+  if (outcome === 'accepted') localStorage.setItem('pwaInstallDismissed', '1');
+  deferredInstallPrompt = null;
+  document.getElementById('installBanner')?.remove();
+}
+
+function dismissInstallBanner() {
+  localStorage.setItem('pwaInstallDismissed', '1');
+  document.getElementById('installBanner')?.remove();
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // ── BOOT ──
 // Tie loading screen to actual data fetch
 (async () => {
@@ -2775,6 +3169,8 @@ async function runStatusCheck() {
     setTimeout(() => {
       postRenderHook(document.getElementById('routesGrid'));
       handleShareDeepLink();
+      // Refresh map if it's already open
+      if (document.getElementById('tabMap')?.classList.contains('active')) renderMapTab();
     }, 200);
   } catch(e) {
     clearInterval(ticker);
