@@ -1102,6 +1102,7 @@ const sailingChanceCache = {};
 // Populated by loadDisruptionBanner() from /api/status
 // Maps routeKey → { status, message }
 let liveDisruptions = {};
+let lastDisruptionFetch = null;
 
 // ── GOOGLE SHEET INTEGRATION ─────────────────────────────────
 const SHEET_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzTwBxJcIt8gGM-bwYuWYE2GS587nuQeAKhL4hpOx6vJAhuuRGKRNS5LtLqmh3x1QFK/exec';
@@ -1606,10 +1607,16 @@ function buildCard(r, i) {
      Object.values(sailingStatuses_card).every(s => s.status === 'cancelled'));
 
   const sailings = TIMETABLE[r.name] || [];
+  // Find the next upcoming sailing time for this route
+  const nextSailingTime = sailings.find(s => {
+    const [hh, mm] = s.t.split(':').map(Number);
+    return (hh > currentHour) || (hh === currentHour && mm > currentMin);
+  })?.t || null;
   const sailingRows = sailings.map(s => {
     const time = s.t;
     const [hh, mm] = time.split(':').map(Number);
     const isPast = (hh < currentHour) || (hh === currentHour && mm <= currentMin);
+    const isNext = time === nextSailingTime;
     const pct = r.hourlyData ? sailingRisk(time, r.name, r.hourlyData, r.marineData) : null;
     // Store in cache so modal can read the exact same value
     if (pct !== null) sailingChanceCache[r.name + '|' + time] = pct;
@@ -1620,16 +1627,23 @@ function buildCard(r, i) {
     const sailingInfo = sailingStatuses[time] || sailingStatuses['*'] || null;
     const sailingStatus = sailingInfo?.status || null;
 
+    // Reason icon for disruption rows
+    const reasonIcons = { Weather: '🌊', Technical: '🔧', Operational: '⛴️', Tidal: '🌊', Other: 'ℹ️' };
+    const reasonIcon = sailingInfo?.reason ? (reasonIcons[sailingInfo.reason] || 'ℹ️') : null;
+    const reasonLabel = sailingInfo?.reason && sailingInfo.reason !== 'Other' ? sailingInfo.reason : null;
+
     if (sailingStatus === 'cancelled') {
       return `<div class="sailing-row${isPast ? ' sailing-past' : ''}" style="background:#fceaed;border:1px solid #ffcdd2;cursor:pointer" title="${(sailingInfo.detail||'').substring(0,120)}">
         <div class="sailing-time" style="color:#c62828">${time}</div>
         <div class="sailing-direction" style="color:#c62828;text-decoration:line-through;flex:1">${s.f} → ${s.to}</div>
-        <div style="font-size:.75rem;font-weight:700;color:#c62828;white-space:nowrap;letter-spacing:.01em">🚨 Cancelled</div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0">
+          <div style="font-size:.75rem;font-weight:700;color:#c62828;white-space:nowrap">🚨 Cancelled</div>
+          ${reasonLabel ? `<div style="font-size:.65rem;color:#c62828;opacity:.8;white-space:nowrap">${reasonIcon} ${reasonLabel}</div>` : ''}
+        </div>
       </div>`;
     }
 
     if (sailingStatus === 'disrupted' || sailingStatus === 'amber') {
-      const label = sailingStatus === 'amber' ? '⚠️ Be Aware' : '⚠️ Disrupted';
       return `<div class="sailing-row${isPast ? ' sailing-past' : ''}" style="background:#fff8e1;border:1px solid #ffe082;cursor:pointer" onclick="openModal('${r.name.replace(/'/g,"\\'")}','${time}')">
         <div class="sailing-time" style="color:#e65100">${time}</div>
         <div class="sailing-direction" style="color:#e65100;flex:1">${s.f} → ${s.to}</div>
@@ -1638,13 +1652,19 @@ function buildCard(r, i) {
             <div class="sailing-bar-fill" style="width:${barW}%;background:${col}"></div>
           </div>
         </div>
-        <div class="sailing-pct-label" style="color:#e65100;width:auto;font-size:.72rem">${pct !== null ? pct+'%' : '–'} ⚠️ Warning</div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0">
+          <div style="font-size:.72rem;font-weight:700;color:#e65100;white-space:nowrap">${pct !== null ? pct+'%' : '–'} ⚠️</div>
+          ${reasonLabel ? `<div style="font-size:.65rem;color:#e65100;opacity:.8;white-space:nowrap">${reasonIcon} ${reasonLabel}</div>` : ''}
+        </div>
       </div>`;
     }
 
-    return `<div class="sailing-row${isPast?' sailing-past':''}" style="cursor:pointer" onclick="openModal('${r.name.replace(/'/g,"\\'")}','${time}')">
+    return `<div class="sailing-row${isPast?' sailing-past':''}${isNext?' sailing-next':''}" style="cursor:pointer${isNext?';border:1.5px solid var(--blue);background:var(--offwhite)':''}" onclick="openModal('${r.name.replace(/'/g,"\\'")}','${time}')">
       <div class="sailing-time">${time}</div>
-      <div class="sailing-direction">${s.f} → ${s.to}</div>
+      <div style="flex:1;min-width:0">
+        <div class="sailing-direction">${s.f} → ${s.to}</div>
+        ${isNext ? `<div style="font-size:.6rem;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.05em;margin-top:1px">Next sailing</div>` : ''}
+      </div>
       <div class="sailing-bar-wrap">
         <div class="sailing-bar-track">
           <div class="sailing-bar-fill" style="width:${barW}%;background:${col}"></div>
@@ -1670,7 +1690,15 @@ function buildCard(r, i) {
         ${calMacStatus === 'cancelled' ? '<div class="calibrated-badge" style="background:#fceaed;color:#c62828;border-color:#ffcdd2">🚨 Cancelled</div>' : ''}
         ${calMacStatus === 'disrupted' ? '<div class="calibrated-badge" style="background:#fff3e0;color:#e65100;border-color:#ffe082">⚠️ Disrupted</div>' : ''}
         ${calMacStatus === 'amber' ? '<div class="calibrated-badge" style="background:#fff8e1;color:#e65100;border-color:#ffe082">⚠️ Be Aware</div>' : ''}
-        ${(()=>{ const t=historicalThresholds[r.name]; return t&&t.samples>=2 ? `<div class="calibrated-badge" title="Prediction calibrated using ${t.samples} months of real CalMac cancellation data">📊 Calibrated</div>` : ''; })()}
+        ${(()=>{
+          const t = historicalThresholds[r.name];
+          if (!t || t.samples < 2) return '';
+          // Only show badge if calibration meaningfully affected the score
+          const weatherOnly = Math.max(0, Math.min(100, Math.round(100 - (r.risk || 0))));
+          const diff = Math.abs((overall || 0) - weatherOnly);
+          if (diff < 3) return '';
+          return `<div class="calibrated-badge" title="Calibrated using ${t.samples} months of real CalMac data — shifted score by ${diff}%">📊 Calibrated</div>`;
+        })()}
       </div>
     </div>
     <div class="card-weather ${wc}">
@@ -1685,7 +1713,10 @@ function buildCard(r, i) {
     ${sailings.length > 0 ? `<div class="sailings-section">
       <div class="sailings-title">Today's sailings</div>
       <div class="sailings-list">${sailingRows}</div>
-    </div>` : ''}
+    </div>` : `<div class="sailings-section">
+      <div class="sailings-title">Today's sailings</div>
+      <div style="padding:10px 0;font-size:.8rem;color:var(--muted);text-align:center">No timetable available — <a href="https://www.calmac.co.uk/timetables" target="_blank" style="color:var(--blue);font-weight:600">check calmac.co.uk</a></div>
+    </div>`}
     <div class="card-foot">
       <div class="conf-pips">
         ${[1,2,3].map(n=>`<div class="conf-pip ${n<=pips?'filled':''}"></div>`).join('')}
@@ -2292,6 +2323,7 @@ async function loadDisruptionBanner() {
     liveDisruptions = {};
     // Store ALL routes so sailingStatuses is available even for BE_AWARE routes
     allRoutes_status.forEach(d => { if (d.routeKey) liveDisruptions[d.routeKey] = d; });
+    lastDisruptionFetch = new Date();
     // Re-render so sailing rows reflect live CalMac status
     if (Object.keys(liveDisruptions).length > 0 && allRoutes.length > 0) renderRoutes();
   } catch (_) {}
@@ -2613,7 +2645,7 @@ async function runStatusCheck() {
       badgeText: isFallback ? '✗ Fallback' : '✓ Live',
       detail: isFallback
         ? `API unavailable (${data.error || 'unknown error'}) — showing link to CalMac website`
-        : `${routeCount} routes fetched in ${ms}ms · ${disruptedCount} disrupted`
+        : `${routeCount} routes · ${disruptedCount} disrupted · fetched in ${ms}ms${lastDisruptionFetch ? ' · last loaded ' + lastDisruptionFetch.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : ''}`
     });
   } catch(e) {
     results.push({ name:'CalMac Status API', icon:'🚨', dot:'red', badge:'err', badgeText:'✗ Error', detail: e.message });
