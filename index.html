@@ -1598,6 +1598,13 @@ function buildCard(r, i) {
   const disruption   = liveDisruptions[r.name];
   const calMacStatus = disruption?.status || null;
 
+  // Check if ALL sailings on this route are cancelled (wildcard '*' entry)
+  const sailingStatuses_card = disruption?.sailingStatuses || {};
+  const allCancelled = calMacStatus === 'cancelled' ||
+    (sailingStatuses_card['*']?.status === 'cancelled') ||
+    (Object.keys(sailingStatuses_card).length > 0 &&
+     Object.values(sailingStatuses_card).every(s => s.status === 'cancelled'));
+
   const sailings = TIMETABLE[r.name] || [];
   const sailingRows = sailings.map(s => {
     const time = s.t;
@@ -1650,12 +1657,14 @@ function buildCard(r, i) {
   return `<div class="route-card" style="animation-delay:${delay}ms">
     <button class="fav-btn" data-route="${r.name}" title="Favourite this route">${favStar}</button>
     <div class="card-head">
-      <div class="verdict-badge ${v}">${verdictEmoji(v)}</div>
+      <div class="verdict-badge ${allCancelled ? 'unlikely' : v}">${allCancelled ? '❌' : verdictEmoji(v)}</div>
       <div class="card-head-text">
         <div class="route-name">${r.name}</div>
       </div>
       <div class="overall-chance">
-        <div class="chance-pct" style="color:${colour}">${overall !== null ? overall+'%' : '–'}</div>
+        ${allCancelled
+          ? `<div class="chance-pct" style="color:var(--red);font-size:1.1rem;line-height:1.2">Cancelled</div>`
+          : `<div class="chance-pct" style="color:${colour}">${overall !== null ? overall+'%' : '–'}</div>`}
         <div class="chance-lbl">Next 12h</div>
         <div class="exposure-lbl">${['','🛡 Sheltered','🌊 Moderate','🌊🌊 Exposed','⚠️ Very exposed'][profile.exposure]}</div>
         ${calMacStatus === 'cancelled' ? '<div class="calibrated-badge" style="background:#fceaed;color:#c62828;border-color:#ffcdd2">🚨 Cancelled</div>' : ''}
