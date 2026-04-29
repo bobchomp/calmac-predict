@@ -1764,14 +1764,15 @@ function buildCard(r, i) {
 
   const sailings = TIMETABLE[r.name] || [];
   // Find the next upcoming sailing time for this route
-  const nextSailingTime = sailings.find(s => {
+  // In tomorrow mode there's no "next" or "past" — all sailings are future
+  const nextSailingTime = _useTomorrow ? null : (sailings.find(s => {
     const [hh, mm] = s.t.split(':').map(Number);
     return (hh > currentHour) || (hh === currentHour && mm > currentMin);
-  })?.t || null;
+  })?.t || null);
   const sailingRows = sailings.map(s => {
     const time = s.t;
     const [hh, mm] = time.split(':').map(Number);
-    const isPast = (hh < currentHour) || (hh === currentHour && mm <= currentMin);
+    const isPast = _useTomorrow ? false : ((hh < currentHour) || (hh === currentHour && mm <= currentMin));
     const isNext = time === nextSailingTime;
     const _sailHourly = _useTomorrow && r.tomorrow?.hourly ? r.tomorrow.hourly : r.hourlyData;
     const _sailMarine = _useTomorrow && r.tomorrow?.marine ? r.tomorrow.marine : r.marineData;
