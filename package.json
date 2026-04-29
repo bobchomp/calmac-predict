@@ -2,7 +2,7 @@
   "name": "calmac-predictor",
   "version": "2.0.0",
   "description": "Unofficial CalMac sailing predictor",
-  "engines": { "node": "20.x" },
+  "engines": { "node": "24.x" },
   "scripts": {
     "build": "node -e \"const fs=require('fs');const sw=fs.readFileSync('sw.js','utf8');fs.writeFileSync('sw.js',sw.replace('__BUILD__',Date.now()));console.log('sw.js stamped with build timestamp');\""
   },
