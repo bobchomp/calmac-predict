@@ -227,6 +227,7 @@
     /* Tab pages */
     .tab-page{display:none;}
     .tab-page.active{display:block;}
+    #tabMap.active{display:flex!important;flex-direction:column;}
 
     /* ── ROUTE DETAIL MODAL ── */
     .modal-overlay{
@@ -758,8 +759,8 @@
   </div>
 
   <!-- ── MAP TAB ── -->
-  <div class="tab-page" id="tabMap" style="padding-bottom:80px;display:flex;flex-direction:column;height:calc(100vh - 56px - env(safe-area-inset-bottom))">
-    <div id="leafletMap" style="flex:1;min-height:0;width:100%;"></div>
+  <div class="tab-page" id="tabMap" style="padding-bottom:0;height:calc(100vh - 56px - env(safe-area-inset-bottom))">
+    <div id="leafletMap" style="width:100%;height:calc(100vh - 56px - env(safe-area-inset-bottom) - 0px);min-height:300px;"></div>
     <!-- Route info panel (shown on line click) -->
     <div id="mapInfoPanel" style="display:none;background:var(--white);border-top:1px solid var(--light);padding:14px 16px;flex-shrink:0">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
@@ -1741,7 +1742,11 @@ document.querySelectorAll('.nav-tab').forEach(tab => {
     if (target === 'tabFavs') renderFavourites();
     if (target === 'tabAbout') loadAboutStats();
     if (target === 'tabStatus') runStatusCheck();
-    if (target === 'tabMap') renderMapTab();
+    if (target === 'tabMap') {
+      renderMapTab();
+      // Give the tab a frame to become visible before invalidating
+      setTimeout(() => { if (leafletMap) leafletMap.invalidateSize({ animate: false }); }, 200);
+    }
     window.scrollTo(0, 0);
   });
 });
@@ -3113,8 +3118,17 @@ function renderMapTab() {
     }
   });
 
-  // Force map to recalculate size (it may have been hidden)
-  setTimeout(() => leafletMap.invalidateSize(), 100);
+  // Force map to recalculate size after tab becomes visible
+  setTimeout(() => {
+    leafletMap.invalidateSize({ animate: false });
+    // Fit map to show all Scottish ferry routes
+    if (Object.keys(leafletLayers).length > 0) {
+      try {
+        const group = L.featureGroup(Object.values(leafletLayers));
+        leafletMap.fitBounds(group.getBounds().pad(0.1), { maxZoom: 9 });
+      } catch(e) {}
+    }
+  }, 150);
 }
 
 function updateLeafletColors() {
