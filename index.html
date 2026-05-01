@@ -368,7 +368,7 @@ footer a{color:var(--blue);text-decoration:none;}
 .leaflet-container{font-family:inherit;}
 /* Map tab: full screen overlay above main content when active */
 #tabMap{position:fixed;left:0;right:0;top:calc(env(safe-area-inset-top) + 48px);bottom:calc(env(safe-area-inset-bottom) + 56px);z-index:50;background:var(–white);overflow:hidden;display:none;flex-direction:column;}
-#leafletMap{flex:1;width:100%;min-height:0;}
+#leafletMap{flex:1;width:100%;min-height:0;height:100%;}
 #mapInfoPanel{flex-shrink:0;}
 .map-legend{position:absolute;bottom:20px;left:12px;z-index:1000;background:var(–white);border-radius:10px;padding:8px 12px;box-shadow:var(–shadow);font-size:.72rem;color:var(–text);}
 .map-legend-item{display:flex;align-items:center;gap:6px;margin-bottom:3px;}
@@ -1760,7 +1760,16 @@ document.querySelectorAll('.nav-tab').forEach(tab => {
     if (target === 'tabMap') {
       mapEl.style.display = 'flex';
       renderMapTab();
-      setTimeout(() => { if (leafletMap) leafletMap.invalidateSize({ animate: false }); }, 200);
+      setTimeout(() => {
+        if (leafletMap) {
+          const c = document.getElementById('leafletMap');
+          const navH = document.querySelector('.bottom-nav')?.offsetHeight || 56;
+          const toolH = document.querySelector('.toolbar')?.offsetHeight || 0; // toolbar hidden on map tab
+          if (c) c.style.height = (window.innerHeight - navH - toolH) + 'px';
+          leafletMap.invalidateSize({ animate: false });
+        }
+      }, 100);
+      setTimeout(() => { if (leafletMap) leafletMap.invalidateSize({ animate: false }); }, 400);
     }
     window.scrollTo(0, 0);
   });
@@ -3078,6 +3087,14 @@ function renderMapTab() {
     return;
   }
 
+  // Ensure the container has a real pixel height before Leaflet init
+  const mapParent = document.getElementById('tabMap');
+  const navH = document.querySelector('.bottom-nav')?.offsetHeight || 56;
+  const toolbarH = document.querySelector('.toolbar')?.offsetHeight || 48;
+  const safeTop = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sat') || '0');
+  const availH = window.innerHeight - navH - toolbarH;
+  container.style.height = availH + 'px';
+
   if (!leafletMap) {
     leafletMap = L.map('leafletMap', {
       center: [56.8, -5.6],
@@ -3140,16 +3157,21 @@ function renderMapTab() {
   });
 
   // Force map to recalculate size after tab becomes visible
-  setTimeout(() => {
+  const _resizeMap = () => {
+    const c = document.getElementById('leafletMap');
+    const navH2 = document.querySelector('.bottom-nav')?.offsetHeight || 56;
+    const toolH2 = document.querySelector('.toolbar')?.offsetHeight || 48;
+    if (c) c.style.height = (window.innerHeight - navH2 - toolH2) + 'px';
     leafletMap.invalidateSize({ animate: false });
-    // Fit map to show all Scottish ferry routes
     if (Object.keys(leafletLayers).length > 0) {
       try {
         const group = L.featureGroup(Object.values(leafletLayers));
         leafletMap.fitBounds(group.getBounds().pad(0.1), { maxZoom: 9 });
       } catch(e) {}
     }
-  }, 150);
+  };
+  setTimeout(_resizeMap, 50);
+  setTimeout(_resizeMap, 300);
 }
 
 function updateLeafletColors() {
@@ -3232,6 +3254,14 @@ function updateOfflineBanner() {
   }
 }
 
+window.addEventListener('resize', () => {
+  if (leafletMap && activeTab === 'tabMap') {
+    const c = document.getElementById('leafletMap');
+    const navH = document.querySelector('.bottom-nav')?.offsetHeight || 56;
+    if (c) c.style.height = (window.innerHeight - navH) + 'px';
+    leafletMap.invalidateSize({ animate: false });
+  }
+});
 window.addEventListener('online', updateOfflineBanner);
 window.addEventListener('offline', updateOfflineBanner);
 updateOfflineBanner();
