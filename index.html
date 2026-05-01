@@ -2330,32 +2330,79 @@ function handleShareDeepLink() {
 // ── SHARE BUTTON ──
 // ─────────────────────────────────────────────────────────────────────────
 function shareRoute(routeName, sailing) {
-  // Ask for the sharer's name
-  const name = prompt('Your name (shown to the recipient):', '');
-  if (name === null) return; // user cancelled
+  // Show a non-blocking name picker so we don't break the iOS gesture chain
+  // We collect the name first, then call share directly from the button tap
+  const existing = document.getElementById('shareNamePicker');
+  if (existing) existing.remove();
 
-  const params = new URLSearchParams({ route: routeName });
-  if (sailing)         params.set('sailing', sailing);
-  if (name.trim())     params.set('from', name.trim());
+  const picker = document.createElement('div');
+  picker.id = 'shareNamePicker';
+  picker.style.cssText = `position:fixed;bottom:calc(80px + env(safe-area-inset-bottom));left:12px;right:12px;
+    z-index:1000;background:var(--white);border-radius:16px;padding:16px;
+    box-shadow:0 8px 40px rgba(0,48,135,0.2);`;
+  picker.innerHTML = `
+    <div style="font-size:.85rem;font-weight:700;color:var(--navy);margin-bottom:10px">Share this route</div>
+    <input id="shareNameInput" type="text" placeholder="Your name (optional)"
+      style="width:100%;padding:9px 12px;border:1.5px solid var(--light);border-radius:10px;
+      font-family:inherit;font-size:.88rem;box-sizing:border-box;margin-bottom:10px;outline:none"/>
+    <div style="display:flex;gap:8px">
+      <button onclick="document.getElementById('shareNamePicker').remove()"
+        style="flex:1;padding:9px;border-radius:10px;border:1.5px solid var(--light);
+        background:var(--white);font-family:inherit;font-size:.85rem;font-weight:600;cursor:pointer">
+        Cancel
+      </button>
+      <button id="shareConfirmBtn"
+        style="flex:1;padding:9px;border-radius:10px;border:none;background:var(--blue);
+        color:#fff;font-family:inherit;font-size:.85rem;font-weight:600;cursor:pointer">
+        Share
+      </button>
+    </div>`;
+  document.body.appendChild(picker);
+  setTimeout(() => document.getElementById('shareNameInput')?.focus(), 50);
 
-  const url = `${location.origin}${location.pathname}?${params}`;
-  const title = `Will It Sail? — ${routeName}`;
-  const text  = name.trim()
-    ? `${name.trim()} shared a CalMac route with you`
-    : `Check this CalMac route on Will It Sail?`;
-
-  if (navigator.share) {
-    navigator.share({ title, text, url }).catch(() => {});
-  } else {
-    navigator.clipboard.writeText(url).then(() => {
-      const toast = document.getElementById('shareToast');
-      toast.textContent = '✅ Link copied!';
-      toast.classList.add('show');
-      setTimeout(() => toast.classList.remove('show'), 2500);
-    }).catch(() => {
-      prompt('Copy this link:', url);
+  // Dismiss on outside tap
+  setTimeout(() => {
+    document.addEventListener('click', function dismiss(e) {
+      if (!picker.contains(e.target)) { picker.remove(); document.removeEventListener('click', dismiss); }
     });
-  }
+  }, 100);
+
+  document.getElementById('shareConfirmBtn').addEventListener('click', () => {
+    const name = (document.getElementById('shareNameInput')?.value || '').trim();
+    picker.remove();
+
+    const params = new URLSearchParams({ route: routeName });
+    if (sailing)   params.set('sailing', sailing);
+    if (name)      params.set('from', name);
+
+    const url   = `${location.origin}${location.pathname}?${params}`;
+    const title = `Will It Sail? — ${routeName}`;
+    const text  = name ? `${name} shared a CalMac route with you` : `Check this CalMac route on Will It Sail?`;
+
+    if (navigator.share) {
+      navigator.share({ title, text, url }).catch(() => {
+        // Fallback to clipboard if share fails
+        _copyToClipboard(url);
+      });
+    } else {
+      _copyToClipboard(url);
+    }
+  });
+}
+
+function _copyToClipboard(url) {
+  navigator.clipboard.writeText(url).then(() => {
+    const toast = document.getElementById('shareToast');
+    toast.textContent = '✅ Link copied!';
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2500);
+  }).catch(() => {
+    // Last resort — show the URL in a selectable input
+    const t = document.getElementById('shareToast');
+    t.textContent = '📋 Copy: ' + url.slice(0, 40) + '…';
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 4000);
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────
