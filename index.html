@@ -12,8 +12,6 @@
   <meta name="apple-mobile-web-app-title" content="Will It Sail?" />
   <meta name="theme-color" content="#003087" />
 
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV/XN/WLs=" crossorigin=""></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet" />
   <style>
@@ -364,33 +362,6 @@ footer a{color:var(--blue);text-decoration:none;}
 .trip-chance-lbl{font-size:.8rem;color:var(–muted);margin-top:4px;}
 .trip-forecast-note{font-size:.75rem;color:var(–muted);margin-top:6px;font-style:italic;}
 
-/* ── MAP TAB ── */
-.leaflet-container{font-family:inherit;}
-/* Map tab: full screen overlay above main content when active */
-#tabMap{display:none;position:fixed;left:0;right:0;z-index:50;background:#ffffff;}
-#mapInfoPanel{flex-shrink:0;}
-.map-legend{position:absolute;bottom:20px;left:12px;z-index:1000;background:#ffffff;border-radius:10px;padding:8px 12px;box-shadow:0 2px 8px rgba(0,48,135,0.08);font-size:.72rem;color:var(–text);}
-.map-legend-item{display:flex;align-items:center;gap:6px;margin-bottom:3px;}
-.map-legend-item:last-child{margin-bottom:0;}
-.map-legend-dot{width:14px;height:4px;border-radius:2px;flex-shrink:0;}
-.map-tab-wrap{padding:0 0 80px;}
-.map-search-bar{padding:12px 16px 8px;position:sticky;top:0;background:var(–white);z-index:10;border-bottom:1px solid var(–light);}
-.map-search-input{width:100%;padding:9px 12px 9px 34px;border:1.5px solid var(–light);border-radius:10px;font-family:inherit;font-size:.88rem;background:var(–offwhite);outline:none;transition:border-color .2s;}
-.map-search-input:focus{border-color:var(–blue);background:var(–white);}
-.map-route-list{padding:8px 12px 0;}
-.map-route-item{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;cursor:pointer;transition:background .15s;border:1.5px solid transparent;margin-bottom:6px;}
-.map-route-item:hover,.map-route-item.active{background:var(–light);border-color:var(–blue);}
-.map-route-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;}
-.map-route-dot.likely{background:var(–green);}
-.map-route-dot.caution{background:var(–amber);}
-.map-route-dot.unlikely{background:var(–red);}
-.map-route-dot.unknown{background:var(–muted);}
-.map-route-name{font-size:.85rem;font-weight:600;color:var(–text);flex:1;}
-.map-route-pct{font-family:‘Syne’,sans-serif;font-size:.9rem;font-weight:800;}
-.map-panel{background:var(–white);border-top:1px solid var(–light);padding:14px 16px;display:none;}
-.map-panel.open{display:block;}
-.map-embed{width:100%;border-radius:10px;border:none;height:220px;margin-top:10px;}
-
 /* ── STATUS PAGE ── */
 .status-page{padding:0 0 80px;}
 .status-item{background:var(–white);border-radius:12px;padding:14px 16px;margin-bottom:10px;box-shadow:var(–shadow);display:flex;align-items:center;gap:14px;}
@@ -516,37 +487,30 @@ footer a{color:var(--blue);text-decoration:none;}
 
   <!-- ── ABOUT TAB ── -->
 
-  <div class="tab-page" id="tabAbout" style="padding-bottom:80px">
+  <div class="tab-page" id="tabStatus" style="padding-bottom:80px">
+    <div class="status-page" id="statusPage">
+      <div id="statusLastChecked" class="status-last-checked">Checking…</div>
+    <!-- LIVE STATS -->
+    <div class="about-card">
+      <h3>Database</h3>
+      <div id="db-stats" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px">
+        <div style="text-align:center;background:var(--light);border-radius:8px;padding:12px">
+          <div style="font-size:1.6rem;font-weight:800;color:var(--navy)" id="stat-months">–</div>
+          <div style="font-size:.72rem;color:var(--muted);margin-top:2px">Months of<br>real data</div>
+        </div>
+        <div style="text-align:center;background:var(--light);border-radius:8px;padding:12px">
+          <div style="font-size:1.6rem;font-weight:800;color:var(--navy)" id="stat-routes">–</div>
+          <div style="font-size:.72rem;color:var(--muted);margin-top:2px">Routes<br>calibrated</div>
+        </div>
+        <div style="text-align:center;background:var(--light);border-radius:8px;padding:12px">
+          <div style="font-size:1.6rem;font-weight:800;color:var(--navy)">🟢</div>
+          <div style="font-size:.72rem;color:var(--muted);margin-top:2px">Live CalMac<br>status API</div>
+        </div>
+      </div>
+      <p style="font-size:.78rem;color:var(--muted)">Historical cancellation data comes from official CalMac monthly reliability PDFs at <a href="https://corporate.calmac.co.uk/en-gb/about-us/route-performance-reports/" target="_blank">corporate.calmac.co.uk</a>. Routes without PDF data use research-based estimates from Transport Scotland reports and FOI releases. The <strong>📊 Calibrated</strong> badge means a route's prediction is anchored to real cancellation history.</p>
+    </div>
 
 ```
-<!-- HERO INTRO -->
-<div class="about-card" style="background:linear-gradient(135deg,#0a2540 0%,#1a3a5c 100%);color:#fff">
-  <h3 style="color:#fff;font-size:1.1rem;margin-bottom:8px">Will It Sail? 🚢</h3>
-  <p style="color:rgba(255,255,255,.85);font-size:.88rem;line-height:1.65">An unofficial sailing predictor for CalMac's west coast ferry network. It combines live weather forecasts, real CalMac cancellation history, live service status, and AIS vessel tracking to estimate how likely each sailing is to run — route by route, departure by departure.</p>
-</div>
-
-<!-- LIVE STATS -->
-<div class="about-card">
-  <h3>Database</h3>
-  <div id="db-stats" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px">
-    <div style="text-align:center;background:var(--light);border-radius:8px;padding:12px">
-      <div style="font-size:1.6rem;font-weight:800;color:var(--navy)" id="stat-months">–</div>
-      <div style="font-size:.72rem;color:var(--muted);margin-top:2px">Months of<br>real data</div>
-    </div>
-    <div style="text-align:center;background:var(--light);border-radius:8px;padding:12px">
-      <div style="font-size:1.6rem;font-weight:800;color:var(--navy)" id="stat-routes">–</div>
-      <div style="font-size:.72rem;color:var(--muted);margin-top:2px">Routes<br>calibrated</div>
-    </div>
-    <div style="text-align:center;background:var(--light);border-radius:8px;padding:12px">
-      <div style="font-size:1.6rem;font-weight:800;color:var(--navy)">🟢</div>
-      <div style="font-size:.72rem;color:var(--muted);margin-top:2px">Live CalMac<br>status API</div>
-    </div>
-  </div>
-  <p style="font-size:.78rem;color:var(--muted)">Historical cancellation data comes from official CalMac monthly reliability PDFs at <a href="https://corporate.calmac.co.uk/en-gb/about-us/route-performance-reports/" target="_blank">corporate.calmac.co.uk</a>. Routes without PDF data use research-based estimates from Transport Scotland reports and FOI releases. The <strong>📊 Calibrated</strong> badge means a route's prediction is anchored to real cancellation history.</p>
-</div>
-
-
-
 <!-- HOW IT WORKS -->
 <div class="about-card">
   <h3>How the prediction works</h3>
@@ -749,24 +713,27 @@ footer a{color:var(--blue);text-decoration:none;}
 
   </div>
   <!-- ── STATUS TAB ── -->
-  <div class="tab-page" id="tabStatus" style="padding-bottom:80px">
-    <div class="status-page" id="statusPage">
-      <div id="statusLastChecked" class="status-last-checked">Checking…</div>
-      <button class="status-refresh-btn" onclick="runStatusCheck()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-        Check now
-      </button>
-      <div id="statusItems">
-        <!-- filled by runStatusCheck() -->
-      </div>
-    </div>
+  <div class="tab-page" id="tabAbout" style="padding-bottom:80px">
+
+```
+<!-- HERO INTRO -->
+<div class="about-card" style="background:linear-gradient(135deg,#0a2540 0%,#1a3a5c 100%);color:#fff">
+  <h3 style="color:#fff;font-size:1.1rem;margin-bottom:8px">Will It Sail? 🚢</h3>
+  <p style="color:rgba(255,255,255,.85);font-size:.88rem;line-height:1.65">An unofficial sailing predictor for CalMac's west coast ferry network. It combines live weather forecasts, real CalMac cancellation history, live service status, and AIS vessel tracking to estimate how likely each sailing is to run — route by route, departure by departure.</p>
+</div>
+
+  <button class="status-refresh-btn" onclick="runStatusCheck()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+    Check now
+  </button>
+  <div id="statusItems">
+    <!-- filled by runStatusCheck() -->
   </div>
+</div>
+```
 
-  <!-- ── MAP TAB ── -->
-
-  <div id="tabMap">
-    <div id="leafletMap"></div>
-    <!-- Route info panel (shown on line click) -->
+  </div>
+<!-- Route info panel (shown on line click) -->
     <div id="mapInfoPanel" style="display:none;background:var(--white);border-top:1px solid var(--light);padding:14px 16px;flex-shrink:0">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
         <div>
@@ -801,17 +768,13 @@ footer a{color:var(--blue);text-decoration:none;}
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
     <span class="nav-label">Favourites</span>
   </button>
-  <button class="nav-tab" data-tab="tabAbout" id="navAbout">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-    <span class="nav-label">About</span>
-  </button>
   <button class="nav-tab" data-tab="tabStatus" id="navStatus">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
     <span class="nav-label">Status</span>
   </button>
-  <button class="nav-tab" data-tab="tabMap" id="navMap">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
-    <span class="nav-label">Map</span>
+  <button class="nav-tab" data-tab="tabAbout" id="navAbout">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <span class="nav-label">About</span>
   </button>
 </nav>
 
@@ -1166,31 +1129,6 @@ const ROUTES = [
   { name: 'Port Askaig - Feolin (Jura)',                  lat: 55.85, lon: -6.10 },
 ];
 
-// ── ROUTE LINES ── actual port-to-port coordinates for Leaflet polylines
-const ROUTE_LINES = [
-  { name: 'Ardrossan - Brodick (Arran)',                   from: [55.642, -4.824], to: [55.574, -5.142] },
-  { name: 'Troon - Brodick (Arran)',                       from: [55.546, -4.681], to: [55.574, -5.142] },
-  { name: 'Kennacraig - Port Ellen / Port Askaig (Islay)', from: [55.897, -5.494], to: [55.628, -6.190] },
-  { name: 'Oban - Craignure (Mull)',                       from: [56.415, -5.473], to: [56.459, -5.713] },
-  { name: 'Oban - Coll / Tiree',                          from: [56.415, -5.473], to: [56.615, -6.526] },
-  { name: 'Oban - Colonsay',                              from: [56.415, -5.473], to: [56.075, -6.186] },
-  { name: 'Oban - Castlebay / Lochboisdale',              from: [56.415, -5.473], to: [57.007, -7.311] },
-  { name: 'Mallaig - Armadale (Skye)',                    from: [57.006, -5.830], to: [57.064, -5.991] },
-  { name: 'Ullapool - Stornoway (Lewis)',                  from: [57.895, -5.160], to: [58.208, -6.387] },
-  { name: 'Uig - Tarbert / Lochmaddy',                    from: [57.583, -6.362], to: [57.900, -6.799] },
-  { name: 'Gourock - Dunoon',                             from: [55.958, -4.819], to: [55.948, -4.924] },
-  { name: 'Wemyss Bay - Rothesay (Bute)',                 from: [55.874, -4.889], to: [55.837, -5.052] },
-  { name: 'Colintraive - Rhubodach (Bute)',               from: [55.921, -5.153], to: [55.923, -5.176] },
-  { name: 'Largs - Cumbrae Slip',                         from: [55.793, -4.869], to: [55.775, -4.924] },
-  { name: 'Tarbert - Portavadie',                         from: [55.868, -5.406], to: [55.876, -5.319] },
-  { name: 'Claonaig - Lochranza (Arran)',                 from: [55.754, -5.396], to: [55.703, -5.296] },
-  { name: 'Tobermory - Kilchoan',                         from: [56.624, -6.068], to: [56.701, -6.120] },
-  { name: 'Fishnish - Lochaline',                         from: [56.515, -5.698], to: [56.534, -5.776] },
-  { name: 'Mallaig - Small Isles',                        from: [57.006, -5.830], to: [56.879, -6.170] },
-  { name: 'Oban - Lismore',                               from: [56.415, -5.473], to: [56.504, -5.497] },
-  { name: 'Seil - Luing',                                 from: [56.234, -5.614], to: [56.218, -5.637] },
-  { name: 'Port Askaig - Feolin (Jura)',                  from: [55.852, -6.105], to: [55.849, -6.131] },
-];
 
 const ROUTE_NAMES = ROUTES.map(r => r.name);
 
@@ -1742,30 +1680,15 @@ document.querySelectorAll('.nav-tab').forEach(tab => {
     activeTab = target;
     document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
-    // Hide map tab (not part of .tab-page system)
-    const mapEl = document.getElementById('tabMap');
-    mapEl.style.display = 'none';
     // Show/hide tab pages
     document.querySelectorAll('.tab-page').forEach(p => p.classList.remove('active'));
-    if (target !== 'tabMap') {
-      document.getElementById(target).classList.add('active');
-    }
+    document.getElementById(target).classList.add('active');
     // Show/hide toolbar based on tab
     const showToolbar = target === 'tabRoutes';
     document.querySelector('.toolbar').style.display = showToolbar ? '' : 'none';
     if (target === 'tabFavs') renderFavourites();
     if (target === 'tabAbout') loadAboutStats();
     if (target === 'tabStatus') runStatusCheck();
-    if (target === 'tabMap') {
-      mapEl.style.display = 'flex';
-      renderMapTab();
-      setTimeout(() => {
-        if (leafletMap) { _sizeMapContainer(); leafletMap.invalidateSize({ animate: false }); }
-      }, 100);
-      setTimeout(() => {
-        if (leafletMap) { _sizeMapContainer(); leafletMap.invalidateSize({ animate: false }); }
-      }, 500);
-    }
     window.scrollTo(0, 0);
   });
 });
@@ -2600,7 +2523,6 @@ async function loadDisruptionBanner() {
     // Re-render so sailing rows reflect live CalMac status
     if (Object.keys(liveDisruptions).length > 0 && allRoutes.length > 0) {
       renderRoutes();
-      updateLeafletColors();
     }
   } catch (_) {}
 }
@@ -3097,190 +3019,15 @@ async function runStatusCheck() {
   if (lastEl) lastEl.textContent = `Last checked: ${now}`;
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// ── MAP TAB (Leaflet) ──
-// ─────────────────────────────────────────────────────────────────────────
-let leafletMap = null;
-let leafletLayers = {}; // routeName → polyline layer
-let selectedMapRouteName = null;
 
-function getRouteLineColor(routeName) {
-  const r = allRoutes.find(x => x.name === routeName);
-  if (!r || r.maxGustMph === undefined) return '#6b82a0';
-  const pct = sailingChance(r.risk || 0, r.name);
-  const disruption = liveDisruptions[routeName];
-  if (disruption?.status === 'cancelled') return '#c8102e';
-  if (pct >= 75) return '#00843d';
-  if (pct >= 45) return '#e8a000';
-  return '#c8102e';
-}
 
-function getRouteLineWeight(routeName) {
-  return selectedMapRouteName === routeName ? 7 : 4;
-}
 
-function _sizeMapContainer() {
-  const mapEl = document.getElementById('tabMap');
-  const navEl = document.querySelector('.bottom-nav');
-  const navRect = navEl ? navEl.getBoundingClientRect() : { top: window.innerHeight - 56, height: 56 };
-  const navTop = Math.round(navRect.top);
-  const mapH = navTop; // map fills from top of screen to top of nav bar
-  mapEl.style.top = '0';
-  mapEl.style.height = mapH + 'px';
-  mapEl.style.bottom = 'auto';
-  const leafletEl = document.getElementById('leafletMap');
-  if (leafletEl) leafletEl.style.height = mapH + 'px';
-  return mapH;
-}
 
-function renderMapTab() {
-  // Wait for Leaflet to load if not yet available
-  if (typeof L === 'undefined') {
-    setTimeout(renderMapTab, 200);
-    return;
-  }
 
-  // Size explicitly before Leaflet init
-  const mapH = _sizeMapContainer();
-  const container = document.getElementById('leafletMap');
-  if (!container || mapH < 100) {
-    setTimeout(renderMapTab, 100);
-    return;
-  }
 
-  if (!leafletMap) {
-    leafletMap = L.map('leafletMap', {
-      center: [56.8, -5.6],
-      zoom: 7,
-      zoomControl: true,
-    });
-
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-      maxZoom: 18,
-    }).addTo(leafletMap);
-
-    // Legend
-    const legend = L.control({ position: 'bottomleft' });
-    legend.onAdd = () => {
-      const div = L.DomUtil.create('div', 'map-legend');
-      div.innerHTML = `
-        <div class="map-legend-item"><div class="map-legend-dot" style="background:#00843d"></div> Likely sailing</div>
-        <div class="map-legend-item"><div class="map-legend-dot" style="background:#e8a000"></div> Use caution</div>
-        <div class="map-legend-item"><div class="map-legend-dot" style="background:#c8102e"></div> At risk / Cancelled</div>
-        <div class="map-legend-item"><div class="map-legend-dot" style="background:#6b82a0"></div> Loading…</div>
-      `;
-      return div;
-    };
-    legend.addTo(leafletMap);
-  }
-
-  // Draw / update route lines
-  ROUTE_LINES.forEach(rl => {
-    const color = getRouteLineColor(rl.name);
-    const weight = getRouteLineWeight(rl.name);
-
-    if (leafletLayers[rl.name]) {
-      leafletLayers[rl.name].setStyle({ color, weight });
-    } else {
-      const line = L.polyline([rl.from, rl.to], {
-        color,
-        weight,
-        opacity: 0.9,
-        lineCap: 'round',
-      }).addTo(leafletMap);
-
-      // Port dots
-      [rl.from, rl.to].forEach(pt => {
-        L.circleMarker(pt, {
-          radius: 5,
-          fillColor: color,
-          color: '#fff',
-          weight: 2,
-          opacity: 1,
-          fillOpacity: 1,
-        }).addTo(leafletMap);
-      });
-
-      line.on('click', () => selectLeafletRoute(rl.name, line));
-      line.on('mouseover', () => { if (selectedMapRouteName !== rl.name) line.setStyle({ weight: 6 }); });
-      line.on('mouseout',  () => { if (selectedMapRouteName !== rl.name) line.setStyle({ weight: 4 }); });
-      leafletLayers[rl.name] = line;
-    }
-  });
-
-  // Force map to recalculate size after tab becomes visible
-  const _resizeMap = () => {
-    _sizeMapContainer();
-    leafletMap.invalidateSize({ animate: false });
-    if (Object.keys(leafletLayers).length > 0) {
-      try {
-        const group = L.featureGroup(Object.values(leafletLayers));
-        leafletMap.fitBounds(group.getBounds().pad(0.1), { maxZoom: 9 });
-      } catch(e) {}
-    }
-  };
-  setTimeout(_resizeMap, 50);
-  setTimeout(_resizeMap, 300);
-}
-
-function updateLeafletColors() {
-  if (!leafletMap) return;
-  ROUTE_LINES.forEach(rl => {
-    const layer = leafletLayers[rl.name];
-    if (!layer) return;
-    layer.setStyle({
-      color: getRouteLineColor(rl.name),
-      weight: getRouteLineWeight(rl.name),
-    });
-  });
-}
-
-function selectLeafletRoute(routeName, layer) {
-  // Deselect previous
-  if (selectedMapRouteName && leafletLayers[selectedMapRouteName]) {
-    leafletLayers[selectedMapRouteName].setStyle({ weight: 4 });
-  }
-  selectedMapRouteName = routeName;
-  layer.setStyle({ weight: 7 });
-
-  const r = allRoutes.find(x => x.name === routeName);
-  const pct = r ? sailingChance(r.risk || 0, r.name) : null;
-  const col = pct !== null ? chanceColor(pct) : 'var(--muted)';
-  const disruption = liveDisruptions[routeName];
-  const calMacStatus = disruption?.status || null;
-
-  // Show info panel
-  const panel = document.getElementById('mapInfoPanel');
-  const nameEl = document.getElementById('mapPanelName');
-  const subEl = document.getElementById('mapPanelSub');
-  const pctEl = document.getElementById('mapPanelPct');
-
-  nameEl.textContent = routeName;
-  pctEl.textContent = pct !== null ? pct + '%' : '–';
-  pctEl.style.color = col;
-
-  if (calMacStatus === 'cancelled') {
-    subEl.innerHTML = '<span style="color:#c62828;font-weight:700">🚨 All sailings cancelled</span>';
-  } else if (calMacStatus === 'disrupted') {
-    subEl.innerHTML = '<span style="color:#e65100;font-weight:700">⚠️ Disruptions reported</span>';
-  } else if (calMacStatus === 'amber') {
-    subEl.innerHTML = '<span style="color:#e65100;font-weight:700">⚠️ Be aware</span>';
-  } else if (r?.maxGustMph !== undefined) {
-    const dir = r.windDirDeg !== null && r.windDirDeg !== undefined ? ' ' + windDirLabel(r.windDirDeg) : '';
-    subEl.textContent = `💨 ${r.maxGustMph} mph gusts${dir} · 🌊 ${r.maxWaveM ?? '–'}m`;
-  } else {
-    subEl.textContent = 'Loading weather…';
-  }
-
-  panel.style.display = 'block';
-}
 
 // Store route for modal open from map panel
 window._mapSelectedRoute = null;
-function openMapRouteModal() {
-  if (selectedMapRouteName) openModal(selectedMapRouteName, null);
-}
 
 // ─────────────────────────────────────────────────────────────────────────
 // ── OFFLINE BANNER ──
@@ -3304,12 +3051,6 @@ function updateOfflineBanner() {
   }
 }
 
-window.addEventListener('resize', () => {
-  if (leafletMap && activeTab === 'tabMap') {
-    _sizeMapContainer();
-    leafletMap.invalidateSize({ animate: false });
-  }
-});
 window.addEventListener('online', updateOfflineBanner);
 window.addEventListener('offline', updateOfflineBanner);
 updateOfflineBanner();
@@ -3412,8 +3153,6 @@ function dismissInstallBanner() {
       postRenderHook(document.getElementById('routesGrid'));
       handleShareDeepLink();
       // Refresh map if it's already open
-      if (activeTab === 'tabMap') renderMapTab();
-      else updateLeafletColors(); // update line colours even if map tab not active
     }, 200);
   } catch(e) {
     clearInterval(ticker);
