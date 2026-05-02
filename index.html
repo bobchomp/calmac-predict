@@ -720,36 +720,161 @@
     <!-- HERO INTRO -->
     <div class="about-card" style="background:linear-gradient(135deg,#0a2540 0%,#1a3a5c 100%);color:#fff">
       <h3 style="color:#fff;font-size:1.1rem;margin-bottom:8px">Will It Sail? 🚢</h3>
-      <p style="color:rgba(255,255,255,.85);font-size:.88rem;line-height:1.65">An unofficial sailing predictor for CalMac's west coast ferry network. It combines live weather forecasts, real CalMac cancellation history, live service status, and AIS vessel tracking to estimate how likely each sailing is to run — route by route, departure by departure.</p>
+      <p style="color:rgba(255,255,255,.85);font-size:.88rem;line-height:1.65">An unofficial sailing predictor for CalMac's west coast ferry network. It combines live weather forecasts, real CalMac cancellation history and live service status to give a sailing chance percentage for each route — updated automatically every 30 minutes.</p>
+      <p style="color:rgba(255,255,255,.7);font-size:.78rem;margin-top:8px">Not affiliated with CalMac or Transport Scotland. Always check <a href="https://www.calmac.co.uk" target="_blank" style="color:#7ecfff">calmac.co.uk</a> for official information.</p>
     </div>
 
-      <button class="status-refresh-btn" onclick="runStatusCheck()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-        Check now
-      </button>
-      <div id="statusItems">
-        <!-- filled by runStatusCheck() -->
-      </div>
-    </div>
-  </div>
-<!-- Route info panel (shown on line click) -->
-    <div id="mapInfoPanel" style="display:none;background:var(--white);border-top:1px solid var(--light);padding:14px 16px;flex-shrink:0">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <div>
-          <div id="mapPanelName" style="font-family:'Syne',sans-serif;font-weight:800;font-size:.95rem;color:var(--navy)"></div>
-          <div id="mapPanelSub" style="font-size:.75rem;color:var(--muted);margin-top:2px"></div>
-        </div>
-        <div style="display:flex;align-items:center;gap:10px">
-          <div id="mapPanelPct" style="font-family:'Syne',sans-serif;font-size:1.6rem;font-weight:800"></div>
-          <button onclick="document.getElementById('mapInfoPanel').style.display='none'" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--muted);padding:4px">✕</button>
-        </div>
-      </div>
-      <div style="display:flex;gap:8px">
-        <button onclick="openMapRouteModal()" id="mapViewBtn" style="flex:1;padding:9px;border-radius:10px;background:var(--blue);color:#fff;border:none;font-family:inherit;font-size:.82rem;font-weight:600;cursor:pointer">View full forecast →</button>
-      </div>
-    </div>
-  </div>
+    <!-- FEATURES -->
+    <div class="about-card">
+      <h3>Features</h3>
 
+      <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--light)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="font-size:1.1rem">🚨</span>
+          <span style="font-weight:700;font-size:.9rem;color:var(--text)">Live CalMac service status</span>
+        </div>
+        <p style="font-size:.83rem;color:var(--muted);line-height:1.6;margin:0">Pulled automatically from CalMac's internal service status API every 10 minutes. Affected route cards are flagged with a status pill — 🚨 Cancelled, ⚠️ Disrupted, or ⚠️ Be Aware — and individual sailing rows show the disruption reason (Weather, Technical, Operational). When all sailings on a route are cancelled, the card shows ❌ and "Cancelled" instead of a percentage. Routes with an upcoming status change show an ⏰ pill even before the disruption starts.</p>
+      </div>
+
+      <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--light)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="font-size:1.1rem">📅</span>
+          <span style="font-weight:700;font-size:.9rem;color:var(--text)">Tomorrow's forecast</span>
+        </div>
+        <p style="font-size:.83rem;color:var(--muted);line-height:1.6;margin:0">The Tomorrow button in the toolbar switches every route card to show the next day's sailing chances, gust and wave figures, and a full timetable with per-sailing risk scores for tomorrow. Tap it again to return to today's view.</p>
+      </div>
+
+      <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--light)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="font-size:1.1rem">🔔</span>
+          <span style="font-weight:700;font-size:.9rem;color:var(--text)">Smart route notifications</span>
+        </div>
+        <p style="font-size:.83rem;color:var(--muted);line-height:1.6;margin:0">Tap <strong>Alert me</strong> on any route to subscribe to push notifications. A slider lets you set your own alert threshold per route — anywhere from 30% to 90% — so you can choose exactly how sensitive the alert is. The notification fires when the sailing chance drops below your threshold, with a 2-hour cooldown per route to avoid spam. Works on Chrome, Edge, Firefox, and Safari on iOS 16.4+ when added to your home screen.</p>
+        <div id="testNotifWrap" style="margin-top:12px">
+          <button id="testNotifBtn" onclick="testNotification()" style="display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:10px;border:1.5px solid var(--light);background:var(--white);font-family:inherit;font-size:.85rem;font-weight:600;color:var(--text);cursor:pointer;transition:all .18s">
+            <span>🔔</span> Send a test notification
+          </button>
+          <div id="testNotifStatus" style="margin-top:8px;font-size:.78rem;color:var(--muted);display:none"></div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--light)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="font-size:1.1rem">🌬️</span>
+          <span style="font-weight:700;font-size:.9rem;color:var(--text)">Wind direction</span>
+        </div>
+        <p style="font-size:.83rem;color:var(--muted);line-height:1.6;margin:0">Each route card shows the dominant wind direction alongside gust speed — for example "47 mph SW". Direction is averaged over the next 12 hours and shown as a compass bearing (N, NE, E, SE, S, SW, W, NW).</p>
+      </div>
+
+      <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--light)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="font-size:1.1rem">🌙</span>
+          <span style="font-weight:700;font-size:.9rem;color:var(--text)">Pre-dawn sailing flag</span>
+        </div>
+        <p style="font-size:.83rem;color:var(--muted);line-height:1.6;margin:0">Early departures scheduled before sunrise are flagged with "🌙 Pre-dawn · Next" on the Next sailing pill. Sunrise and sunset are calculated from each route's latitude and longitude, accounting for the season and UK timezone offset.</p>
+      </div>
+
+      <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--light)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="font-size:1.1rem">🔗</span>
+          <span style="font-weight:700;font-size:.9rem;color:var(--text)">Share links</span>
+        </div>
+        <p style="font-size:.83rem;color:var(--muted);line-height:1.6;margin:0">Every route card has a Share button. Tap it, enter your name, and a unique link is generated that opens the native share sheet on iOS and Android. When the recipient opens the link they see your name at the top — <em>"Ross shared Ardrossan – Brodick with you 🚢"</em> — and the app opens directly to that route.</p>
+      </div>
+
+      <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--light)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="font-size:1.1rem">🚢</span>
+          <span style="font-weight:700;font-size:.9rem;color:var(--text)">Live vessel identification</span>
+        </div>
+        <p style="font-size:.83rem;color:var(--muted);line-height:1.6;margin:0">The route detail modal shows the vessel currently operating that route, fetched live from AIS position data via aisstream.io. If a vessel is detected within the route's geographic bounding box it's shown with a green live indicator. If AIS data is unavailable, the scheduled vessel for that route is shown instead.</p>
+      </div>
+
+      <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--light)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="font-size:1.1rem">ℹ️</span>
+          <span style="font-weight:700;font-size:.9rem;color:var(--text)">Route info &amp; next sailing</span>
+        </div>
+        <p style="font-size:.83rem;color:var(--muted);line-height:1.6;margin:0">The detail modal shows crossing time, service type, scheduled vessel, and a contextual note per route. On the card itself, the next upcoming departure is highlighted with a blue border and "Next sailing" label. Past sailings are faded. Routes without a published timetable show a link to calmac.co.uk instead.</p>
+      </div>
+
+      <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--light)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="font-size:1.1rem">📡</span>
+          <span style="font-weight:700;font-size:.9rem;color:var(--text)">System status page</span>
+        </div>
+        <p style="font-size:.83rem;color:var(--muted);line-height:1.6;margin:0">The Status tab gives a live health check of every data source: Weather API, Marine/Wave API, CalMac Status API, Push Notifications, Service Worker, and Historical Calibration. Each shows a green/amber/red indicator. Tap "Check now" to re-run all checks.</p>
+      </div>
+
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="font-size:1.1rem">📱</span>
+          <span style="font-weight:700;font-size:.9rem;color:var(--text)">Offline support &amp; installable (PWA)</span>
+        </div>
+        <p style="font-size:.83rem;color:var(--muted);line-height:1.6;margin:0">A service worker caches the app shell so it remains usable in areas with no signal. When offline, a banner shows the time data was last loaded. On supported browsers a prompt offers to install the app to your home screen for faster access. On iOS, use Safari's Share → Add to Home Screen.</p>
+      </div>
+    </div>
+
+    <!-- HOW IT WORKS -->
+    <div class="about-card">
+      <h3>How the prediction works</h3>
+      <p style="font-size:.85rem;color:var(--muted);line-height:1.65">Each route gets a risk score from 0–100 based on four weather factors, then converted to a sailing chance percentage and blended with real CalMac historical reliability data where available.</p>
+      <div class="factor-row"><div class="factor-icon">💨</div><div class="factor-text"><div class="factor-name">Wind gusts &amp; direction</div><div class="factor-desc">Gust speed compared against each route's specific cancellation threshold — 40 mph for the exposed Stornoway crossing, 65 mph for the sheltered Gourock–Dunoon run. The score scales from 3 pts at 45% of threshold up to 40 pts when gusts exceed 120%. Wind direction (N/NE/E etc.) is also displayed on each card, averaged over the next 12 hours.</div></div><div class="factor-weight">0–40 pts</div></div>
+      <div class="factor-row"><div class="factor-icon">🌊</div><div class="factor-text"><div class="factor-name">Wave height &amp; swell</div><div class="factor-desc">Significant wave height and swell combined into an effective wave height, adjusted for wave period. Compared against exposure-based thresholds — a 2m wave is fine for the sheltered Sound of Mull but severe for the Minch.</div></div><div class="factor-weight">0–30 pts</div></div>
+      <div class="factor-row"><div class="factor-icon">🌫</div><div class="factor-text"><div class="factor-name">Visibility</div><div class="factor-desc">Fog and low visibility can ground sailings even in calm conditions. Scores 2 pts below 5km, up to 15 pts below 500m.</div></div><div class="factor-weight">0–15 pts</div></div>
+      <div class="factor-row" style="border-bottom:none"><div class="factor-icon">🌧</div><div class="factor-text"><div class="factor-name">Precipitation &amp; snow</div><div class="factor-desc">Heavy rain, thunderstorms and snow add up to 10 pts depending on the weather code and accumulation. Tidal penalty of 3 pts applied to exposed routes like Uig triangle and Small Isles.</div></div><div class="factor-weight">0–10 pts</div></div>
+    </div>
+
+    <!-- CALIBRATION -->
+    <div class="about-card">
+      <h3>Historical calibration</h3>
+      <p style="font-size:.82rem;color:var(--muted);margin:0;line-height:1.6">For routes with a 📊 Calibrated badge, the weather score is blended with real CalMac reliability data — seasonal figures from official monthly performance PDFs:</p>
+      <div class="calibration-grid" id="calibGrid" style="margin-top:12px">
+        <div class="calib-row"><span class="calib-route">Ardrossan – Brodick</span><span class="calib-pct">–</span></div>
+        <div class="calib-row"><span class="calib-route">Ullapool – Stornoway</span><span class="calib-pct">–</span></div>
+        <div class="calib-row"><span class="calib-route">Uig – Tarbert/Lochmaddy</span><span class="calib-pct">–</span></div>
+        <div class="calib-row"><span class="calib-route">Kennacraig – Islay</span><span class="calib-pct">–</span></div>
+        <div class="calib-row"><span class="calib-route">Oban – Craignure</span><span class="calib-pct">–</span></div>
+        <div class="calib-row"><span class="calib-route">Oban – Castlebay/Lochboisdale</span><span class="calib-pct">–</span></div>
+      </div>
+      <p style="font-size:.78rem;color:var(--muted);margin-top:8px;line-height:1.6">The result is capped at that route's historical reliability + 10%. The 📊 Calibrated badge only appears when historical data shifts the score by more than 3%. Routes without PDF data use weather-only predictions.</p>
+      <div id="aboutStats" style="display:flex;gap:12px;margin-top:14px;flex-wrap:wrap">
+        <div class="about-stat"><span class="about-stat-num" id="stat-months">–</span><span class="about-stat-lbl">MONTHS OF DATA</span></div>
+        <div class="about-stat"><span class="about-stat-num" id="stat-routes">–</span><span class="about-stat-lbl">ROUTES CALIBRATED</span></div>
+      </div>
+    </div>
+
+    <!-- PER-SAILING -->
+    <div class="about-card">
+      <h3>Individual sailing predictions</h3>
+      <p style="font-size:.85rem;color:var(--muted);line-height:1.65">Each route card shows a timetable where every departure has its own sailing chance, re-calculated for that specific hour. A route might show 90% overall but flag a 15:00 departure at 65% if a squall is forecast that afternoon.</p>
+      <p style="font-size:.85rem;color:var(--muted);line-height:1.65;margin-top:8px">The <strong>next upcoming sailing</strong> is highlighted with a blue border. Cancelled sailings show in red with a strikethrough direction; disrupted sailings show in amber with the disruption reason. Use the <strong>Tomorrow</strong> button in the toolbar to switch all cards to the following day's timetable and risk scores.</p>
+      <p style="font-size:.85rem;color:var(--muted);line-height:1.65;margin-top:8px">Timetables are based on the CalMac Summer 2026 schedule (27 March – 18 October 2026), verified from official CalMac PDFs.</p>
+    </div>
+
+    <!-- DATA SOURCES -->
+    <div class="about-card">
+      <h3>Data sources</h3>
+      <div class="factor-row"><div class="factor-icon">🌤</div><div class="factor-text"><div class="factor-name">Open-Meteo</div><div class="factor-desc">Free, open-source weather API. Provides 48 hours of hourly wind speed, gusts, direction, wave height, swell, visibility and precipitation forecasts. Auto-refreshed every 30 minutes.</div></div></div>
+      <div class="factor-row"><div class="factor-icon">🚨</div><div class="factor-text"><div class="factor-name">CalMac service status API</div><div class="factor-desc">CalMac's own internal GraphQL endpoint, polled automatically on load and every 10 minutes. Returns per-route disruption status, reason, and whether a change is imminent.</div></div></div>
+      <div class="factor-row"><div class="factor-icon">🛳</div><div class="factor-text"><div class="factor-name">AIS vessel tracking (aisstream.io)</div><div class="factor-desc">Live vessel position data from AIS receivers. Used to identify which vessel is currently operating each route.</div></div></div>
+      <div class="factor-row"><div class="factor-icon">📋</div><div class="factor-text"><div class="factor-name">CalMac Reliability PDFs</div><div class="factor-desc">Official monthly performance reports from CalMac's corporate site. Six routes are currently fully calibrated with 72 months of verified data.</div></div></div>
+      <div class="factor-row" style="border-bottom:none"><div class="factor-icon">🗂</div><div class="factor-text"><div class="factor-name">Transport Scotland / FOI data</div><div class="factor-desc">For routes where CalMac PDFs aren't yet in the database, estimates come from Transport Scotland annual reports and published FOI responses.</div></div></div>
+    </div>
+
+    <!-- LIMITATIONS -->
+    <div class="about-card">
+      <h3>Limitations</h3>
+      <p style="font-size:.85rem;color:var(--muted);line-height:1.65">Weather predictions are at the route midpoint — conditions at the terminal or mid-crossing may differ. The model can't predict mechanical breakdowns, crewing issues, or last-minute decisions made by CalMac masters. Always verify with CalMac directly before travelling, especially for essential journeys.</p>
+    </div>
+
+    <!-- DEVELOPER -->
+    <div class="about-card" style="text-align:center">
+      <p style="font-size:.82rem;color:var(--muted);margin:0">Built by <strong>Ross Mackenzie</strong> · <a href="https://willitsail.rossmackenzie.co.uk" style="color:var(--blue)">willitsail.rossmackenzie.co.uk</a></p>
+      <p style="font-size:.75rem;color:var(--muted);margin-top:6px">Not affiliated with CalMac Ferries or Transport Scotland</p>
+    </div>
+
+  </div>
 </main>
 
 <!-- ── SHARE TOAST ── -->
