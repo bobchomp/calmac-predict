@@ -171,6 +171,17 @@ module.exports = async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
+  // ── Test email action ──
+  if (req.query?.action === 'test-email') {
+    const result = await sendDisruptionEmail([{
+      routeKey: 'Ullapool - Stornoway (Lewis)',
+      status:   'disrupted',
+      reason:   'Adverse weather conditions',
+      detail:   'This is a test alert triggered manually. No real disruption exists.',
+    }]);
+    return res.status(200).json({ ok: true, test: true, email: result });
+  }
+
   const results = [];
 
   try {
