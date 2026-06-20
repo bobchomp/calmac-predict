@@ -2,10 +2,17 @@
 // Called by cron-job.org on the 1st of each month via:
 //   GET https://willitsail.rossmackenzie.co.uk/api/ingest-report?secret=<CRON_SECRET>
 //
-// 1. Scrapes the CalMac corporate site for the latest monthly reliability PDF
-// 2. Downloads the PDF and extracts text using pdf-parse
-// 3. Parses route-level cancellation figures from the text
-// 4. Posts structured data to Google Apps Script (action=ingestReport)
+// The CalMac corporate site is JavaScript-rendered, so auto-discovery of new
+// PDFs isn't reliable. Instead, pass the PDF URL directly each month:
+//   GET /api/ingest-report?secret=<SECRET>&url=<PDF_URL>
+//
+// Workflow each month:
+//   1. CalMac publish the new PDF at corporate.calmac.co.uk
+//   2. Copy the PDF link
+//   3. Trigger: /api/ingest-report?secret=...&url=https://corporate.calmac.co.uk/.../report.pdf
+//
+// The cron-job.org monthly trigger (no ?url param) will attempt auto-discovery
+// as a best-effort fallback — update the cron URL when a new report is published.
 
 const SHEET_SCRIPT_URL = process.env.SHEET_SCRIPT_URL || '';
 const CRON_SECRET      = process.env.CRON_SECRET       || '';
@@ -13,22 +20,37 @@ const CRON_SECRET      = process.env.CRON_SECRET       || '';
 const REPORT_INDEX_URL =
   'https://corporate.calmac.co.uk/en-gb/about-us/route-performance-reports/';
 
-// ── Scrape the index page for the most recent PDF link ───────────────────
+// ── Attempt to find a PDF link from the index page ───────────────────────
+// CalMac's corporate site renders via JS so this may not find anything —
+// that's expected. The ?url= param is the reliable path.
 async function findLatestPdfUrl() {
-  const resp = await fetch(REPORT_INDEX_URL, { signal: AbortSignal.timeout(15000) });
+  const resp = await fetch(REPORT_INDEX_URL, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; CalMacBot/1.0)' },
+    signal: AbortSignal.timeout(15000),
+  });
   if (!resp.ok) throw new Error(`Index page ${resp.status}`);
   const html = await resp.text();
 
-  // Find all links ending in .pdf
-  const pdfPattern = /href="([^"]*\.pdf)"/gi;
-  const matches = [...html.matchAll(pdfPattern)].map(m => m[1]);
-  if (!matches.length) throw new Error('No PDF links found on index page');
+  // Look for PDF links in any attribute (href, src, data-url, etc.)
+  const pdfPattern = /(?:href|src|data-[a-z-]+)="([^"]*corporate\.calmac[^"]*\.pdf[^"]*)"/gi;
+  let matches = [...html.matchAll(pdfPattern)].map(m => m[1]);
 
-  // Prefer links with "route-performance" in the name; take the first (most recent)
+  // Fallback: any .pdf link at all
+  if (!matches.length) {
+    matches = [...html.matchAll(/href="([^"]*\.pdf)"/gi)].map(m => m[1]);
+  }
+
+  if (!matches.length) {
+    throw new Error(
+      'CalMac corporate site is JS-rendered — no PDF links in raw HTML. ' +
+      'Trigger manually with ?url=<PDF_URL> after finding the link on ' +
+      'corporate.calmac.co.uk/en-gb/about-us/route-performance-reports/'
+    );
+  }
+
   const relevant = matches.filter(u => /route.performance|reliability/i.test(u));
   const url = relevant[0] || matches[0];
 
-  // Resolve relative URLs
   if (url.startsWith('http')) return url;
   if (url.startsWith('//'))   return 'https:' + url;
   return new URL(url, REPORT_INDEX_URL).href;
@@ -126,8 +148,8 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    // 1. Find the latest PDF
-    const pdfUrl = await findLatestPdfUrl();
+    // 1. Find the latest PDF — accept ?url= to skip auto-discovery
+    const pdfUrl = req.query?.url || await findLatestPdfUrl();
 
     // 2. Download it
     const pdfBuffer = await downloadPdf(pdfUrl);
