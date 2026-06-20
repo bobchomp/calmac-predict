@@ -162,7 +162,8 @@ async function sendHealthAlertEmail(failedChecks, isTest = false) {
       },
       body: JSON.stringify({
         from:    ALERT_FROM,
-        to:      ALERT_TO,
+        to:      ALERT_FROM,
+        bcc:     ALERT_TO,
         subject: isTest
           ? 'Will It Sail — test health alert'
           : `Will It Sail — ${failedChecks.length === 1 ? failedChecks[0].name : `${failedChecks.length} services`} down`,
