@@ -355,69 +355,45 @@ function recordStatus(payload) {
 
 // ════════════════════════════════════════════════════════════
 // NEW: ingestReport — called by api/ingest-report.js monthly
-// Parses extracted PDF rows into the existing RELIABILITY_TAB
-// schema, then re-runs recalculateThresholds so the site
-// immediately benefits from the new data.
+// Each row already carries routeKey, year, month, scheduled,
+// operated, cancelled, diverted, reliability.
+// Deduplicates by routeKey+year+month so re-runs are safe.
 // ════════════════════════════════════════════════════════════
 function ingestReport(payload) {
-  const period = payload.period || '';
-  const rows   = payload.rows   || [];
-  const pdfUrl = payload.pdfUrl || '';
-
+  const rows = payload.rows || [];
   if (rows.length === 0) return { ok: false, reason: 'No rows received' };
-
-  // Parse "May 2026", "may-2026", or "2026-05" into { year, month }
-  const MONTHS = { jan:1,feb:2,mar:3,apr:4,may:5,jun:6,
-                   jul:7,aug:8,sep:9,oct:10,nov:11,dec:12 };
-  let year = null, month = null;
-
-  // Try "Month YYYY" or "month-YYYY"
-  const textMatch = period.match(/([a-z]{3})[a-z]*[-\s](\d{4})/i);
-  if (textMatch) {
-    month = MONTHS[textMatch[1].toLowerCase()];
-    year  = parseInt(textMatch[2], 10);
-  }
-  // Try "YYYY-MM"
-  if (!year) {
-    const numMatch = period.match(/(\d{4})[-_](0?[1-9]|1[0-2])/);
-    if (numMatch) { year = parseInt(numMatch[1]); month = parseInt(numMatch[2]); }
-  }
-  // Fall back to previous month
-  if (!year) {
-    const d = new Date();
-    d.setMonth(d.getMonth() - 1);
-    year  = d.getFullYear();
-    month = d.getMonth() + 1;
-  }
 
   const ss       = SpreadsheetApp.openById(SHEET_ID);
   const relSheet = ss.getSheetByName(RELIABILITY_TAB);
 
-  // Remove any existing rows for this year+month (idempotent re-runs)
-  const existing = relSheet.getDataRange().getValues();
-  for (let i = existing.length - 1; i >= 1; i--) {
-    if (parseInt(existing[i][1]) === year && parseInt(existing[i][2]) === month) {
-      relSheet.deleteRow(i + 1);
+  // Build a set of existing routeKey|year|month keys to avoid duplicates
+  const existing     = relSheet.getDataRange().getValues();
+  const existingKeys = new Set();
+  for (let i = 1; i < existing.length; i++) {
+    if (existing[i][0]) {
+      existingKeys.add(existing[i][0] + '|' + existing[i][1] + '|' + existing[i][2]);
     }
   }
 
-  // Map PDF rows into the existing schema:
+  // Filter duplicates, map to sheet row format:
   //   [routeKey, year, month, scheduled, operated, cancelled, diverted, reliability]
-  const newRows = rows.map(function(r) {
-    const totalCanx = (r.weatherCanx || 0) + (r.technicalCanx || 0) + (r.otherCanx || 0);
-    const scheduled = r.scheduled  || 0;
-    const operated  = Math.max(0, scheduled - totalCanx);
-    return [
-      r.route        || '',
-      year,
-      month,
-      scheduled,
-      operated,
-      totalCanx,
-      0,                       // diverted (not in PDF data)
-      r.reliability  || '',
-    ];
-  }).filter(function(r) { return r[0] && r[3] > 0; }); // skip blank/zero rows
+  const newRows = rows
+    .filter(function(r) {
+      return r.routeKey && r.year && r.month && r.scheduled > 0
+        && !existingKeys.has(r.routeKey + '|' + r.year + '|' + r.month);
+    })
+    .map(function(r) {
+      return [
+        r.routeKey,
+        r.year,
+        r.month,
+        r.scheduled,
+        r.operated   || 0,
+        r.cancelled  || 0,
+        r.diverted   || 0,
+        r.reliability,
+      ];
+    });
 
   if (newRows.length > 0) {
     relSheet.getRange(relSheet.getLastRow() + 1, 1, newRows.length, 8).setValues(newRows);
@@ -427,10 +403,10 @@ function ingestReport(payload) {
   const calcResult = recalculateThresholds();
 
   return {
-    ok:       true,
-    period:   year + '-' + String(month).padStart(2, '0'),
-    inserted: newRows.length,
-    pdfUrl:   pdfUrl,
+    ok:                 true,
+    received:           rows.length,
+    inserted:           newRows.length,
+    skipped_duplicates: rows.length - newRows.length,
     thresholds_updated: calcResult.routes_calculated,
   };
 }
