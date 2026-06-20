@@ -1871,7 +1871,7 @@ function buildCard(r, i) {
         })()}
       </div>
     </div>
-    ${disruption?.timetableNotice ? `<div class="timetable-notice" onclick="openTimetableNotice(${JSON.stringify(r.name)})">
+    ${disruption?.timetableNotice ? `<div class="timetable-notice" onclick='openTimetableNotice(${JSON.stringify(r.name)})'>
       <div class="timetable-notice-body">
         <div class="timetable-notice-title">📋 ${disruption.timetableNotice.title}</div>
         ${disruption.timetableNotice.detail ? `<div class="timetable-notice-detail">${(d => d.length > 120 ? d.substring(0, 120).trimEnd() + '…' : d)(disruption.timetableNotice.detail.replace(/https?:\/\/\S+/g, '').replace(/\s{2,}/g, ' ').trim())}</div>` : ''}
