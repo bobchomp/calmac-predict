@@ -2,12 +2,18 @@
 // 1. Fetches live CalMac service status via GraphQL
 // 2. Records any cancellations/disruptions to Google Sheet (ground truth log)
 // 3. Sends push notifications to subscribers of affected routes
+// 4. Emails teddaharry@gmail.com + ross.mackenzie1@invernessroyalacademy.org.uk
+//    when NEW disruptions appear (first seen, not every day ongoing)
 
 const BASE_URL = process.env.CRON_BASE_URL || 'https://calmac-predict.vercel.app';
 
 const KV_URL   = process.env.UPSTASH_REDIS_REST_URL   || '';
 const KV_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || '';
-const SHEET_URL = process.env.FEEDBACK_SHEET_URL || ''; // reuse same sheet endpoint
+const SHEET_URL = process.env.FEEDBACK_SHEET_URL || '';
+
+const RESEND_API_KEY  = process.env.RESEND_API_KEY || '';
+const ALERT_FROM      = 'noreply@rossmackenzie.co.uk';
+const ALERT_TO        = ['teddaharry@gmail.com', 'ross.mackenzie1@invernessroyalacademy.org.uk'];
 
 const NOTIFY_THRESHOLD = 70;
 
@@ -61,6 +67,75 @@ const ROUTE_COORDS = {
   'Mallaig - Small Isles':                             { lat: 56.98, lon: -6.10 },
   'Tobermory - Kilchoan':                              { lat: 56.69, lon: -6.07 },
 };
+
+// ── Email disruption alerts via Resend ──────────────────────────────────
+async function sendDisruptionEmail(newDisruptions) {
+  if (!RESEND_API_KEY || !newDisruptions.length) return null;
+
+  const rows = newDisruptions.map(d => {
+    const statusLabel = d.status === 'cancelled' ? 'Cancelled' : 'Disrupted';
+    const detail = d.detail ? `<p style="margin:4px 0 0;color:#555;font-size:13px">${d.detail}</p>` : '';
+    return `
+      <tr>
+        <td style="padding:10px 12px;border-bottom:1px solid #eee;font-weight:600">${d.routeKey}</td>
+        <td style="padding:10px 12px;border-bottom:1px solid #eee">
+          <span style="background:${d.status === 'cancelled' ? '#fee2e2' : '#fef3c7'};color:${d.status === 'cancelled' ? '#b91c1c' : '#92400e'};padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600">${statusLabel}</span>
+        </td>
+        <td style="padding:10px 12px;border-bottom:1px solid #eee;font-size:13px;color:#333">
+          ${d.reason || ''}${detail}
+        </td>
+      </tr>`;
+  }).join('');
+
+  const html = `
+    <div style="font-family:system-ui,-apple-system,sans-serif;max-width:640px;margin:0 auto">
+      <div style="background:#1e3a5f;color:#fff;padding:20px 24px;border-radius:8px 8px 0 0">
+        <h1 style="margin:0;font-size:20px">⚠️ CalMac Disruption Alert</h1>
+        <p style="margin:4px 0 0;opacity:.8;font-size:13px">${new Date().toLocaleString('en-GB', { timeZone: 'Europe/London', dateStyle: 'full', timeStyle: 'short' })}</p>
+      </div>
+      <div style="border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;padding:0">
+        <p style="margin:16px 20px 12px;color:#374151;font-size:14px">
+          ${newDisruptions.length === 1 ? '1 new disruption' : `${newDisruptions.length} new disruptions`} reported on CalMac routes:
+        </p>
+        <table style="width:100%;border-collapse:collapse;font-size:14px">
+          <thead>
+            <tr style="background:#f9fafb">
+              <th style="padding:8px 12px;text-align:left;color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #e5e7eb">Route</th>
+              <th style="padding:8px 12px;text-align:left;color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #e5e7eb">Status</th>
+              <th style="padding:8px 12px;text-align:left;color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #e5e7eb">Reason / Detail</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <p style="margin:16px 20px;font-size:13px;color:#6b7280">
+          <a href="https://calmac-predict.vercel.app" style="color:#1e3a5f">View live status →</a>
+        </p>
+      </div>
+    </div>`;
+
+  try {
+    const resp = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: ALERT_FROM,
+        to:   ALERT_TO,
+        subject: newDisruptions.length === 1
+          ? `CalMac disruption: ${newDisruptions[0].routeKey}`
+          : `CalMac disruptions: ${newDisruptions.length} routes affected`,
+        html,
+      }),
+      signal: AbortSignal.timeout(10000),
+    });
+    const data = await resp.json().catch(() => ({}));
+    return { ok: resp.ok, status: resp.status, id: data.id, error: data.message };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
 
 // ── Write a cancellation record to Google Sheet ────────────────────────
 async function recordToSheet(route, calMacStatus, predictedChance) {
@@ -159,6 +234,43 @@ module.exports = async function handler(req, res) {
       }
     }
 
+    // ── Step 4: email alerts for NEW disruptions (first appearance only) ──
+    const emailCandidates = [];
+
+    for (const route of (statusData.routes || [])) {
+      const routeKey   = route.routeKey;
+      if (!routeKey) continue;
+      const alertKey   = `alert_sent:${routeKey.replace(/[^a-z0-9]/gi, '_')}`;
+      const isDisrupted = route.status && !['normal', 'unknown'].includes(route.status);
+
+      if (isDisrupted) {
+        const sentRecord = await kvGet(alertKey);
+        // Use status as dedup key — email again only if the status type changes
+        const titleNow   = route.status;
+        if (!sentRecord || sentRecord.title !== titleNow) {
+          await kvSet(alertKey, { title: titleNow, sentAt: Date.now() });
+          // Extract the best available detail from sailingStatuses
+          const allEntries  = Object.values(route.sailingStatuses || {});
+          const wildcard    = route.sailingStatuses?.['*'];
+          const best        = wildcard || allEntries[0] || {};
+          emailCandidates.push({
+            routeKey,
+            status: route.status,
+            reason: best.reason || '',
+            detail: best.detail ? best.detail.substring(0, 300) : '',
+          });
+        }
+      } else {
+        // Route back to normal — clear the sent record so we email again next disruption
+        if (KV_URL) await kvSet(alertKey, null);
+      }
+    }
+
+    let emailResult = null;
+    if (emailCandidates.length > 0) {
+      emailResult = await sendDisruptionEmail(emailCandidates);
+    }
+
     // ── Check for new timetable notices (amended timetable / vessel substitution) ──
     for (const route of (statusData.routes || [])) {
       const routeKey = route.routeKey;
@@ -207,6 +319,7 @@ module.exports = async function handler(req, res) {
       disrupted: disrupted.length,
       recorded: results.filter(r => r.recorded).length,
       results,
+      emailAlerts: emailResult ? { sent: emailCandidates.length, result: emailResult } : { sent: 0 },
       timetables: timetableResult,
     });
 
