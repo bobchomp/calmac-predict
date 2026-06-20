@@ -212,13 +212,100 @@ module.exports = async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  // ── Test email action ──
+  // ── Test email action — returns an HTML page ──
   if (req.query?.action === 'test-email') {
-    const result = await sendHealthAlertEmail([
-      { name: 'Weather API',       detail: 'HTTP 503 — test alert only, no real error' },
-      { name: 'CalMac Status API', detail: 'API unavailable — test alert only, no real error' },
-    ], true);
-    return res.status(200).json({ ok: true, test: true, email: result });
+    const customTo = (req.query?.to || '').trim();
+    let sendResult = null;
+
+    if (customTo) {
+      // One-off send to a specific address
+      const saved = ALERT_TO;
+      // Temporarily override recipients for this send
+      const resp = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from:    ALERT_FROM,
+          to:      customTo,
+          subject: 'Will It Sail — one-off test email',
+          html: `<div style="font-family:system-ui,sans-serif;padding:24px;max-width:480px">
+            <h2 style="margin:0 0 8px">Test email from Will It Sail</h2>
+            <p style="color:#555">This was sent manually to <strong>${customTo}</strong> using the test panel.</p>
+            <p style="color:#555;font-size:13px">If you received this, the Resend integration is working correctly.</p>
+          </div>`,
+        }),
+        signal: AbortSignal.timeout(10000),
+      }).catch(e => ({ ok: false, _err: e.message }));
+      const data = resp.json ? await resp.json().catch(() => ({})) : {};
+      sendResult = { to: customTo, ok: resp.ok ?? false, id: data.id, error: data.message || resp._err };
+    } else {
+      // Default test — fake health alert to the normal BCC recipients
+      sendResult = await sendHealthAlertEmail([
+        { name: 'Weather API',       detail: 'HTTP 503 — test alert only, no real error' },
+        { name: 'CalMac Status API', detail: 'API unavailable — test alert only, no real error' },
+      ], true);
+      if (sendResult) sendResult.to = ALERT_TO.join(', ') + ' (BCC)';
+    }
+
+    const resultBox = sendResult
+      ? sendResult.ok
+        ? `<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:12px 16px;margin-bottom:20px;color:#166534">
+            ✓ Sent successfully${sendResult.id ? ` · ID: <code>${sendResult.id}</code>` : ''}<br>
+            <span style="font-size:13px;opacity:.8">To: ${sendResult.to || '—'}</span>
+           </div>`
+        : `<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;padding:12px 16px;margin-bottom:20px;color:#991b1b">
+            ✗ Failed: ${sendResult.error || 'unknown error'}
+           </div>`
+      : '';
+
+    const pageSecret = encodeURIComponent(secret || '');
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Will It Sail — Email Test</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 480px; margin: 48px auto; padding: 0 20px; color: #111; }
+    h1 { font-size: 1.2rem; margin: 0 0 4px; }
+    p.sub { color: #6b7280; font-size: 13px; margin: 0 0 24px; }
+    .card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+    .card h2 { font-size: .95rem; margin: 0 0 12px; color: #374151; }
+    .card p { font-size: 13px; color: #6b7280; margin: 0 0 12px; }
+    input[type=email] { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; margin-bottom: 10px; }
+    button { background: #1e3a5f; color: #fff; border: none; border-radius: 6px; padding: 9px 18px; font-size: 14px; cursor: pointer; }
+    button:hover { background: #2d5282; }
+    a.btn { display:inline-block; background:#374151; color:#fff; border-radius:6px; padding:9px 18px; font-size:14px; text-decoration:none; }
+    a.btn:hover { background:#1f2937; }
+  </style>
+</head>
+<body>
+  <h1>Will It Sail — Email Test</h1>
+  <p class="sub">Send test alerts to verify Resend is working.</p>
+
+  ${resultBox}
+
+  <div class="card">
+    <h2>Standard test</h2>
+    <p>Sends a fake health-alert email to the normal BCC recipients (teddaharry@gmail.com &amp; ross.mackenzie1@invernessroyalacademy.org.uk).</p>
+    <a class="btn" href="?secret=${pageSecret}&action=test-email">Send test alert</a>
+  </div>
+
+  <div class="card">
+    <h2>One-off send</h2>
+    <p>Send a plain test email to any address.</p>
+    <form method="GET" action="">
+      <input type="hidden" name="secret" value="${secret || ''}">
+      <input type="hidden" name="action" value="test-email">
+      <input type="email" name="to" placeholder="recipient@example.com" required>
+      <button type="submit">Send</button>
+    </form>
+  </div>
+</body>
+</html>`;
+
+    res.setHeader('Content-Type', 'text/html');
+    return res.status(200).send(html);
   }
 
   const results = [];
