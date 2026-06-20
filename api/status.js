@@ -89,43 +89,18 @@ function detailImpliesCancelled(detail) {
   return lower.includes('cancel') || lower.includes('no service') || lower.includes('not operat');
 }
 
-// Clean CalMac markdown detail text into safe HTML.
-// Bare URLs and [text](url) links become <a> tags so the modal can render them clickable.
-// The card banner strips tags client-side before truncating.
+// Clean CalMac markdown detail text to readable plain text, keeping bare URLs
+// as plain text so the modal can linkify them client-side.
 function cleanDetail(detail) {
   if (!detail) return '';
-
   let t = detail;
-
-  // [text](url) → <a> tag
-  t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, (_, txt, url) =>
-    `<a href="${url.replace(/"/g, '%22')}" target="_blank" rel="noopener noreferrer">${txt}</a>`
-  );
-
-  // [text][n] reference links — keep text, drop ref marker (can't resolve refs)
-  t = t.replace(/\[([^\]]+)\]\[\d+\]/g, '$1');
-
-  // [n]: URL reference definitions — convert bare URL to <a> then remove marker
-  t = t.replace(/\[\d+\]:\s*(https?:\/\/\S+)/g, (_, url) =>
-    `<a href="${url.replace(/"/g, '%22')}" target="_blank" rel="noopener noreferrer">${url}</a>`
-  );
-
-  // Remaining bare URLs (deduplicated) → <a> tags
-  const seen = new Set();
-  t = t.replace(/https?:\/\/[^\s<>"]+/g, url => {
-    if (seen.has(url)) return '';
-    seen.add(url);
-    const label = url.replace(/^https?:\/\/(www\.)?/, '').replace(/#.*$/, '');
-    return `<a href="${url.replace(/"/g, '%22')}" target="_blank" rel="noopener noreferrer">${label}</a>`;
-  });
-
-  // Strip remaining [n] markers, markdown bold/italic
-  t = t.replace(/\[\d+\]/g, '').replace(/\*\*/g, '').replace(/\*/g, '');
-
-  // Collapse extra whitespace
+  t = t.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1'); // [text](url) → text (drop url)
+  t = t.replace(/\[([^\]]+)\]\[\d+\]/g,   '$1'); // [text][n]   → text
+  t = t.replace(/\[\d+\]:\s*\S+/g,         '');  // [n]: url definitions → remove
+  t = t.replace(/\[\d+\]/g,                '');  // stray [n] markers → remove
+  t = t.replace(/\*\*/g, '').replace(/\*/g, ''); // bold / italic
   t = t.replace(/[ \t]{2,}/g, ' ').trim();
-
-  return t.substring(0, 3000);
+  return t.substring(0, 2000);
 }
 
 // Scan all routeStatus entries for amended timetable / vessel substitution notices.

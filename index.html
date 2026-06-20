@@ -104,7 +104,7 @@
     .timetable-notice-detail{font-size:.75rem;color:#1976d2;margin-top:3px;line-height:1.4;}
 
     /* Links inside CalMac advisory blocks (modal) */
-    .calmac-detail a{color:inherit;text-decoration:underline;word-break:break-all;}
+    .calmac-detail a{color:inherit;font-weight:600;text-decoration:underline;word-break:break-word;}
     .calmac-detail a:hover{opacity:.75;}
 
     /* Weather row */
@@ -1848,7 +1848,7 @@ function buildCard(r, i) {
     </div>
     ${disruption?.timetableNotice ? `<div class="timetable-notice">
       <div class="timetable-notice-title">📋 ${disruption.timetableNotice.title}</div>
-      ${disruption.timetableNotice.detail ? `<div class="timetable-notice-detail">${(d => d.length > 120 ? d.substring(0, 120).trimEnd() + '…' : d)(disruption.timetableNotice.detail.replace(/<[^>]+>/g, ''))}</div>` : ''}
+      ${disruption.timetableNotice.detail ? `<div class="timetable-notice-detail">${(d => d.length > 120 ? d.substring(0, 120).trimEnd() + '…' : d)(disruption.timetableNotice.detail.replace(/https?:\/\/\S+/g, '').replace(/\s{2,}/g, ' ').trim())}</div>` : ''}
     </div>` : ''}
     <div class="card-weather ${wc}">
       <div class="wx-item">💨 <strong>${(_useTomorrow && r.tomorrow?.maxGustMph !== null ? r.tomorrow.maxGustMph : r.maxGustMph) !== undefined ? (_useTomorrow && r.tomorrow?.maxGustMph !== null ? r.tomorrow.maxGustMph : r.maxGustMph)+' mph' : '–'}</strong>${r.windDirDeg !== null && r.windDirDeg !== undefined ? ` <span style="opacity:.6;font-size:.78rem">${windDirLabel(r.windDirDeg)}</span>` : ''}</div>
@@ -1901,6 +1901,18 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
 document.getElementById('refreshBtn').addEventListener('click', fetchData);
 setInterval(fetchData, 30 * 60 * 1000);
 setInterval(loadDisruptionBanner, 10 * 60 * 1000); // refresh CalMac disruptions every 10 min
+
+// Convert plain-text URLs in CalMac advisory text to clickable links.
+// Applied client-side in the modal only — cards show stripped plain text.
+function linkifyDetail(text) {
+  const seen = new Set();
+  return (text || '').replace(/https?:\/\/[^\s]+/g, url => {
+    if (seen.has(url)) return '';
+    seen.add(url);
+    const label = url.replace(/^https?:\/\/(www\.)?/, '').replace(/[/#?].*$/, '');
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+  });
+}
 
 // ── MODAL ──
 function openModal(routeName, sailingTime) {
@@ -2040,7 +2052,7 @@ function openModal(routeName, sailingTime) {
       : sailingInfo.status === 'amber'
         ? 'Be Aware — CalMac advisory'
         : `Disrupted — ${sailingInfo.reason || 'CalMac advisory'}`;
-    const detail = (sailingInfo.detail || '').trim();
+    const detail = linkifyDetail((sailingInfo.detail || '').trim());
     const reason = sailingInfo.reason ? `<div style="font-size:.75rem;color:${col};margin-top:6px;opacity:.85">${reasonIcon} Reason: <strong>${sailingInfo.reason}</strong></div>` : '';
     return `<div style="background:${bg};border:1.5px solid ${bdr};border-radius:10px;padding:12px 14px;margin-bottom:16px">
       <div style="font-weight:700;color:${col};font-size:.9rem;margin-bottom:4px">${icon} ${title}</div>
