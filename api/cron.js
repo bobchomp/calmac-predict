@@ -68,47 +68,87 @@ const ROUTE_COORDS = {
   'Tobermory - Kilchoan':                              { lat: 56.69, lon: -6.07 },
 };
 
-// ── Email disruption alerts via Resend ──────────────────────────────────
-async function sendDisruptionEmail(newDisruptions) {
-  if (!RESEND_API_KEY || !newDisruptions.length) return null;
+// ── App health checks (mirrors the Status tab in the UI) ─────────────────
+// Returns array of failed checks: { name, detail }
+// Push Notifications and Service Worker are client-side only — skipped here.
+async function runHealthChecks(statusData) {
+  const failed = [];
 
-  const rows = newDisruptions.map(d => {
-    const statusLabel = d.status === 'cancelled' ? 'Cancelled' : 'Disrupted';
-    const detail = d.detail ? `<p style="margin:4px 0 0;color:#555;font-size:13px">${d.detail}</p>` : '';
-    return `
-      <tr>
-        <td style="padding:10px 12px;border-bottom:1px solid #eee;font-weight:600">${d.routeKey}</td>
-        <td style="padding:10px 12px;border-bottom:1px solid #eee">
-          <span style="background:${d.status === 'cancelled' ? '#fee2e2' : '#fef3c7'};color:${d.status === 'cancelled' ? '#b91c1c' : '#92400e'};padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600">${statusLabel}</span>
-        </td>
-        <td style="padding:10px 12px;border-bottom:1px solid #eee;font-size:13px;color:#333">
-          ${d.reason || ''}${detail}
-        </td>
-      </tr>`;
-  }).join('');
+  // 1. Weather API
+  try {
+    const t0 = Date.now();
+    const r  = await fetch(
+      'https://api.open-meteo.com/v1/forecast?latitude=57.0&longitude=-5.8&hourly=windspeed_10m&forecast_days=1',
+      { signal: AbortSignal.timeout(8000) }
+    );
+    if (!r.ok) failed.push({ name: 'Weather API', detail: `HTTP ${r.status} — weather data unavailable` });
+    else {
+      const ms  = Date.now() - t0;
+      const j   = await r.json().catch(() => null);
+      const pts = j?.hourly?.windspeed_10m?.length || 0;
+      if (pts === 0) failed.push({ name: 'Weather API', detail: `Open-Meteo responded (${ms}ms) but returned no hourly data` });
+    }
+  } catch (e) {
+    failed.push({ name: 'Weather API', detail: e.message });
+  }
+
+  // 2. Marine / Wave API (amber in UI, but still worth alerting if fully down)
+  try {
+    const r = await fetch(
+      'https://marine-api.open-meteo.com/v1/marine?latitude=57.0&longitude=-5.8&hourly=wave_height&forecast_days=1',
+      { signal: AbortSignal.timeout(8000) }
+    );
+    if (!r.ok) failed.push({ name: 'Marine / Wave API', detail: `HTTP ${r.status} — wave predictions unavailable` });
+  } catch (e) {
+    failed.push({ name: 'Marine / Wave API', detail: e.message });
+  }
+
+  // 3. CalMac Status API — already fetched, just inspect the result
+  if (!statusData || statusData.fallback === true) {
+    failed.push({
+      name:   'CalMac Status API',
+      detail: statusData?.error
+        ? `API unavailable: ${statusData.error}`
+        : 'API unavailable — app is showing fallback link to CalMac website',
+    });
+  } else if (!statusData.routes?.length) {
+    failed.push({ name: 'CalMac Status API', detail: 'API responded but returned 0 routes' });
+  }
+
+  return failed;
+}
+
+// ── Email health alert via Resend ─────────────────────────────────────────
+async function sendHealthAlertEmail(failedChecks, isTest = false) {
+  if (!RESEND_API_KEY || !failedChecks.length) return null;
+
+  const rows = failedChecks.map(c => `
+    <tr>
+      <td style="padding:10px 12px;border-bottom:1px solid #eee;font-weight:600">${c.name}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid #eee;font-size:13px;color:#b91c1c">${c.detail}</td>
+    </tr>`).join('');
 
   const html = `
-    <div style="font-family:system-ui,-apple-system,sans-serif;max-width:640px;margin:0 auto">
-      <div style="background:#1e3a5f;color:#fff;padding:20px 24px;border-radius:8px 8px 0 0">
-        <h1 style="margin:0;font-size:20px">⚠️ CalMac Disruption Alert</h1>
+    <div style="font-family:system-ui,-apple-system,sans-serif;max-width:600px;margin:0 auto">
+      <div style="background:#7f1d1d;color:#fff;padding:20px 24px;border-radius:8px 8px 0 0">
+        <h1 style="margin:0;font-size:20px">🚨 Will It Sail — App Error${isTest ? ' (test)' : ''}</h1>
         <p style="margin:4px 0 0;opacity:.8;font-size:13px">${new Date().toLocaleString('en-GB', { timeZone: 'Europe/London', dateStyle: 'full', timeStyle: 'short' })}</p>
       </div>
-      <div style="border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;padding:0">
+      <div style="border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
         <p style="margin:16px 20px 12px;color:#374151;font-size:14px">
-          ${newDisruptions.length === 1 ? '1 new disruption' : `${newDisruptions.length} new disruptions`} reported on CalMac routes:
+          ${failedChecks.length === 1 ? '1 service' : `${failedChecks.length} services`} ${isTest ? 'would be' : 'are'} reporting errors:
         </p>
         <table style="width:100%;border-collapse:collapse;font-size:14px">
           <thead>
             <tr style="background:#f9fafb">
-              <th style="padding:8px 12px;text-align:left;color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #e5e7eb">Route</th>
-              <th style="padding:8px 12px;text-align:left;color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #e5e7eb">Status</th>
-              <th style="padding:8px 12px;text-align:left;color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #e5e7eb">Reason / Detail</th>
+              <th style="padding:8px 12px;text-align:left;color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #e5e7eb">Service</th>
+              <th style="padding:8px 12px;text-align:left;color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #e5e7eb">Error</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>
         <p style="margin:16px 20px;font-size:13px;color:#6b7280">
-          <a href="https://calmac-predict.vercel.app" style="color:#1e3a5f">View live status →</a>
+          <a href="https://willitsail.rossmackenzie.co.uk/#status" style="color:#7f1d1d">View Status page →</a>
         </p>
       </div>
     </div>`;
@@ -121,11 +161,11 @@ async function sendDisruptionEmail(newDisruptions) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: ALERT_FROM,
-        to:   ALERT_TO,
-        subject: newDisruptions.length === 1
-          ? `CalMac disruption: ${newDisruptions[0].routeKey}`
-          : `CalMac disruptions: ${newDisruptions.length} routes affected`,
+        from:    ALERT_FROM,
+        to:      ALERT_TO,
+        subject: isTest
+          ? 'Will It Sail — test health alert'
+          : `Will It Sail — ${failedChecks.length === 1 ? failedChecks[0].name : `${failedChecks.length} services`} down`,
         html,
       }),
       signal: AbortSignal.timeout(10000),
@@ -173,12 +213,10 @@ module.exports = async function handler(req, res) {
 
   // ── Test email action ──
   if (req.query?.action === 'test-email') {
-    const result = await sendDisruptionEmail([{
-      routeKey: 'Ullapool - Stornoway (Lewis)',
-      status:   'disrupted',
-      reason:   'Adverse weather conditions',
-      detail:   'This is a test alert triggered manually. No real disruption exists.',
-    }]);
+    const result = await sendHealthAlertEmail([
+      { name: 'Weather API',       detail: 'HTTP 503 — test alert only, no real error' },
+      { name: 'CalMac Status API', detail: 'API unavailable — test alert only, no real error' },
+    ], true);
     return res.status(200).json({ ok: true, test: true, email: result });
   }
 
@@ -245,41 +283,21 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // ── Step 4: email alerts for NEW disruptions (first appearance only) ──
-    const emailCandidates = [];
-
-    for (const route of (statusData.routes || [])) {
-      const routeKey   = route.routeKey;
-      if (!routeKey) continue;
-      const alertKey   = `alert_sent:${routeKey.replace(/[^a-z0-9]/gi, '_')}`;
-      const isDisrupted = route.status && !['normal', 'unknown'].includes(route.status);
-
-      if (isDisrupted) {
-        const sentRecord = await kvGet(alertKey);
-        // Use status as dedup key — email again only if the status type changes
-        const titleNow   = route.status;
-        if (!sentRecord || sentRecord.title !== titleNow) {
-          await kvSet(alertKey, { title: titleNow, sentAt: Date.now() });
-          // Extract the best available detail from sailingStatuses
-          const allEntries  = Object.values(route.sailingStatuses || {});
-          const wildcard    = route.sailingStatuses?.['*'];
-          const best        = wildcard || allEntries[0] || {};
-          emailCandidates.push({
-            routeKey,
-            status: route.status,
-            reason: best.reason || '',
-            detail: best.detail ? best.detail.substring(0, 300) : '',
-          });
-        }
-      } else {
-        // Route back to normal — clear the sent record so we email again next disruption
-        if (KV_URL) await kvSet(alertKey, null);
-      }
-    }
-
+    // ── Step 4: health check — email if any service is broken ──
+    const failedChecks = await runHealthChecks(statusData);
     let emailResult = null;
-    if (emailCandidates.length > 0) {
-      emailResult = await sendDisruptionEmail(emailCandidates);
+
+    if (failedChecks.length > 0 && KV_URL) {
+      // Dedup: store a fingerprint of which services are failing; only email when it changes
+      const fingerprint = failedChecks.map(c => c.name).sort().join(',');
+      const lastAlert   = await kvGet('health_alert_sent');
+      if (lastAlert?.fingerprint !== fingerprint) {
+        await kvSet('health_alert_sent', { fingerprint, sentAt: Date.now() });
+        emailResult = await sendHealthAlertEmail(failedChecks);
+      }
+    } else if (failedChecks.length === 0 && KV_URL) {
+      // All clear — reset so we email again if something breaks later
+      await kvSet('health_alert_sent', null);
     }
 
     // ── Check for new timetable notices (amended timetable / vessel substitution) ──
@@ -330,7 +348,7 @@ module.exports = async function handler(req, res) {
       disrupted: disrupted.length,
       recorded: results.filter(r => r.recorded).length,
       results,
-      emailAlerts: emailResult ? { sent: emailCandidates.length, result: emailResult } : { sent: 0 },
+      healthChecks: { failed: failedChecks.length, checks: failedChecks, emailSent: !!emailResult, emailResult },
       timetables: timetableResult,
     });
 
