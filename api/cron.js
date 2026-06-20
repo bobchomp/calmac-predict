@@ -191,11 +191,23 @@ module.exports = async function handler(req, res) {
       }
     }
 
+    // ── Check for new seasonal timetable PDFs on calmac.co.uk ────────────
+    let timetableResult = null;
+    try {
+      const ttResp = await fetch(`${BASE_URL}/api/check-timetables?secret=${encodeURIComponent(secret || '')}`, {
+        signal: AbortSignal.timeout(55000),
+      });
+      timetableResult = ttResp.ok ? await ttResp.json() : { error: `HTTP ${ttResp.status}` };
+    } catch (err) {
+      timetableResult = { error: err.message };
+    }
+
     return res.status(200).json({
       ok: true,
       disrupted: disrupted.length,
       recorded: results.filter(r => r.recorded).length,
       results,
+      timetables: timetableResult,
     });
 
   } catch (err) {

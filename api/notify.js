@@ -103,6 +103,51 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({ ok: true });
   }
 
+  // ── BROADCAST — send to every unique subscriber across all routes ──
+  if (action === 'broadcast') {
+    if (!KV_URL || !VAPID_PUBLIC) return res.status(200).json({ ok: true, sent: 0, note: 'Push not configured' });
+    const { title, message, url } = body || {};
+
+    // Collect all subs:* keys then deduplicate subscriptions by endpoint
+    const allKeys  = await kvKeys('subs:*');
+    const subMap   = new Map(); // endpoint → subscription object
+    for (const key of allKeys) {
+      const subs = (await kvGet(key)) || [];
+      for (const sub of subs) {
+        if (sub?.endpoint) subMap.set(sub.endpoint, sub);
+      }
+    }
+    const allSubs = [...subMap.values()];
+    if (!allSubs.length) return res.status(200).json({ ok: true, sent: 0 });
+
+    const payload = {
+      title: title || '📅 Will It Sail',
+      body:  message || 'New update from CalMac.',
+      icon:  '/icon-120.png',
+      badge: '/icon-120.png',
+      data:  { url: url || 'https://calmac-predict.vercel.app' },
+    };
+
+    let sent = 0;
+    const expiredEndpoints = [];
+    for (const sub of allSubs) {
+      const result = await sendPush(sub, payload);
+      if (result === true)      sent++;
+      if (result === 'expired') expiredEndpoints.push(sub.endpoint);
+    }
+
+    // Clean up expired subscriptions from every route key
+    if (expiredEndpoints.length) {
+      for (const key of allKeys) {
+        const subs = (await kvGet(key)) || [];
+        const cleaned = subs.filter(s => !expiredEndpoints.includes(s.endpoint));
+        if (cleaned.length !== subs.length) await kvSet(key, cleaned);
+      }
+    }
+
+    return res.status(200).json({ ok: true, sent, expired: expiredEndpoints.length, total: allSubs.length });
+  }
+
   // ── SEND (called by cron) ──
   if (action === 'send') {
     if (!route) return res.status(400).json({ error: 'route required' });
