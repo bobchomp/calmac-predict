@@ -21,17 +21,19 @@ const CRON_SECRET      = process.env.CRON_SECRET       || '';
 
 const CORPORATE_BASE = 'https://corporate.calmac.co.uk/en-gb/about-us/route-performance-reports';
 
-// Maps our 22 internal route keys → corporate site URL slugs.
-// Slugs are guessed from the confirmed pattern (oban-colonsay).
-// Any that return 404 will appear in the response "failed" list so you can correct them.
+// Maps route keys → corporate site URL slugs (confirmed working).
+// Slugs verified against corporate.calmac.co.uk/en-gb/about-us/route-performance-reports/[slug]/
+// Routes omitted here have no CalMac performance page:
+//   - Troon - Brodick (Arran): seasonal service, not reported separately
+//   - Seil - Luing: operated by Argyll & Bute Council, not CalMac
+//   - Port Askaig - Feolin (Jura): operated by Argyll & Bute Council, not CalMac
 const ROUTE_SLUGS = {
   'Ardrossan - Brodick (Arran)':                       'ardrossan-brodick',
-  'Troon - Brodick (Arran)':                           'troon-brodick',
-  'Kennacraig - Port Ellen / Port Askaig (Islay)':     'kennacraig-port-ellen-port-askaig',
+  'Kennacraig - Port Ellen / Port Askaig (Islay)':     'kennacraig-islay',
   'Oban - Craignure (Mull)':                           'oban-craignure',
   'Oban - Coll / Tiree':                               'oban-coll-tiree',
   'Oban - Colonsay':                                   'oban-colonsay',
-  'Oban - Castlebay / Lochboisdale':                   'oban-castlebay-lochboisdale',
+  'Oban - Castlebay / Lochboisdale':                   'oban-castlebaylochboisdale',
   'Mallaig - Armadale (Skye)':                         'mallaig-armadale',
   'Ullapool - Stornoway (Lewis)':                      'ullapool-stornoway',
   'Uig - Tarbert / Lochmaddy':                         'uig-tarbert-lochmaddy',
@@ -39,14 +41,12 @@ const ROUTE_SLUGS = {
   'Wemyss Bay - Rothesay (Bute)':                      'wemyss-bay-rothesay',
   'Colintraive - Rhubodach (Bute)':                    'colintraive-rhubodach',
   'Largs - Cumbrae Slip':                              'largs-cumbrae',
-  'Tarbert - Portavadie':                              'tarbert-portavadie',
+  'Tarbert - Portavadie':                              'tarbert-loch-fyne-portavadie',
   'Claonaig - Lochranza (Arran)':                      'claonaig-lochranza',
   'Tobermory - Kilchoan':                              'tobermory-kilchoan',
   'Fishnish - Lochaline':                              'fishnish-lochaline',
   'Mallaig - Small Isles':                             'mallaig-small-isles',
   'Oban - Lismore':                                    'oban-lismore',
-  'Seil - Luing':                                      'seil-luing',
-  'Port Askaig - Feolin (Jura)':                       'port-askaig-feolin',
 };
 
 const MONTH_NAMES = {
