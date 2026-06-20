@@ -1934,8 +1934,12 @@ function openModal(routeName, sailingTime) {
   const hm = r.marineData || null;
 
   // These are the exact values calcHourlyRisk uses (m/s converted to mph)
-  const gust = (((hw.windgusts_10m || [])[h] ?? (hw.windspeed_10m || [])[h]) ?? 0) * 2.237;
-  const wind = ((hw.windspeed_10m || [])[h] ?? 0) * 2.237;
+  const rawGustMs  = (hw.windgusts_10m || [])[h];   // null = missing gust data
+  const rawWindMs  = (hw.windspeed_10m || [])[h];   // null = missing wind data
+  const gustMs     = rawGustMs != null ? rawGustMs : (rawWindMs ?? 0);
+  const gust = gustMs * 2.237;
+  const wind = (rawWindMs ?? 0) * 2.237;
+  const hasWindData = rawWindMs != null;
   const waveM = hm ? ((hm.wave_height || [])[h] ?? r.maxWaveM) : r.maxWaveM;
   const vis   = (hw.visibility || [])[h] ?? r.minVisM;
   const code  = (hw.weathercode || [])[h] ?? r.weatherCode ?? 0;
@@ -1943,12 +1947,13 @@ function openModal(routeName, sailingTime) {
   const isTidal = TIDAL_ROUTES.has(r.name);
   const effThreshold = profile.threshold * season;
 
-  // Wind score — identical to calcHourlyRisk
+  // Wind score — must exactly match calcHourlyRisk thresholds
   const gustRatio = gust / effThreshold;
   let windScore = 0;
-  if      (gustRatio >= 1.1)  windScore = 40;
-  else if (gustRatio >= 0.9)  windScore = 30;
-  else if (gustRatio >= 0.75) windScore = 18;
+  if      (gustRatio >= 1.2)  windScore = 40;
+  else if (gustRatio >= 1.0)  windScore = 34;
+  else if (gustRatio >= 0.9)  windScore = 26;
+  else if (gustRatio >= 0.75) windScore = 16;
   else if (gustRatio >= 0.6)  windScore = 8;
   else if (gustRatio >= 0.45) windScore = 3;
 
@@ -2061,9 +2066,16 @@ function openModal(routeName, sailingTime) {
     </div>`;
   })() : '';
 
+  // Wind reason text — distinguish calm from missing data
+  const windReason = !hasWindData
+    ? 'No wind data for this hour — showing estimated risk'
+    : gust < 1
+      ? 'Calm — no significant wind at departure time'
+      : Math.round(gust) + ' mph gusts / ' + Math.round(wind) + ' mph sustained (threshold ~' + Math.round(effThreshold) + ' mph)';
+
   // Build modal content
   const scoreRows = [
-    { icon:'💨', name:'Wind & Gusts', reason: Math.round(gust) + ' mph gusts (threshold ~' + Math.round(effThreshold) + ' mph for this route)', score: windScore, max: 40 },
+    { icon:'💨', name:'Wind & Gusts', reason: windReason, score: windScore, max: 40 },
     { icon:'🌊', name:'Wave Height',  reason: waveReason,  score: waveScore,   max: 30 },
     { icon:'🌫', name:'Visibility',   reason: visReason,   score: visScore,    max: 15 },
     { icon:'🌧', name:'Precipitation',reason: precipReason,score: precipScore, max: 10 },
