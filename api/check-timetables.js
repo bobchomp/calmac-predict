@@ -65,6 +65,9 @@ async function kvSet(key, value) {
 }
 
 // ── Fetch one route page and extract timetable PDF URLs ──────────────────
+// The page has a #timetablesContent tab section followed by #faresContent.
+// We scope PDF extraction to just the timetables section so fares PDFs
+// (which live in the next tab) are never accidentally included.
 async function fetchTimetablePdfs(slug) {
   const pageUrl = `${CALMAC_ROUTE_BASE}/${slug}/`;
   const resp = await fetch(pageUrl, {
@@ -74,16 +77,19 @@ async function fetchTimetablePdfs(slug) {
   if (!resp.ok) throw new Error(`HTTP ${resp.status} for ${slug}`);
   const html = await resp.text();
 
-  // Extract all PDF hrefs from assets.calmac.co.uk
-  const allPdfs = [...html.matchAll(/href="(https:\/\/assets\.calmac\.co\.uk\/[^"]+\.pdf)"/gi)]
-    .map(m => m[1]);
+  // Slice out just the #timetablesContent div — stop before the next tab section
+  const ttStart = html.indexOf('id="timetablesContent"');
+  const ttEnd   = html.indexOf('id="faresContent"');
+  const section = ttStart !== -1
+    ? html.slice(ttStart, ttEnd !== -1 ? ttEnd : ttStart + 8000)
+    : html; // fallback: search the whole page
 
-  // Keep only timetable-related PDFs (exclude fares-only docs)
-  const timetablePdfs = [...new Set(allPdfs)].filter(url =>
-    /timetable|\/stt[-_]|\/wtt[-_]|summer.{0,10}tt|winter.{0,10}tt/i.test(url)
-  );
+  const pdfs = [...new Set(
+    [...section.matchAll(/href="(https:\/\/assets\.calmac\.co\.uk\/[^"]+\.pdf)"/gi)]
+      .map(m => m[1])
+  )];
 
-  return { slug, pageUrl, pdfs: timetablePdfs };
+  return { slug, pageUrl, pdfs };
 }
 
 // ── Handler ───────────────────────────────────────────────────────────────
