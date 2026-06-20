@@ -99,9 +99,23 @@
     .calibrated-badge{font-size:.62rem;color:#2e7d32;background:#e8f5e9;border:1px solid #a5d6a7;border-radius:4px;padding:2px 5px;margin-top:3px;font-weight:600;display:inline-block;cursor:help;}
 
     /* Timetable notice banner */
-    .timetable-notice{background:#e3f2fd;border-bottom:1px solid #90caf9;padding:8px 16px;}
+    .timetable-notice{background:#e3f2fd;border-bottom:1px solid #90caf9;padding:8px 16px;cursor:pointer;display:flex;align-items:flex-start;gap:8px;}
+    .timetable-notice:hover{background:#d0e9fa;}
+    .timetable-notice-body{flex:1;min-width:0;}
     .timetable-notice-title{font-size:.8rem;font-weight:700;color:#1565c0;}
     .timetable-notice-detail{font-size:.75rem;color:#1976d2;margin-top:3px;line-height:1.4;}
+    .timetable-notice-chevron{font-size:.85rem;color:#90caf9;flex-shrink:0;margin-top:1px;}
+    /* Timetable notice popup */
+    .tn-overlay{position:fixed;inset:0;z-index:600;background:rgba(0,18,60,0.55);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);display:flex;align-items:flex-end;justify-content:center;opacity:0;visibility:hidden;transition:opacity .22s ease,visibility .22s ease;}
+    .tn-overlay.open{opacity:1;visibility:visible;}
+    .tn-popup{background:#fff;width:100%;max-width:560px;border-radius:22px 22px 0 0;max-height:75vh;overflow-y:auto;-webkit-overflow-scrolling:touch;transform:translateY(30px);transition:transform .25s cubic-bezier(.32,1.1,.42,1);padding-bottom:env(safe-area-inset-bottom);}
+    .tn-overlay.open .tn-popup{transform:translateY(0);}
+    .tn-handle{width:40px;height:4px;border-radius:2px;background:#dee2e6;margin:12px auto 0;}
+    .tn-header{padding:16px 20px 14px;border-bottom:1px solid #e3f2fd;}
+    .tn-title{font-family:'Syne',sans-serif;font-size:1rem;font-weight:800;color:#1565c0;margin-bottom:2px;}
+    .tn-subtitle{font-size:.75rem;color:#90caf9;}
+    .tn-body{padding:16px 20px 24px;font-size:.85rem;color:#1565c0;line-height:1.65;}
+    .tn-body a{color:#1565c0;font-weight:600;text-decoration:underline;word-break:break-word;}
 
     /* Links inside CalMac advisory blocks (modal) */
     .calmac-detail a{color:inherit;font-weight:600;text-decoration:underline;word-break:break-word;}
@@ -759,6 +773,17 @@
 <!-- ── ROUTE DETAIL MODAL ── -->
 <div class="modal-overlay" id="modalOverlay">
   <div class="modal" id="modalContent"></div>
+</div>
+
+<div class="tn-overlay" id="tnOverlay">
+  <div class="tn-popup">
+    <div class="tn-handle"></div>
+    <div class="tn-header">
+      <div class="tn-title" id="tnTitle"></div>
+      <div class="tn-subtitle">Timetable notice from CalMac</div>
+    </div>
+    <div class="tn-body" id="tnBody"></div>
+  </div>
 </div>
 
 <script>
@@ -1846,9 +1871,12 @@ function buildCard(r, i) {
         })()}
       </div>
     </div>
-    ${disruption?.timetableNotice ? `<div class="timetable-notice">
-      <div class="timetable-notice-title">📋 ${disruption.timetableNotice.title}</div>
-      ${disruption.timetableNotice.detail ? `<div class="timetable-notice-detail">${(d => d.length > 120 ? d.substring(0, 120).trimEnd() + '…' : d)(disruption.timetableNotice.detail.replace(/https?:\/\/\S+/g, '').replace(/\s{2,}/g, ' ').trim())}</div>` : ''}
+    ${disruption?.timetableNotice ? `<div class="timetable-notice" onclick="openTimetableNotice(${JSON.stringify(disruption.timetableNotice.title)},${JSON.stringify(disruption.timetableNotice.detail||'')})">
+      <div class="timetable-notice-body">
+        <div class="timetable-notice-title">📋 ${disruption.timetableNotice.title}</div>
+        ${disruption.timetableNotice.detail ? `<div class="timetable-notice-detail">${(d => d.length > 120 ? d.substring(0, 120).trimEnd() + '…' : d)(disruption.timetableNotice.detail.replace(/https?:\/\/\S+/g, '').replace(/\s{2,}/g, ' ').trim())}</div>` : ''}
+      </div>
+      <div class="timetable-notice-chevron">›</div>
     </div>` : ''}
     <div class="card-weather ${wc}">
       <div class="wx-item">💨 <strong>${(_useTomorrow && r.tomorrow?.maxGustMph !== null ? r.tomorrow.maxGustMph : r.maxGustMph) !== undefined ? (_useTomorrow && r.tomorrow?.maxGustMph !== null ? r.tomorrow.maxGustMph : r.maxGustMph)+' mph' : '–'}</strong>${r.windDirDeg !== null && r.windDirDeg !== undefined ? ` <span style="opacity:.6;font-size:.78rem">${windDirLabel(r.windDirDeg)}</span>` : ''}</div>
@@ -2175,6 +2203,27 @@ function closeModal() {
 document.getElementById('modalOverlay').addEventListener('click', e => {
   if (e.target === document.getElementById('modalOverlay')) closeModal();
 });
+
+// ── TIMETABLE NOTICE POPUP ──
+function openTimetableNotice(title, detail) {
+  document.getElementById('tnTitle').textContent = title;
+  document.getElementById('tnBody').innerHTML = linkifyDetail(detail) || '<em style="opacity:.6">No further detail provided.</em>';
+  document.getElementById('tnOverlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeTimetableNotice() {
+  document.getElementById('tnOverlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+document.getElementById('tnOverlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('tnOverlay')) closeTimetableNotice();
+});
+// Swipe down to close
+let _tnTouchY = 0;
+document.querySelector('#tnOverlay .tn-popup').addEventListener('touchstart', e => { _tnTouchY = e.touches[0].clientY; }, { passive: true });
+document.querySelector('#tnOverlay .tn-popup').addEventListener('touchend', e => {
+  if (e.changedTouches[0].clientY - _tnTouchY > 60 && document.querySelector('#tnOverlay .tn-popup').scrollTop === 0) closeTimetableNotice();
+}, { passive: true });
 
 // Close on swipe down
 let touchStartY = 0;

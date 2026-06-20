@@ -94,10 +94,15 @@ function detailImpliesCancelled(detail) {
 function cleanDetail(detail) {
   if (!detail) return '';
   let t = detail;
-  t = t.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1'); // [text](url) → text (drop url)
-  t = t.replace(/\[([^\]]+)\]\[\d+\]/g,   '$1'); // [text][n]   → text
-  t = t.replace(/\[\d+\]:\s*\S+/g,         '');  // [n]: url definitions → remove
-  t = t.replace(/\[\d+\]/g,                '');  // stray [n] markers → remove
+  // Collect reference-style URL definitions before stripping them: [n]: url
+  const refs = {};
+  t = t.replace(/\[(\d+)\]:\s*(\S+)/g, (_, n, url) => { refs[n] = url; return ''; });
+  // [text](url) → "text url"  — keep URL as bare text for client-side linkification
+  t = t.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1 $2');
+  // [text][n] → "text url"  — resolve reference
+  t = t.replace(/\[([^\]]+)\]\[(\d+)\]/g, (_, text, n) => refs[n] ? text + ' ' + refs[n] : text);
+  // stray [n] markers
+  t = t.replace(/\[\d+\]/g, '');
   t = t.replace(/\*\*/g, '').replace(/\*/g, ''); // bold / italic
   t = t.replace(/[ \t]{2,}/g, ' ').trim();
   return t.substring(0, 2000);
