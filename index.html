@@ -103,6 +103,10 @@
     .timetable-notice-title{font-size:.8rem;font-weight:700;color:#1565c0;}
     .timetable-notice-detail{font-size:.75rem;color:#1976d2;margin-top:3px;line-height:1.4;}
 
+    /* Links inside CalMac advisory blocks (modal) */
+    .calmac-detail a{color:inherit;text-decoration:underline;word-break:break-all;}
+    .calmac-detail a:hover{opacity:.75;}
+
     /* Weather row */
     .card-weather{padding:10px 16px;background:var(--offwhite);border-bottom:1px solid var(--light);display:flex;gap:14px;font-size:.82rem;color:var(--muted);}
     .wx-item{display:flex;align-items:center;gap:4px;}
@@ -1253,8 +1257,8 @@ function calcHourlyRisk(routeName, hour, hourlyWeather, hourlyMarine) {
   // ── WIND (0-40 pts) ──
   // How close are we to the route's specific cancellation threshold?
   // Open-Meteo returns wind in m/s — convert to mph to match threshold values
-  const gust = ((hourlyWeather.windgusts_10m || [])[hour] || 0) * 2.237;
-  const wind = ((hourlyWeather.windspeed_10m || [])[hour] || 0) * 2.237;
+  const gust = (((hourlyWeather.windgusts_10m || [])[hour] ?? (hourlyWeather.windspeed_10m || [])[hour]) ?? 0) * 2.237;
+  const wind = ((hourlyWeather.windspeed_10m || [])[hour] ?? 0) * 2.237;
   const gustRatio = gust / effectiveThreshold; // >1 means likely cancelled
   if      (gustRatio >= 1.2)  risk += 40; // Well over threshold — very likely cancelled
   else if (gustRatio >= 1.0)  risk += 34; // At or just over threshold
@@ -1507,8 +1511,14 @@ async function fetchAllWeather() {
 
     // weather_code is the current Open-Meteo field name (weathercode is legacy alias)
     const weatherHourly = hourly.weather_code || hourly.weathercode || [];
-    // Expose both gust and wind arrays so calcHourlyRisk can use whichever is available
-    const mergedHourly = { ...hourly, weathercode: weatherHourly, windgusts_10m: hourly.windgusts_10m || hourly.windspeed_10m };
+    // Element-wise gust fallback: Open-Meteo returns arrays of nulls for offshore locations.
+    // Checking array truthiness alone won't catch this — we must patch each null element.
+    const rawGusts = hourly.windgusts_10m || [];
+    const rawWinds = hourly.windspeed_10m || [];
+    const patchedGusts = rawGusts.length
+      ? rawGusts.map((v, i) => v != null ? v : (rawWinds[i] ?? 0))
+      : rawWinds;
+    const mergedHourly = { ...hourly, weathercode: weatherHourly, windgusts_10m: patchedGusts };
 
     return {
       route: route.name, hourly: mergedHourly, marine,
@@ -1825,7 +1835,6 @@ function buildCard(r, i) {
         ${calMacStatus === 'disrupted' ? '<div class="calibrated-badge" style="background:#fff3e0;color:#e65100;border-color:#ffe082">⚠️ Disrupted</div>' : ''}
         ${calMacStatus === 'amber' ? '<div class="calibrated-badge" style="background:#fff8e1;color:#e65100;border-color:#ffe082">⚠️ Be Aware</div>' : ''}
         ${disruption?.isUpcoming && !['cancelled','disrupted','amber'].includes(calMacStatus) ? '<div class="calibrated-badge" style="background:#fff8e1;color:#e65100;border-color:#ffe082">⏰ Change coming</div>' : ''}
-        ${disruption?.timetableNotice ? '<div class="calibrated-badge" style="background:#e3f2fd;color:#1565c0;border-color:#90caf9">📋 Amended timetable</div>' : ''}
         ${(()=>{
           const t = historicalThresholds[r.name];
           if (!t || t.samples < 2) return '';
@@ -1839,7 +1848,7 @@ function buildCard(r, i) {
     </div>
     ${disruption?.timetableNotice ? `<div class="timetable-notice">
       <div class="timetable-notice-title">📋 ${disruption.timetableNotice.title}</div>
-      ${disruption.timetableNotice.detail ? `<div class="timetable-notice-detail">${disruption.timetableNotice.detail}</div>` : ''}
+      ${disruption.timetableNotice.detail ? `<div class="timetable-notice-detail">${(d => d.length > 120 ? d.substring(0, 120).trimEnd() + '…' : d)(disruption.timetableNotice.detail.replace(/<[^>]+>/g, ''))}</div>` : ''}
     </div>` : ''}
     <div class="card-weather ${wc}">
       <div class="wx-item">💨 <strong>${(_useTomorrow && r.tomorrow?.maxGustMph !== null ? r.tomorrow.maxGustMph : r.maxGustMph) !== undefined ? (_useTomorrow && r.tomorrow?.maxGustMph !== null ? r.tomorrow.maxGustMph : r.maxGustMph)+' mph' : '–'}</strong>${r.windDirDeg !== null && r.windDirDeg !== undefined ? ` <span style="opacity:.6;font-size:.78rem">${windDirLabel(r.windDirDeg)}</span>` : ''}</div>
@@ -1913,8 +1922,8 @@ function openModal(routeName, sailingTime) {
   const hm = r.marineData || null;
 
   // These are the exact values calcHourlyRisk uses (m/s converted to mph)
-  const gust = ((hw.windgusts_10m || [])[h] || 0) * 2.237;
-  const wind = ((hw.windspeed_10m || [])[h] || 0) * 2.237;
+  const gust = (((hw.windgusts_10m || [])[h] ?? (hw.windspeed_10m || [])[h]) ?? 0) * 2.237;
+  const wind = ((hw.windspeed_10m || [])[h] ?? 0) * 2.237;
   const waveM = hm ? ((hm.wave_height || [])[h] ?? r.maxWaveM) : r.maxWaveM;
   const vis   = (hw.visibility || [])[h] ?? r.minVisM;
   const code  = (hw.weathercode || [])[h] ?? r.weatherCode ?? 0;
@@ -2035,7 +2044,7 @@ function openModal(routeName, sailingTime) {
     const reason = sailingInfo.reason ? `<div style="font-size:.75rem;color:${col};margin-top:6px;opacity:.85">${reasonIcon} Reason: <strong>${sailingInfo.reason}</strong></div>` : '';
     return `<div style="background:${bg};border:1.5px solid ${bdr};border-radius:10px;padding:12px 14px;margin-bottom:16px">
       <div style="font-weight:700;color:${col};font-size:.9rem;margin-bottom:4px">${icon} ${title}</div>
-      <div style="font-size:.82rem;color:${col};line-height:1.55">${detail}</div>
+      <div class="calmac-detail" style="font-size:.82rem;color:${col};line-height:1.55">${detail}</div>
       ${reason}
     </div>`;
   })() : '';
