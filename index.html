@@ -1871,7 +1871,7 @@ function buildCard(r, i) {
         })()}
       </div>
     </div>
-    ${disruption?.timetableNotice ? `<div class="timetable-notice" onclick="openTimetableNotice(${JSON.stringify(disruption.timetableNotice.title)},${JSON.stringify(disruption.timetableNotice.detail||'')})">
+    ${disruption?.timetableNotice ? `<div class="timetable-notice" onclick="openTimetableNotice(${JSON.stringify(r.name)})">
       <div class="timetable-notice-body">
         <div class="timetable-notice-title">📋 ${disruption.timetableNotice.title}</div>
         ${disruption.timetableNotice.detail ? `<div class="timetable-notice-detail">${(d => d.length > 120 ? d.substring(0, 120).trimEnd() + '…' : d)(disruption.timetableNotice.detail.replace(/https?:\/\/\S+/g, '').replace(/\s{2,}/g, ' ').trim())}</div>` : ''}
@@ -2205,9 +2205,11 @@ document.getElementById('modalOverlay').addEventListener('click', e => {
 });
 
 // ── TIMETABLE NOTICE POPUP ──
-function openTimetableNotice(title, detail) {
-  document.getElementById('tnTitle').textContent = title;
-  document.getElementById('tnBody').innerHTML = linkifyDetail(detail) || '<em style="opacity:.6">No further detail provided.</em>';
+function openTimetableNotice(routeName) {
+  const notice = liveDisruptions[routeName]?.timetableNotice;
+  if (!notice) return;
+  document.getElementById('tnTitle').textContent = notice.title || 'Timetable notice';
+  document.getElementById('tnBody').innerHTML = linkifyDetail(notice.detail) || '<em style="opacity:.6">No further detail provided.</em>';
   document.getElementById('tnOverlay').classList.add('open');
   document.body.style.overflow = 'hidden';
 }
