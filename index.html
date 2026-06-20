@@ -1441,94 +1441,95 @@ function setStatus(type, msg) {
 }
 
 // ── FETCH ──
-// Fetches routes in small batches of 4 to avoid rate limiting,
-// falling back gracefully if any individual route fails.
+// Single batch request for all 22 routes — Open-Meteo supports comma-separated
+// lat/lon and returns an array, so 2 requests total instead of 44.
 async function fetchAllWeather() {
   const hour = new Date().getHours();
 
-  async function fetchOne(route) {
-    const baseParams = '?latitude=' + route.lat + '&longitude=' + route.lon
-      + '&forecast_days=1&timezone=Europe%2FLondon';
-    const windUrl = 'https://api.open-meteo.com/v1/forecast' + baseParams.replace('forecast_days=1','forecast_days=2')
-      + '&hourly=windspeed_10m,windgusts_10m,winddirection_10m,weathercode,visibility,precipitation,snowfall'
-      + '&windspeed_unit=mph';
-    const marineUrl = 'https://marine-api.open-meteo.com/v1/marine' + baseParams.replace('forecast_days=1','forecast_days=2')
-      + '&hourly=wave_height,wave_period,swell_wave_height';
+  const lats = ROUTES.map(r => r.lat).join(',');
+  const lons = ROUTES.map(r => r.lon).join(',');
 
-    const [windResp, marineResp] = await Promise.allSettled([
-      fetch(windUrl).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }),
-      fetch(marineUrl).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }),
-    ]);
+  const windUrl   = 'https://api.open-meteo.com/v1/forecast'
+    + '?latitude=' + lats + '&longitude=' + lons
+    + '&forecast_days=2&timezone=Europe%2FLondon&windspeed_unit=ms'
+    + '&hourly=windspeed_10m,windgusts_10m,winddirection_10m,weather_code,visibility,precipitation,snowfall';
+  const marineUrl = 'https://marine-api.open-meteo.com/v1/marine'
+    + '?latitude=' + lats + '&longitude=' + lons
+    + '&forecast_days=2&timezone=Europe%2FLondon'
+    + '&hourly=wave_height,wave_period,swell_wave_height';
 
-    if (windResp.status === 'rejected') throw new Error(windResp.reason);
-    const j = windResp.value;
-    const hourly = j.hourly || {};
-    const marine = marineResp.status === 'fulfilled' ? (marineResp.value.hourly || null) : null;
+  if (typeof ls !== 'undefined') { ls.setProgress(30); ls.setMessage('Fetching weather data…'); }
 
-    const slice = arr => (arr || []).slice(hour, hour + 12).filter(v => v != null);
-    const sliceFrom = (arr, start) => (arr || []).slice(start, start + 24).filter(v => v != null);
-    const mx = arr => arr.length ? Math.max(...arr) : null;
-    const mn = arr => arr.length ? Math.min(...arr) : null;
-    const gusts  = slice(hourly.windgusts_10m);
-    const winds  = slice(hourly.windspeed_10m);
-    const waves  = marine ? slice(marine.wave_height) : [];
-    const swells = marine ? slice(marine.swell_wave_height) : [];
-    // Wind direction: average in next 12h
-    const dirs = (hourly.winddirection_10m || []).slice(hour, hour + 12).filter(v => v != null);
-    const windDirDeg = dirs.length ? Math.round(dirs.reduce((a,b)=>a+b,0)/dirs.length) : null;
-    // Tomorrow data: hours 24-47 (full day)
+  const [windResp, marineResp] = await Promise.allSettled([
+    fetch(windUrl,   { signal: AbortSignal.timeout(15000) }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }),
+    fetch(marineUrl, { signal: AbortSignal.timeout(15000) }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }),
+  ]);
+
+  if (windResp.status === 'rejected') throw new Error('Weather fetch failed: ' + windResp.reason);
+
+  if (typeof ls !== 'undefined') { ls.setProgress(70); ls.setMessage('Processing…'); }
+
+  const windArr   = Array.isArray(windResp.value)   ? windResp.value   : [windResp.value];
+  const marineArr = marineResp.status === 'fulfilled'
+    ? (Array.isArray(marineResp.value) ? marineResp.value : [marineResp.value])
+    : [];
+
+  const slice     = (arr, start) => (arr || []).slice(start, start + 12).filter(v => v != null);
+  const sliceFrom = (arr, start) => (arr || []).slice(start, start + 24).filter(v => v != null);
+  const mx = arr => arr.length ? Math.max(...arr) : null;
+  const mn = arr => arr.length ? Math.min(...arr) : null;
+
+  const results = ROUTES.map((route, i) => {
+    const w      = windArr[i]   || {};
+    const mEntry = marineArr[i] || null;
+    const hourly = w.hourly     || {};
+    const marine = mEntry?.hourly || null;
+
+    const gusts  = slice(hourly.windgusts_10m, hour);
+    const winds  = slice(hourly.windspeed_10m,  hour);
+    // Open-Meteo doesn't always provide windgusts_10m for offshore locations — fall back to wind speed
+    const effectiveGusts = gusts.length ? gusts : winds;
+    const waves  = marine ? slice(marine.wave_height,        hour) : [];
+    const swells = marine ? slice(marine.swell_wave_height,  hour) : [];
+    const dirs   = (hourly.winddirection_10m || []).slice(hour, hour + 12).filter(v => v != null);
+    const windDirDeg = dirs.length ? Math.round(dirs.reduce((a,b) => a + b, 0) / dirs.length) : null;
+
     const tomorrowStart = 24;
     const tGusts = sliceFrom(hourly.windgusts_10m, tomorrowStart);
     const tWinds = sliceFrom(hourly.windspeed_10m, tomorrowStart);
+    const effectiveTGusts = tGusts.length ? tGusts : tWinds;
     const tWaves = marine ? sliceFrom(marine.wave_height, tomorrowStart) : [];
 
+    // weather_code is the current Open-Meteo field name (weathercode is legacy alias)
+    const weatherHourly = hourly.weather_code || hourly.weathercode || [];
+    // Expose both gust and wind arrays so calcHourlyRisk can use whichever is available
+    const mergedHourly = { ...hourly, weathercode: weatherHourly, windgusts_10m: hourly.windgusts_10m || hourly.windspeed_10m };
+
     return {
-      route: route.name, hourly, marine,
-      maxGustMph: mx(gusts) !== null ? Math.round(mx(gusts) * 2.237) : null,
-      maxWindMph: mx(winds) !== null ? Math.round(mx(winds) * 2.237) : null,
-      worstCode:  mx(slice(hourly.weathercode)),
-      minVisM:    mn(slice(hourly.visibility)),
-      maxPrecip:  mx(slice(hourly.precipitation)),
-      maxSnow:    mx(slice(hourly.snowfall)),
+      route: route.name, hourly: mergedHourly, marine,
+      maxGustMph: mx(effectiveGusts) !== null ? Math.round(mx(effectiveGusts) * 2.237) : null,
+      maxWindMph: mx(winds)          !== null ? Math.round(mx(winds)          * 2.237) : null,
+      worstCode:  mx(slice(weatherHourly, hour)),
+      minVisM:    mn(slice(hourly.visibility, hour)),
+      maxPrecip:  mx(slice(hourly.precipitation, hour)),
+      maxSnow:    mx(slice(hourly.snowfall, hour)),
       maxWaveM:   mx(waves)  !== null ? Math.round(mx(waves)  * 10) / 10 : null,
       maxSwellM:  mx(swells) !== null ? Math.round(mx(swells) * 10) / 10 : null,
       hasMarine:  marine !== null,
       windDirDeg,
       tomorrow: {
-        maxGustMph: mx(tGusts) !== null ? Math.round(mx(tGusts) * 2.237) : null,
-        maxWaveM:   mx(tWaves) !== null ? Math.round(mx(tWaves) * 10) / 10 : null,
-        hourly:     hourly,
-        marine:     marine,
+        maxGustMph: mx(effectiveTGusts) !== null ? Math.round(mx(effectiveTGusts) * 2.237) : null,
+        maxWaveM:   mx(tWaves)          !== null ? Math.round(mx(tWaves)          * 10) / 10 : null,
+        hourly:     mergedHourly,
+        marine,
       },
     };
-  }
-
-  // Run in batches of 4 with a small gap between batches
-  const results = [];
-  const batchSize = 4;
-  for (let i = 0; i < ROUTES.length; i += batchSize) {
-    const batch = ROUTES.slice(i, i + batchSize);
-    const batchResults = await Promise.all(
-      batch.map(r => fetchOne(r).catch(() => ({
-        route: r.name, hourly: null, marine: null,
-        maxGustMph: null, maxWindMph: null, worstCode: null,
-        minVisM: null, maxPrecip: null, maxSnow: null,
-        maxWaveM: null, hasMarine: false,
-      })))
-    );
-    results.push(...batchResults);
-    // Small pause between batches to be nice to the API
-    if (i + batchSize < ROUTES.length) await new Promise(res => setTimeout(res, 300));
-    // Update loading progress
-    if (typeof ls !== 'undefined') {
-      ls.setProgress(Math.round(((i + batchSize) / ROUTES.length) * 85));
-      ls.setMessage('Loading routes ' + (i+1) + '–' + Math.min(i+batchSize, ROUTES.length) + ' of ' + ROUTES.length + '…');
-    }
-  }
+  });
 
   if (!results.some(r => r.maxGustMph !== null)) {
     throw new Error('No weather data received — check your connection');
   }
+  if (typeof ls !== 'undefined') { ls.setProgress(85); ls.setMessage('Calculating risk scores…'); }
   return results;
 }
 
