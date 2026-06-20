@@ -98,7 +98,7 @@ function cleanDetail(detail) {
     .replace(/\*\*/g, '')                    // bold
     .replace(/\*/g, '')                      // italic
     .trim()
-    .substring(0, 350);
+    .substring(0, 2000);
 }
 
 // Scan all routeStatus entries for amended timetable / vessel substitution notices.
