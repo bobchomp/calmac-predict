@@ -119,7 +119,7 @@ async function runHealthChecks(statusData) {
 }
 
 // ── Email health alert via Resend ─────────────────────────────────────────
-async function sendHealthAlertEmail(failedChecks, isTest = false) {
+async function sendHealthAlertEmail(failedChecks, isTest = false, overrideTo = null) {
   if (!RESEND_API_KEY || !failedChecks.length) return null;
 
   const rows = failedChecks.map(c => `
@@ -162,8 +162,7 @@ async function sendHealthAlertEmail(failedChecks, isTest = false) {
       },
       body: JSON.stringify({
         from:    ALERT_FROM,
-        to:      ALERT_FROM,
-        bcc:     ALERT_TO,
+        ...(overrideTo ? { to: overrideTo } : { to: ALERT_FROM, bcc: ALERT_TO }),
         subject: isTest
           ? 'Will It Sail — test health alert'
           : `Will It Sail — ${failedChecks.length === 1 ? failedChecks[0].name : `${failedChecks.length} services`} down`,
@@ -218,26 +217,11 @@ module.exports = async function handler(req, res) {
     let sendResult = null;
 
     if (customTo) {
-      // One-off send to a specific address
-      const saved = ALERT_TO;
-      // Temporarily override recipients for this send
-      const resp = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          from:    ALERT_FROM,
-          to:      customTo,
-          subject: 'Will It Sail — one-off test email',
-          html: `<div style="font-family:system-ui,sans-serif;padding:24px;max-width:480px">
-            <h2 style="margin:0 0 8px">Test email from Will It Sail</h2>
-            <p style="color:#555">This was sent manually to <strong>${customTo}</strong> using the test panel.</p>
-            <p style="color:#555;font-size:13px">If you received this, the Resend integration is working correctly.</p>
-          </div>`,
-        }),
-        signal: AbortSignal.timeout(10000),
-      }).catch(e => ({ ok: false, _err: e.message }));
-      const data = resp.json ? await resp.json().catch(() => ({})) : {};
-      sendResult = { to: customTo, ok: resp.ok ?? false, id: data.id, error: data.message || resp._err };
+      sendResult = await sendHealthAlertEmail([
+        { name: 'Weather API',       detail: 'HTTP 503 — test alert only, no real error' },
+        { name: 'CalMac Status API', detail: 'API unavailable — test alert only, no real error' },
+      ], true, customTo);
+      if (sendResult) sendResult.to = customTo;
     } else {
       // Default test — fake health alert to the normal BCC recipients
       sendResult = await sendHealthAlertEmail([
