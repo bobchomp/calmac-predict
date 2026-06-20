@@ -159,6 +159,38 @@ module.exports = async function handler(req, res) {
       }
     }
 
+    // ── Check for new timetable notices (amended timetable / vessel substitution) ──
+    for (const route of (statusData.routes || [])) {
+      const routeKey = route.routeKey;
+      if (!routeKey || !route.timetableNotice) continue;
+
+      const notice    = route.timetableNotice;
+      const noticeKey = `timetablenotice:${routeKey.replace(/[^a-z0-9]/gi, '_')}`;
+      const lastNotice = await kvGet(noticeKey);
+
+      // Push only when this is a title we haven't seen before for this route
+      if (notice.title !== lastNotice?.title && KV_URL) {
+        await kvSet(noticeKey, { title: notice.title, seen: Date.now() });
+
+        try {
+          const subKey = `subs:${routeKey.replace(/[^a-z0-9]/gi, '_')}`;
+          const subs = (await kvGet(subKey)) || [];
+          if (subs.length > 0) {
+            await fetch(`${BASE_URL}/api/notify`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action:  'send',
+                route:   routeKey,
+                message: `${routeKey}: ${notice.title}`,
+              }),
+            });
+          }
+          results.push({ route: routeKey, timetableNotice: notice.title, pushed: true });
+        } catch (_) {}
+      }
+    }
+
     return res.status(200).json({
       ok: true,
       disrupted: disrupted.length,

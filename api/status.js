@@ -101,6 +101,33 @@ function cleanDetail(detail) {
     .substring(0, 350);
 }
 
+// Scan all routeStatus entries for amended timetable / vessel substitution notices.
+// CalMac publishes these as separate entries (often status: INFORMATION or SERVICE)
+// alongside the normal SAILING disruption entries.
+function extractTimetableNotice(routeStatuses) {
+  const KEYWORDS = /amended\s*timetable|vessel\s*sub|temporary\s*timetable|winter\s*timetable|summer\s*timetable|additional\s*sail|timetable\s*change|replacement\s*vessel/i;
+  const now = new Date();
+
+  for (const s of (routeStatuses || [])) {
+    const title  = s.title     || '';
+    const detail = s.detail    || '';
+    const sub    = s.subStatus || '';
+
+    if (!KEYWORDS.test(title) && !KEYWORDS.test(detail) && !KEYWORDS.test(sub)) continue;
+
+    // Skip expired notices
+    if (s.endDateTime && new Date(s.endDateTime) < now) continue;
+
+    return {
+      title:         title || 'Timetable notice',
+      detail:        cleanDetail(detail),
+      startDateTime: s.startDateTime || null,
+      endDateTime:   s.endDateTime   || null,
+    };
+  }
+  return null;
+}
+
 // Check if a routeStatus window covers today
 function coversToday(startDateTime, endDateTime) {
   if (!startDateTime || !endDateTime) return false;
@@ -187,6 +214,7 @@ module.exports = async function handler(req, res) {
           status: topStatus,
           sailingStatuses,
           isUpcoming: r.isStatusChangeUpcoming || false,
+          timetableNotice: extractTimetableNotice(r.routeStatuses),
           raw: r.status,
         };
       })

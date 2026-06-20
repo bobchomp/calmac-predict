@@ -98,6 +98,11 @@
     .exposure-lbl{font-size:.65rem;color:var(--muted);margin-top:2px;}
     .calibrated-badge{font-size:.62rem;color:#2e7d32;background:#e8f5e9;border:1px solid #a5d6a7;border-radius:4px;padding:2px 5px;margin-top:3px;font-weight:600;display:inline-block;cursor:help;}
 
+    /* Timetable notice banner */
+    .timetable-notice{background:#e3f2fd;border-bottom:1px solid #90caf9;padding:8px 16px;}
+    .timetable-notice-title{font-size:.8rem;font-weight:700;color:#1565c0;}
+    .timetable-notice-detail{font-size:.75rem;color:#1976d2;margin-top:3px;line-height:1.4;}
+
     /* Weather row */
     .card-weather{padding:10px 16px;background:var(--offwhite);border-bottom:1px solid var(--light);display:flex;gap:14px;font-size:.82rem;color:var(--muted);}
     .wx-item{display:flex;align-items:center;gap:4px;}
@@ -1820,6 +1825,7 @@ function buildCard(r, i) {
         ${calMacStatus === 'disrupted' ? '<div class="calibrated-badge" style="background:#fff3e0;color:#e65100;border-color:#ffe082">⚠️ Disrupted</div>' : ''}
         ${calMacStatus === 'amber' ? '<div class="calibrated-badge" style="background:#fff8e1;color:#e65100;border-color:#ffe082">⚠️ Be Aware</div>' : ''}
         ${disruption?.isUpcoming && !['cancelled','disrupted','amber'].includes(calMacStatus) ? '<div class="calibrated-badge" style="background:#fff8e1;color:#e65100;border-color:#ffe082">⏰ Change coming</div>' : ''}
+        ${disruption?.timetableNotice ? '<div class="calibrated-badge" style="background:#e3f2fd;color:#1565c0;border-color:#90caf9">📋 Amended timetable</div>' : ''}
         ${(()=>{
           const t = historicalThresholds[r.name];
           if (!t || t.samples < 2) return '';
@@ -1831,6 +1837,10 @@ function buildCard(r, i) {
         })()}
       </div>
     </div>
+    ${disruption?.timetableNotice ? `<div class="timetable-notice">
+      <div class="timetable-notice-title">📋 ${disruption.timetableNotice.title}</div>
+      ${disruption.timetableNotice.detail ? `<div class="timetable-notice-detail">${disruption.timetableNotice.detail}</div>` : ''}
+    </div>` : ''}
     <div class="card-weather ${wc}">
       <div class="wx-item">💨 <strong>${(_useTomorrow && r.tomorrow?.maxGustMph !== null ? r.tomorrow.maxGustMph : r.maxGustMph) !== undefined ? (_useTomorrow && r.tomorrow?.maxGustMph !== null ? r.tomorrow.maxGustMph : r.maxGustMph)+' mph' : '–'}</strong>${r.windDirDeg !== null && r.windDirDeg !== undefined ? ` <span style="opacity:.6;font-size:.78rem">${windDirLabel(r.windDirDeg)}</span>` : ''}</div>
       <div class="wx-item">🌊 <strong>${(_useTomorrow ? r.tomorrow?.maxWaveM : r.maxWaveM) !== null && (_useTomorrow ? r.tomorrow?.maxWaveM : r.maxWaveM) !== undefined ? (_useTomorrow ? r.tomorrow.maxWaveM : r.maxWaveM)+'m' : '–'}</strong></div>
