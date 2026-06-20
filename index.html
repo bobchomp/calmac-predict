@@ -2863,18 +2863,14 @@ async function runStatusCheck() {
     const t0 = Date.now();
     const r = await fetch('https://api.open-meteo.com/v1/forecast?latitude=57.0&longitude=-5.8&hourly=windspeed_10m&forecast_days=1', { signal: AbortSignal.timeout(8000) });
     const ms = Date.now() - t0;
-    const ok = r.ok;
-    const routesLoaded = allRoutes.filter(r => r.maxGustMph !== null && r.maxGustMph !== undefined).length;
-    results.push({
-      name: 'Weather API',
-      icon: '🌤',
-      dot: ok ? 'green' : 'red',
-      badge: ok ? 'ok' : 'err',
-      badgeText: ok ? '✓ OK' : '✗ Error',
-      detail: ok
-        ? `Open-Meteo responding (${ms}ms) · ${routesLoaded}/22 routes loaded`
-        : `HTTP ${r.status} — weather data unavailable`
-    });
+    const routesLoaded = allRoutes.filter(rt => rt.maxGustMph !== null && rt.maxGustMph !== undefined).length;
+    if (!r.ok) {
+      results.push({ name:'Weather API', icon:'🌤', dot:'red', badge:'err', badgeText:'✗ Error', detail:`HTTP ${r.status} — weather data unavailable` });
+    } else if (routesLoaded === 0) {
+      results.push({ name:'Weather API', icon:'🌤', dot:'amber', badge:'warn', badgeText:'⚠ No data', detail:`Open-Meteo responding (${ms}ms) — app data failed to load, try refreshing` });
+    } else {
+      results.push({ name:'Weather API', icon:'🌤', dot:'green', badge:'ok', badgeText:'✓ OK', detail:`Open-Meteo responding (${ms}ms) · ${routesLoaded}/22 routes loaded` });
+    }
   } catch(e) {
     results.push({ name:'Weather API', icon:'🌤', dot:'red', badge:'err', badgeText:'✗ Error', detail: e.message });
   }
@@ -2884,7 +2880,7 @@ async function runStatusCheck() {
     const t0 = Date.now();
     const r = await fetch('https://marine-api.open-meteo.com/v1/marine?latitude=57.0&longitude=-5.8&hourly=wave_height&forecast_days=1', { signal: AbortSignal.timeout(8000) });
     const ms = Date.now() - t0;
-    const marineCount = allRoutes.filter(r => r.hasMarine).length;
+    const marineCount = allRoutes.filter(rt => rt.hasMarine).length;
     results.push({
       name: 'Marine / Wave API',
       icon: '🌊',
