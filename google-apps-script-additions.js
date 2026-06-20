@@ -409,4 +409,5 @@ function ingestReport(payload) {
     skipped_duplicates: rows.length - newRows.length,
     thresholds_updated: calcResult.routes_calculated,
   };
+  
 }
