@@ -2,11 +2,13 @@
   "buildCommand": "npm run build",
   "outputDirectory": ".",
   "functions": {
-    "api/weather.js": { "maxDuration": 30 },
-    "api/status.js":  { "maxDuration": 15 },
-    "api/vessel.js":  { "maxDuration": 15 },
-    "api/notify.js":  { "maxDuration": 15 },
-    "api/cron.js":    { "maxDuration": 60 }
+    "api/weather.js":       { "maxDuration": 30 },
+    "api/status.js":        { "maxDuration": 15 },
+    "api/vessel.js":        { "maxDuration": 15 },
+    "api/notify.js":        { "maxDuration": 15 },
+    "api/cron.js":          { "maxDuration": 60 },
+    "api/record.js":        { "maxDuration": 55 },
+    "api/ingest-report.js": { "maxDuration": 55 }
   },
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
