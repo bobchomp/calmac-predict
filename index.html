@@ -806,10 +806,10 @@
       </div>
       <button class="vt-close" onclick="closeVesselTracker()">✕</button>
     </div>
-    <div id="vtMap"></div>
+    <iframe id="vtFrame" src="about:blank" frameborder="0" allowfullscreen style="width:100%;height:340px;display:block;"></iframe>
     <div class="vt-footer">
-      <span id="vtStatus">Loading position…</span>
-      <a id="vtMTLink" href="#" target="_blank" rel="noopener">MarineTraffic →</a>
+      <span id="vtStatus"></span>
+      <a id="vtMTLink" href="#" target="_blank" rel="noopener" style="display:none">Open full map →</a>
     </div>
   </div>
 </div>
@@ -2690,127 +2690,38 @@ const ROUTE_PORTS = {
   'Tobermory - Kilchoan':                            { a:[56.622,-6.069,'Tobermory'],       b:[56.696,-6.099,'Kilchoan'] },
 };
 
-let _vtMap = null;
-let _vtVesselMarker = null;
-let _vtPortA = null;
-let _vtPortB = null;
-let _vtLine = null;
-
-const _shipIcon = L => L.divIcon({
-  className: '',
-  html: '<div style="font-size:22px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))">🚢</div>',
-  iconSize: [26, 26], iconAnchor: [13, 13],
-});
-const _portIcon = L => L.divIcon({
-  className: '',
-  html: '<div style="width:10px;height:10px;background:#003087;border:2px solid #fff;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>',
-  iconSize: [10, 10], iconAnchor: [5, 5],
-});
-
-function openVesselTracker(routeName, vesselName, mmsi, liveLat, liveLon) {
-  if (typeof L === 'undefined') {
-    document.getElementById('vtStatus').textContent = '⚠️ Map failed to load — try refreshing the page';
-    document.getElementById('vtOverlay').classList.add('open');
-    document.body.style.overflow = 'hidden';
-    const mtLink = document.getElementById('vtMTLink');
-    if (mmsi) { mtLink.href = `https://www.marinetraffic.com/en/ais/details/ships/mmsi:${mmsi}`; mtLink.style.display = ''; }
-    document.getElementById('vtVesselName').textContent = vesselName || 'Vessel Tracker';
-    document.getElementById('vtRouteName').textContent  = routeName || '';
-    return;
-  }
-  const ports  = ROUTE_PORTS[routeName];
-  const isLive = liveLat != null;
+function openVesselTracker(routeName, vesselName, mmsi) {
+  const ports = ROUTE_PORTS[routeName];
+  const midLat = ports ? ((ports.a[0] + ports.b[0]) / 2).toFixed(4) : '57.0';
+  const midLon = ports ? ((ports.a[1] + ports.b[1]) / 2).toFixed(4) : '-5.5';
+  const zoom   = ports ? 11 : 9;
 
   document.getElementById('vtVesselName').textContent = vesselName || 'Vessel Tracker';
-  document.getElementById('vtRouteName').textContent  = routeName || '';
-  document.getElementById('vtStatus').textContent     = isLive ? '🟢 Live position' : '⚪ Live position unavailable — showing route';
+  document.getElementById('vtRouteName').textContent  = routeName  || '';
+  document.getElementById('vtStatus').textContent     = '🟢 Live AIS via MarineTraffic';
+
   const mtLink = document.getElementById('vtMTLink');
-  if (mmsi) { mtLink.href = `https://www.marinetraffic.com/en/ais/details/ships/mmsi:${mmsi}`; mtLink.style.display = ''; }
-  else { mtLink.style.display = 'none'; }
+  if (mmsi) {
+    mtLink.href         = `https://www.marinetraffic.com/en/ais/details/ships/mmsi:${mmsi}`;
+    mtLink.style.display = '';
+  } else {
+    mtLink.style.display = 'none';
+  }
+
+  // Build MarineTraffic embed URL — centres on route midpoint, highlights the vessel if MMSI known
+  const embedUrl = `https://www.marinetraffic.com/en/ais/embed/zoom:${zoom}/centery:${midLat}/centerx:${midLon}/maptype:0/shownames:false/mmsi:${mmsi || 0}/shipid:0/fleet:/fleet_id:/vtypes:/showmenu:/remember:false`;
 
   document.getElementById('vtOverlay').classList.add('open');
   document.body.style.overflow = 'hidden';
-
-  // Wait for overlay transition to finish (~250ms) before init
-  setTimeout(() => {
-    if (!_vtMap) {
-      _vtMap = L.map('vtMap', { zoomControl: true, attributionControl: true });
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-        maxZoom: 17,
-      }).addTo(_vtMap);
-    }
-
-    // Clear previous markers/line
-    if (_vtVesselMarker) { _vtMap.removeLayer(_vtVesselMarker); _vtVesselMarker = null; }
-    if (_vtPortA)        _vtMap.removeLayer(_vtPortA);
-    if (_vtPortB)        _vtMap.removeLayer(_vtPortB);
-    if (_vtLine)         _vtMap.removeLayer(_vtLine);
-
-    // Only place vessel marker when we have a real live position
-    if (isLive) {
-      _vtVesselMarker = L.marker([liveLat, liveLon], { icon: _shipIcon(L), zIndexOffset: 100 })
-        .bindPopup(`<b>${vesselName || 'Vessel'}</b><br>Live position`)
-        .addTo(_vtMap);
-    }
-
-    if (ports) {
-      _vtPortA = L.marker([ports.a[0], ports.a[1]], { icon: _portIcon(L) })
-        .bindTooltip(ports.a[2], { permanent: true, direction: 'top', className: 'vt-port-label' })
-        .addTo(_vtMap);
-      _vtPortB = L.marker([ports.b[0], ports.b[1]], { icon: _portIcon(L) })
-        .bindTooltip(ports.b[2], { permanent: true, direction: 'top', className: 'vt-port-label' })
-        .addTo(_vtMap);
-      _vtLine = L.polyline([[ports.a[0], ports.a[1]], [ports.b[0], ports.b[1]]], {
-        color: '#005eb8', weight: 2, dashArray: '5 6', opacity: 0.7,
-      }).addTo(_vtMap);
-
-      const boundsCoords = [[ports.a[0], ports.a[1]], [ports.b[0], ports.b[1]]];
-      if (isLive) boundsCoords.push([liveLat, liveLon]);
-      _vtMap.fitBounds(L.latLngBounds(boundsCoords).pad(0.25));
-    } else if (isLive) {
-      _vtMap.setView([liveLat, liveLon], 11);
-    } else {
-      _vtMap.setView([57, -5.5], 7);
-    }
-
-    // Force Leaflet to recalculate container size now that the overlay is fully visible
-    _vtMap.invalidateSize();
-    setTimeout(() => _vtMap.invalidateSize(), 150);
-
-    // Fetch live position in background (may take up to 5s)
-    {
-      document.getElementById('vtStatus').textContent = '🔄 Fetching live position…';
-      fetch(`/api/vessel?route=${encodeURIComponent(routeName)}&live=1`)
-        .then(r => r.json())
-        .then(data => {
-          if (!data?.vessel?.live) {
-            document.getElementById('vtStatus').textContent = '⚪ Live position unavailable — showing route';
-            return;
-          }
-          const v = data.vessel;
-          document.getElementById('vtStatus').textContent = `🟢 Live position · ${v.speed != null && v.speed > 0.5 ? v.speed.toFixed(1) + ' kn' : 'stationary'}`;
-          if (_vtVesselMarker) _vtMap.removeLayer(_vtVesselMarker);
-          _vtVesselMarker = L.marker([v.lat, v.lon], { icon: _shipIcon(L), zIndexOffset: 100 })
-            .bindPopup(`<b>${v.name}</b><br>Live position`)
-            .addTo(_vtMap);
-          if (ports) {
-            const bc = [[ports.a[0], ports.a[1]], [ports.b[0], ports.b[1]], [v.lat, v.lon]];
-            _vtMap.fitBounds(L.latLngBounds(bc).pad(0.2));
-          } else {
-            _vtMap.setView([v.lat, v.lon], 11);
-          }
-        })
-        .catch(() => {
-          document.getElementById('vtStatus').textContent = '⚪ Live position unavailable — showing route';
-        });
-    }
-  }, 300);
+  // Small delay so overlay transition starts before the iframe begins loading
+  setTimeout(() => { document.getElementById('vtFrame').src = embedUrl; }, 80);
 }
 
 function closeVesselTracker() {
   document.getElementById('vtOverlay').classList.remove('open');
   document.body.style.overflow = '';
+  // Reset iframe so it doesn't keep running in background
+  setTimeout(() => { document.getElementById('vtFrame').src = 'about:blank'; }, 300);
 }
 
 document.getElementById('vtOverlay').addEventListener('click', e => {
@@ -3032,15 +2943,13 @@ async function enrichModalWithVessel(routeName) {
     const isLive = !v.scheduled;
     const speed  = isLive && v.speed != null && v.speed > 0.5 ? ` · ${v.speed.toFixed(1)} kn` : '';
     const label  = isLive ? `(live${speed})` : '(scheduled)';
-    const mmsiJs = v.mmsi || 'null';
-    const latJs  = v.lat  != null ? v.lat  : 'null';
-    const lonJs  = v.lon  != null ? v.lon  : 'null';
-    const nameJs = (v.name || 'Vessel').replace(/'/g, "\\'");
+    const mmsiJs  = v.mmsi || 'null';
+    const nameJs  = (v.name || 'Vessel').replace(/'/g, "\\'");
     const routeJs = routeName.replace(/'/g, "\\'");
     vesselEl.innerHTML = `
-      <span class="vessel-chip ${isLive ? 'live' : 'scheduled'}" style="cursor:pointer" onclick="openVesselTracker('${routeJs}','${nameJs}',${mmsiJs},${latJs},${lonJs})">
+      <span class="vessel-chip scheduled" style="cursor:pointer" onclick="openVesselTracker('${routeJs}','${nameJs}',${mmsiJs})">
         🚢 ${v.name} <small style="opacity:.7">${label}</small>
-        <small style="color:var(--blue);margin-left:6px">📍 Track →</small>
+        <small style="color:var(--blue);margin-left:6px">📍 Track live →</small>
       </span>`;
   }
 }
