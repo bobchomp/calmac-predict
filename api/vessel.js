@@ -58,16 +58,19 @@ async function getLivePosition(mmsiList, box) {
     catch (_) { clearTimeout(timeout); return resolve(null); }
 
     ws.on('open', () => {
-      ws.send(JSON.stringify({
-        APIKey:       AISSTREAM_KEY,
+      const sub = {
+        APIKey:        AISSTREAM_KEY,
         BoundingBoxes: [[[minLat, minLon], [maxLat, maxLon]]],
-        FilterMMSI:   mmsiList.map(String),
-      }));
+        FilterMMSI:    mmsiList.map(String),
+      };
+      console.log('[vessel] WS open, subscribing mmsis:', mmsiList, 'box:', box);
+      ws.send(JSON.stringify(sub));
     });
 
     ws.on('message', raw => {
       try {
         const msg = JSON.parse(raw.toString());
+        console.log('[vessel] msg type:', msg.MessageType, 'keys:', Object.keys(msg.Message || {}).join(','));
         if (msg.MessageType === 'PositionReport') {
           const pos  = msg.Message?.PositionReport;
           const mmsi = msg.MetaData?.MMSI_String ? parseInt(msg.MetaData.MMSI_String) : null;
@@ -79,7 +82,7 @@ async function getLivePosition(mmsiList, box) {
       } catch (_) {}
     });
 
-    ws.on('error', () => { clearTimeout(timeout); finish(null); });
+    ws.on('error', (err) => { console.log('[vessel] WS error:', err.message); clearTimeout(timeout); finish(null); });
   });
 }
 
