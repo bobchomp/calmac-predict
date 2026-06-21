@@ -439,9 +439,9 @@
 .acc-ring svg{transform:rotate(-90deg);}
 .acc-ring-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-size:.95rem;font-weight:800;}
   </style>
-  <!-- Leaflet for in-app vessel tracker -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV/XN/WPcM=" crossorigin=""></script>
+  <!-- Leaflet for in-app vessel tracker (vendored — served from same origin) -->
+  <link rel="stylesheet" href="/leaflet.min.css"/>
+  <script src="/leaflet.min.js"></script>
   <!-- Vercel Web Analytics -->
   <script>window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments)};</script>
   <script defer src="/_vercel/insights/script.js"></script>
