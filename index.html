@@ -2225,7 +2225,7 @@ function openModal(routeName, sailingTime) {
             <div class="br-reason">${row.reason}</div>
             <div class="br-bar"><div class="br-bar-fill" style="width:${row.level.barPct}%;background:${row.level.barColor}"></div></div>
           </div>
-          <div class="br-level ${row.level.cls}">${row.level.label}</div>
+          <div class="br-level ${row.level.cls}">${row.level.barPct}%</div>
         </div>
       `).join('')}
 
