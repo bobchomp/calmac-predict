@@ -2725,7 +2725,7 @@ function openVesselTracker(routeName, vesselName, mmsi, liveLat, liveLon) {
   document.getElementById('vtOverlay').classList.add('open');
   document.body.style.overflow = 'hidden';
 
-  // Init map once, then reuse
+  // Wait for overlay transition to finish (~250ms) before init
   setTimeout(() => {
     if (!_vtMap) {
       _vtMap = L.map('vtMap', { zoomControl: true, attributionControl: true });
@@ -2764,8 +2764,10 @@ function openVesselTracker(routeName, vesselName, mmsi, liveLat, liveLon) {
       _vtMap.setView([vesLat, vesLon], 11);
     }
 
+    // Force Leaflet to recalculate container size now that the overlay is fully visible
     _vtMap.invalidateSize();
-  }, 60);
+    setTimeout(() => _vtMap.invalidateSize(), 150);
+  }, 300);
 }
 
 function closeVesselTracker() {
