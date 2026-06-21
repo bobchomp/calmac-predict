@@ -2840,15 +2840,15 @@ async function enrichModalWithVessel(routeName) {
   const aisData = await getVesselForRoute(routeName);
   if (aisData?.vessel) {
     const v = aisData.vessel;
-    const isLive = !v.scheduled;
+    const isLive    = !v.scheduled;
+    const trackLink = v.mmsi
+      ? ` <a href="https://www.vesselfinder.com/?mmsi=${v.mmsi}&zoom=12" target="_blank" rel="noopener" style="font-size:.78rem;color:var(--blue);text-decoration:none;white-space:nowrap">📍 Track on VesselFinder →</a>`
+      : '';
     if (isLive) {
-      const speed     = v.speed != null && v.speed > 0.5 ? ` · ${v.speed.toFixed(1)} kn` : '';
-      const trackLink = v.mmsi
-        ? ` <a href="https://www.vesselfinder.com/?mmsi=${v.mmsi}&zoom=12" target="_blank" rel="noopener" style="font-size:.78rem;color:var(--blue);text-decoration:none;white-space:nowrap">📍 Track live →</a>`
-        : '';
+      const speed = v.speed != null && v.speed > 0.5 ? ` · ${v.speed.toFixed(1)} kn` : '';
       vesselEl.innerHTML = `<span class="vessel-chip live">🚢 ${v.name} <small style="opacity:.7">(live${speed})</small>${trackLink}</span>`;
     } else {
-      vesselEl.innerHTML = `<span class="vessel-chip scheduled">🚢 ${v.name} <small style="opacity:.7">(scheduled)</small></span>`;
+      vesselEl.innerHTML = `<span class="vessel-chip scheduled">🚢 ${v.name} <small style="opacity:.7">(scheduled)</small>${trackLink}</span>`;
     }
   }
 }

@@ -106,10 +106,10 @@ module.exports = async function handler(req, res) {
     }
   } catch (_) { /* fall through */ }
 
-  // If aisstream fails, return the scheduled/default vessel for this route
-  const scheduled = Object.values(FLEET).find(v => v.routes.includes(route));
+  // If aisstream fails, return the scheduled/default vessel for this route (with MMSI for tracking link)
+  const fleetEntry = Object.entries(FLEET).find(([, v]) => v.routes.includes(route));
   return res.status(200).json({
-    vessel: scheduled ? { name: scheduled.name, scheduled: true } : null,
+    vessel: fleetEntry ? { name: fleetEntry[1].name, mmsi: parseInt(fleetEntry[0]), scheduled: true } : null,
     note: 'Live AIS unavailable — showing scheduled vessel',
     route,
     fetchedAt: new Date().toISOString(),
