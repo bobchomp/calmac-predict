@@ -2841,10 +2841,15 @@ async function enrichModalWithVessel(routeName) {
   if (aisData?.vessel) {
     const v = aisData.vessel;
     const isLive = !v.scheduled;
-    const chip = isLive
-      ? `<span class="vessel-chip live">🚢 ${v.name} <small style="opacity:.7">(live)</small></span>`
-      : `<span class="vessel-chip scheduled">🚢 ${v.name} <small style="opacity:.7">(scheduled)</small></span>`;
-    vesselEl.innerHTML = chip;
+    if (isLive) {
+      const speed     = v.speed != null && v.speed > 0.5 ? ` · ${v.speed.toFixed(1)} kn` : '';
+      const trackLink = v.mmsi
+        ? ` <a href="https://www.vesselfinder.com/?mmsi=${v.mmsi}&zoom=12" target="_blank" rel="noopener" style="font-size:.78rem;color:var(--blue);text-decoration:none;white-space:nowrap">📍 Track live →</a>`
+        : '';
+      vesselEl.innerHTML = `<span class="vessel-chip live">🚢 ${v.name} <small style="opacity:.7">(live${speed})</small>${trackLink}</span>`;
+    } else {
+      vesselEl.innerHTML = `<span class="vessel-chip scheduled">🚢 ${v.name} <small style="opacity:.7">(scheduled)</small></span>`;
+    }
   }
 }
 
@@ -3100,6 +3105,28 @@ async function runStatusCheck() {
       ? `${calibrated} routes calibrated with real CalMac data · Last weather fetch: ${lastFetched ? lastFetched.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : 'never'}`
       : 'Historical thresholds not yet loaded — predictions use weather only'
   });
+
+  // ── 7. Prediction Accuracy ──
+  try {
+    const accResp = await fetch('/api/accuracy', { signal: AbortSignal.timeout(5000) });
+    if (accResp.ok) {
+      const acc = await accResp.json();
+      if (!acc.points) {
+        results.push({ name: 'Prediction Accuracy', icon: '🎯', dot: 'amber', badge: 'warn', badgeText: '⚠ No data', detail: 'Accuracy tracking starts from today — check back in a few days' });
+      } else if (acc.last30 < 10) {
+        results.push({ name: 'Prediction Accuracy', icon: '🎯', dot: 'amber', badge: 'warn', badgeText: '⚠ Building', detail: `${acc.last30} data point${acc.last30 !== 1 ? 's' : ''} collected so far — need more to show accuracy` });
+      } else {
+        const dot        = acc.accuracy >= 80 ? 'green' : acc.accuracy >= 60 ? 'amber' : 'red';
+        const badge      = acc.accuracy >= 80 ? 'ok'    : acc.accuracy >= 60 ? 'warn'  : 'err';
+        const badgeText  = `${acc.accuracy >= 80 ? '✓' : acc.accuracy >= 60 ? '⚠' : '✗'} ${acc.accuracy}%`;
+        const bucketStr  = acc.buckets
+          .filter(b => b.count > 0 && b.sailedPct !== null)
+          .map(b => `${b.label} → ${b.sailedPct}% sailed`)
+          .join(' · ');
+        results.push({ name: 'Prediction Accuracy', icon: '🎯', dot, badge, badgeText, detail: `${acc.accuracy}% accurate (last 30 days · ${acc.last30} predictions)${bucketStr ? ' · ' + bucketStr : ''}` });
+      }
+    }
+  } catch (_) {}
 
   // ── Render ──
   container.innerHTML = results.map(r => `

@@ -9,7 +9,8 @@
     "api/cron.js":          { "maxDuration": 60 },
     "api/record.js":        { "maxDuration": 55 },
     "api/ingest-report.js":     { "maxDuration": 55 },
-    "api/check-timetables.js": { "maxDuration": 55 }
+    "api/check-timetables.js": { "maxDuration": 55 },
+    "api/accuracy.js":         { "maxDuration": 10 }
   },
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }

@@ -177,6 +177,15 @@ async function sendHealthAlertEmail(failedChecks, isTest = false, overrideTo = n
   }
 }
 
+// ── Accuracy log — push a prediction/outcome data point to Redis ─────────
+async function recordAccuracyPoint(routeKey, predictedChance, sailed) {
+  if (!KV_URL || predictedChance === null) return;
+  const log = (await kvGet('accuracy:log')) || [];
+  log.push({ ts: Date.now(), r: routeKey, p: Math.round(predictedChance), s: sailed });
+  if (log.length > 1000) log.splice(0, log.length - 1000);
+  await kvSet('accuracy:log', log);
+}
+
 // ── Write a cancellation record to Google Sheet ────────────────────────
 async function recordToSheet(route, calMacStatus, predictedChance) {
   if (!SHEET_URL) return;
@@ -321,8 +330,9 @@ module.exports = async function handler(req, res) {
         }
       } catch (_) {}
 
-      // Record to Google Sheet as ground truth
+      // Record to Google Sheet as ground truth + accuracy log
       await recordToSheet(routeKey, disruption.status, predictedChance);
+      await recordAccuracyPoint(routeKey, predictedChance, disruption.status !== 'cancelled');
       results.push({ route: routeKey, calMacStatus: disruption.status, predictedChance, recorded: true });
 
       // ── Step 3: send push notifications if subscribed & below threshold ──
@@ -353,6 +363,33 @@ module.exports = async function handler(req, res) {
           }
         }
       }
+    }
+
+    // ── Step 3b: sample 5 non-disrupted routes for accuracy calibration ──
+    // Gives us "predicted high % and it sailed" data points alongside the disrupted ones.
+    // Rotate the sample deterministically by day so different routes are covered over time.
+    const disruptedKeySet = new Set(disrupted.map(d => d.routeKey).filter(Boolean));
+    const normalRoutes    = Object.keys(ROUTE_COORDS).filter(k => !disruptedKeySet.has(k));
+    const dayIndex        = Math.floor(Date.now() / 86400000);
+    const sampleRoutes    = normalRoutes
+      .map((k, i) => ({ k, ord: (i * 7 + dayIndex) % normalRoutes.length }))
+      .sort((a, b) => a.ord - b.ord)
+      .slice(0, 5)
+      .map(x => x.k);
+
+    for (const routeKey of sampleRoutes) {
+      const coords = ROUTE_COORDS[routeKey];
+      try {
+        const weatherResp = await fetch(
+          `${BASE_URL}/api/weather?lat=${coords.lat}&lon=${coords.lon}&route=${encodeURIComponent(routeKey)}`,
+          { signal: AbortSignal.timeout(10000) }
+        );
+        if (weatherResp.ok) {
+          const weather = await weatherResp.json();
+          const chance  = weather?.sailingChance ?? weather?.chance ?? null;
+          await recordAccuracyPoint(routeKey, chance, true);
+        }
+      } catch (_) {}
     }
 
     // ── Step 4: health check — email if any service is broken ──
