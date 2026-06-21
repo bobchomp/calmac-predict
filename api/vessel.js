@@ -39,6 +39,50 @@ const FLEET = {
   235060249: { name: 'MV Loch Bhrusda',       routes: [] },
 };
 
+const AISSTREAM_KEY = process.env.AISSTREAM_API_KEY || '';
+
+// Open a brief WebSocket to aisstream.io, wait up to 5s for a position from any known MMSI in the bounding box
+async function getLivePosition(mmsiList, box) {
+  if (!AISSTREAM_KEY || !mmsiList.length) return null;
+  const [minLat, maxLat, minLon, maxLon] = box;
+
+  const { default: WebSocket } = await import('ws');
+
+  return new Promise(resolve => {
+    let done = false;
+    const finish = val => { if (!done) { done = true; resolve(val); try { ws.terminate(); } catch (_) {} } };
+    const timeout = setTimeout(() => finish(null), 5500);
+
+    let ws;
+    try { ws = new WebSocket('wss://stream.aisstream.io/v0/stream'); }
+    catch (_) { clearTimeout(timeout); return resolve(null); }
+
+    ws.on('open', () => {
+      ws.send(JSON.stringify({
+        APIKey:       AISSTREAM_KEY,
+        BoundingBoxes: [[[minLat, minLon], [maxLat, maxLon]]],
+        FilterMMSI:   mmsiList.map(String),
+      }));
+    });
+
+    ws.on('message', raw => {
+      try {
+        const msg = JSON.parse(raw.toString());
+        if (msg.MessageType === 'PositionReport') {
+          const pos  = msg.Message?.PositionReport;
+          const mmsi = msg.MetaData?.MMSI_String ? parseInt(msg.MetaData.MMSI_String) : null;
+          if (pos && mmsi && pos.Latitude !== 0) {
+            clearTimeout(timeout);
+            finish({ mmsi, lat: pos.Latitude, lon: pos.Longitude, speed: pos.Sog, heading: pos.TrueHeading });
+          }
+        }
+      } catch (_) {}
+    });
+
+    ws.on('error', () => { clearTimeout(timeout); finish(null); });
+  });
+}
+
 // Route bounding boxes [minLat, maxLat, minLon, maxLon]
 const ROUTE_BOXES = {
   'Ullapool - Stornoway (Lewis)':              [57.8, 58.3, -6.5, -5.0],
@@ -75,42 +119,36 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({ vessel: null, note: 'Route bounding box not defined' });
   }
 
-  const [minLat, maxLat, minLon, maxLon] = box;
+  // Fleet MMSIs assigned to this route
+  const routeEntries = Object.entries(FLEET).filter(([, v]) => v.routes.includes(route));
+  const routeMMSIs   = routeEntries.map(([mmsi]) => parseInt(mmsi));
 
-  // Use aisstream.io — free, no auth required for basic position data
-  // Connect via their REST endpoint (they have one undocumented at /vessels)
-  // Fall back to MarineTraffic if needed
-  try {
-    const url = `https://aisstream.io/api/vessels?minLat=${minLat}&maxLat=${maxLat}&minLon=${minLon}&maxLon=${maxLon}&shipType=60-69`;
-    const resp = await fetch(url, {
-      headers: { 'Accept': 'application/json' },
-      signal: AbortSignal.timeout(6000),
+  // Try live AIS via aisstream.io WebSocket (requires AISSTREAM_API_KEY env var)
+  const livePos = await getLivePosition(routeMMSIs, box);
+  if (livePos) {
+    const known = FLEET[livePos.mmsi];
+    return res.status(200).json({
+      vessel: {
+        name:    known?.name || 'Unknown vessel',
+        mmsi:    livePos.mmsi,
+        lat:     livePos.lat,
+        lon:     livePos.lon,
+        speed:   livePos.speed,
+        heading: livePos.heading,
+        live:    true,
+      },
+      route,
+      fetchedAt: new Date().toISOString(),
     });
+  }
 
-    if (resp.ok) {
-      const vessels = await resp.json();
-      const arr = Array.isArray(vessels) ? vessels : (vessels?.data || []);
-
-      // Match against known fleet
-      const matches = arr
-        .map(v => {
-          const mmsi = parseInt(v.mmsi || v.MMSI || 0);
-          const known = FLEET[mmsi];
-          return known ? { ...known, mmsi, lat: v.lat, lon: v.lon, speed: v.speed, heading: v.heading } : null;
-        })
-        .filter(Boolean);
-
-      if (matches.length > 0) {
-        return res.status(200).json({ vessel: matches[0], allOnRoute: matches, route, fetchedAt: new Date().toISOString() });
-      }
-    }
-  } catch (_) { /* fall through */ }
-
-  // If aisstream fails, return the scheduled/default vessel for this route (with MMSI for tracking link)
-  const fleetEntry = Object.entries(FLEET).find(([, v]) => v.routes.includes(route));
+  // No live position — return scheduled vessel info (MMSI only, no position)
+  const fleetEntry = routeEntries[0];
   return res.status(200).json({
-    vessel: fleetEntry ? { name: fleetEntry[1].name, mmsi: parseInt(fleetEntry[0]), scheduled: true } : null,
-    note: 'Live AIS unavailable — showing scheduled vessel',
+    vessel: fleetEntry
+      ? { name: fleetEntry[1].name, mmsi: parseInt(fleetEntry[0]), scheduled: true }
+      : null,
+    note: AISSTREAM_KEY ? 'Live AIS timeout — no vessel detected in area' : 'Set AISSTREAM_API_KEY for live position',
     route,
     fetchedAt: new Date().toISOString(),
   });

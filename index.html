@@ -2719,15 +2719,11 @@ function openVesselTracker(routeName, vesselName, mmsi, liveLat, liveLon) {
     return;
   }
   const ports  = ROUTE_PORTS[routeName];
-  const midLat = ports ? (ports.a[0] + ports.b[0]) / 2 : 57;
-  const midLon = ports ? (ports.a[1] + ports.b[1]) / 2 : -5.5;
-  const vesLat = liveLat ?? midLat;
-  const vesLon = liveLon ?? midLon;
   const isLive = liveLat != null;
 
   document.getElementById('vtVesselName').textContent = vesselName || 'Vessel Tracker';
   document.getElementById('vtRouteName').textContent  = routeName || '';
-  document.getElementById('vtStatus').textContent     = isLive ? '🟢 Live position' : '🔵 Approximate position — route midpoint shown';
+  document.getElementById('vtStatus').textContent     = isLive ? '🟢 Live position' : '⚪ Live position unavailable — showing route';
   const mtLink = document.getElementById('vtMTLink');
   if (mmsi) { mtLink.href = `https://www.marinetraffic.com/en/ais/details/ships/mmsi:${mmsi}`; mtLink.style.display = ''; }
   else { mtLink.style.display = 'none'; }
@@ -2746,14 +2742,17 @@ function openVesselTracker(routeName, vesselName, mmsi, liveLat, liveLon) {
     }
 
     // Clear previous markers/line
-    if (_vtVesselMarker) _vtMap.removeLayer(_vtVesselMarker);
+    if (_vtVesselMarker) { _vtMap.removeLayer(_vtVesselMarker); _vtVesselMarker = null; }
     if (_vtPortA)        _vtMap.removeLayer(_vtPortA);
     if (_vtPortB)        _vtMap.removeLayer(_vtPortB);
     if (_vtLine)         _vtMap.removeLayer(_vtLine);
 
-    _vtVesselMarker = L.marker([vesLat, vesLon], { icon: _shipIcon(L), zIndexOffset: 100 })
-      .bindPopup(`<b>${vesselName || 'Vessel'}</b><br>${isLive ? 'Live position' : 'Approximate'}`)
-      .addTo(_vtMap);
+    // Only place vessel marker when we have a real live position
+    if (isLive) {
+      _vtVesselMarker = L.marker([liveLat, liveLon], { icon: _shipIcon(L), zIndexOffset: 100 })
+        .bindPopup(`<b>${vesselName || 'Vessel'}</b><br>Live position`)
+        .addTo(_vtMap);
+    }
 
     if (ports) {
       _vtPortA = L.marker([ports.a[0], ports.a[1]], { icon: _portIcon(L) })
@@ -2766,12 +2765,13 @@ function openVesselTracker(routeName, vesselName, mmsi, liveLat, liveLon) {
         color: '#005eb8', weight: 2, dashArray: '5 6', opacity: 0.7,
       }).addTo(_vtMap);
 
-      const bounds = L.latLngBounds(
-        [[ports.a[0], ports.a[1]], [ports.b[0], ports.b[1]], [vesLat, vesLon]]
-      ).pad(0.25);
-      _vtMap.fitBounds(bounds);
+      const boundsCoords = [[ports.a[0], ports.a[1]], [ports.b[0], ports.b[1]]];
+      if (isLive) boundsCoords.push([liveLat, liveLon]);
+      _vtMap.fitBounds(L.latLngBounds(boundsCoords).pad(0.25));
+    } else if (isLive) {
+      _vtMap.setView([liveLat, liveLon], 11);
     } else {
-      _vtMap.setView([vesLat, vesLon], 11);
+      _vtMap.setView([57, -5.5], 7);
     }
 
     // Force Leaflet to recalculate container size now that the overlay is fully visible
