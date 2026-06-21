@@ -35,7 +35,10 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
-  // 1. API calls → always network, never cache
+  // 1. Cross-origin requests (CDN, tile servers, external APIs) → let browser handle
+  if (url.origin !== self.location.origin) return;
+
+  // 2. API calls → always network, never cache
   if (url.pathname.startsWith('/api/')) return;
 
   // 2. HTML navigation (index.html, /) → network-first

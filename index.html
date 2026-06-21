@@ -2708,6 +2708,16 @@ const _portIcon = L => L.divIcon({
 });
 
 function openVesselTracker(routeName, vesselName, mmsi, liveLat, liveLon) {
+  if (typeof L === 'undefined') {
+    document.getElementById('vtStatus').textContent = '⚠️ Map failed to load — try refreshing the page';
+    document.getElementById('vtOverlay').classList.add('open');
+    document.body.style.overflow = 'hidden';
+    const mtLink = document.getElementById('vtMTLink');
+    if (mmsi) { mtLink.href = `https://www.marinetraffic.com/en/ais/details/ships/mmsi:${mmsi}`; mtLink.style.display = ''; }
+    document.getElementById('vtVesselName').textContent = vesselName || 'Vessel Tracker';
+    document.getElementById('vtRouteName').textContent  = routeName || '';
+    return;
+  }
   const ports  = ROUTE_PORTS[routeName];
   const midLat = ports ? (ports.a[0] + ports.b[0]) / 2 : 57;
   const midLon = ports ? (ports.a[1] + ports.b[1]) / 2 : -5.5;
