@@ -59,18 +59,21 @@ async function getLivePosition(mmsiList, box) {
 
     ws.on('open', () => {
       const sub = {
-        APIKey:        AISSTREAM_KEY,
-        BoundingBoxes: [[[minLat, minLon], [maxLat, maxLon]]],
-        FilterMMSI:    mmsiList.map(String),
+        APIKey:             AISSTREAM_KEY,
+        BoundingBoxes:      [[[minLat, minLon], [maxLat, maxLon]]],
+        FiltersShipMMSI:    mmsiList.map(String),
+        FilterMessageTypes: ['PositionReport'],
       };
-      console.log('[vessel] WS open, subscribing mmsis:', mmsiList, 'box:', box);
+      console.log('[vessel] WS open, mmsis:', mmsiList.join(','), 'box:', box.join(','));
       ws.send(JSON.stringify(sub));
     });
 
+    let msgCount = 0;
     ws.on('message', raw => {
       try {
         const msg = JSON.parse(raw.toString());
-        console.log('[vessel] msg type:', msg.MessageType, 'keys:', Object.keys(msg.Message || {}).join(','));
+        msgCount++;
+        console.log('[vessel] msg#' + msgCount + ' type:', msg.MessageType, JSON.stringify(msg).slice(0, 200));
         if (msg.MessageType === 'PositionReport') {
           const pos  = msg.Message?.PositionReport;
           const mmsi = msg.MetaData?.MMSI_String ? parseInt(msg.MetaData.MMSI_String) : null;
