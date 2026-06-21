@@ -2698,21 +2698,21 @@ function openVesselTracker(routeName, vesselName, mmsi) {
 
   document.getElementById('vtVesselName').textContent = vesselName || 'Vessel Tracker';
   document.getElementById('vtRouteName').textContent  = routeName  || '';
-  document.getElementById('vtStatus').textContent     = '🟢 Live AIS via MarineTraffic';
+  document.getElementById('vtStatus').textContent     = '🟢 Live AIS via VesselFinder';
 
   const mtLink = document.getElementById('vtMTLink');
   if (mmsi) {
-    mtLink.href         = `https://www.marinetraffic.com/en/ais/details/ships/mmsi:${mmsi}`;
+    mtLink.href          = `https://www.vesselfinder.com/?mmsi=${mmsi}`;
     mtLink.style.display = '';
   } else {
     mtLink.style.display = 'none';
   }
 
-  // Build MarineTraffic embed URL — when MMSI is set and no centery/centerx given,
-  // MarineTraffic auto-centres and selects that vessel
+  // VesselFinder: ?mmsi= centres the map on that vessel automatically
+  // Falls back to area view when no MMSI known for the route
   const embedUrl = mmsi
-    ? `https://www.marinetraffic.com/en/ais/embed/zoom:${zoom}/maptype:0/shownames:false/mmsi:${mmsi}/shipid:0/fleet:/fleet_id:/vtypes:/showmenu:/remember:false`
-    : `https://www.marinetraffic.com/en/ais/embed/zoom:${zoom}/centery:${midLat}/centerx:${midLon}/maptype:0/shownames:false/mmsi:0/shipid:0/fleet:/fleet_id:/vtypes:/showmenu:/remember:false`;
+    ? `https://www.vesselfinder.com/?mmsi=${mmsi}&zoom=${zoom}&fleet=false`
+    : `https://www.vesselfinder.com/?lat=${midLat}&lon=${midLon}&zoom=${zoom}&fleet=false`;
 
   document.getElementById('vtOverlay').classList.add('open');
   document.body.style.overflow = 'hidden';
