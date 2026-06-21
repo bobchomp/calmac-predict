@@ -115,46 +115,47 @@ const ROUTE_BOXES = {
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', 's-maxage=120, stale-while-revalidate=30');
 
   const route = req.query.route;
   if (!route) return res.status(400).json({ error: 'route param required' });
 
-  const box = ROUTE_BOXES[route];
-  if (!box) {
-    return res.status(200).json({ vessel: null, note: 'Route bounding box not defined' });
-  }
-
-  // Fleet MMSIs assigned to this route
   const routeEntries = Object.entries(FLEET).filter(([, v]) => v.routes.includes(route));
-  const routeMMSIs   = routeEntries.map(([mmsi]) => parseInt(mmsi));
+  const fleetEntry   = routeEntries[0];
 
-  // Try live AIS via aisstream.io WebSocket (requires AISSTREAM_API_KEY env var)
-  const livePos = await getLivePosition(routeMMSIs, box);
-  if (livePos) {
-    const known = FLEET[livePos.mmsi];
-    return res.status(200).json({
-      vessel: {
-        name:    known?.name || 'Unknown vessel',
-        mmsi:    livePos.mmsi,
-        lat:     livePos.lat,
-        lon:     livePos.lon,
-        speed:   livePos.speed,
-        heading: livePos.heading,
-        live:    true,
-      },
-      route,
-      fetchedAt: new Date().toISOString(),
-    });
+  // ?live=1 — called from inside the tracker overlay after the map opens
+  // Does the slow WebSocket lookup; no CDN cache
+  if (req.query.live === '1') {
+    res.setHeader('Cache-Control', 'no-store');
+    const box = ROUTE_BOXES[route];
+    if (box && routeEntries.length) {
+      const routeMMSIs = routeEntries.map(([mmsi]) => parseInt(mmsi));
+      const livePos    = await getLivePosition(routeMMSIs, box);
+      if (livePos) {
+        const known = FLEET[livePos.mmsi];
+        return res.status(200).json({
+          vessel: {
+            name:    known?.name || 'Unknown vessel',
+            mmsi:    livePos.mmsi,
+            lat:     livePos.lat,
+            lon:     livePos.lon,
+            speed:   livePos.speed,
+            heading: livePos.heading,
+            live:    true,
+          },
+          route,
+          fetchedAt: new Date().toISOString(),
+        });
+      }
+    }
+    return res.status(200).json({ vessel: null, note: 'No live position found', route });
   }
 
-  // No live position — return scheduled vessel info (MMSI only, no position)
-  const fleetEntry = routeEntries[0];
+  // Default (no ?live) — instant response from FLEET registry, no WS
+  res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=60');
   return res.status(200).json({
     vessel: fleetEntry
       ? { name: fleetEntry[1].name, mmsi: parseInt(fleetEntry[0]), scheduled: true }
       : null,
-    note: AISSTREAM_KEY ? 'Live AIS timeout — no vessel detected in area' : 'Set AISSTREAM_API_KEY for live position',
     route,
     fetchedAt: new Date().toISOString(),
   });

@@ -2777,6 +2777,34 @@ function openVesselTracker(routeName, vesselName, mmsi, liveLat, liveLon) {
     // Force Leaflet to recalculate container size now that the overlay is fully visible
     _vtMap.invalidateSize();
     setTimeout(() => _vtMap.invalidateSize(), 150);
+
+    // Fetch live position in background (may take up to 5s)
+    {
+      document.getElementById('vtStatus').textContent = '🔄 Fetching live position…';
+      fetch(`/api/vessel?route=${encodeURIComponent(routeName)}&live=1`)
+        .then(r => r.json())
+        .then(data => {
+          if (!data?.vessel?.live) {
+            document.getElementById('vtStatus').textContent = '⚪ Live position unavailable — showing route';
+            return;
+          }
+          const v = data.vessel;
+          document.getElementById('vtStatus').textContent = `🟢 Live position · ${v.speed != null && v.speed > 0.5 ? v.speed.toFixed(1) + ' kn' : 'stationary'}`;
+          if (_vtVesselMarker) _vtMap.removeLayer(_vtVesselMarker);
+          _vtVesselMarker = L.marker([v.lat, v.lon], { icon: _shipIcon(L), zIndexOffset: 100 })
+            .bindPopup(`<b>${v.name}</b><br>Live position`)
+            .addTo(_vtMap);
+          if (ports) {
+            const bc = [[ports.a[0], ports.a[1]], [ports.b[0], ports.b[1]], [v.lat, v.lon]];
+            _vtMap.fitBounds(L.latLngBounds(bc).pad(0.2));
+          } else {
+            _vtMap.setView([v.lat, v.lon], 11);
+          }
+        })
+        .catch(() => {
+          document.getElementById('vtStatus').textContent = '⚪ Live position unavailable — showing route';
+        });
+    }
   }, 300);
 }
 
