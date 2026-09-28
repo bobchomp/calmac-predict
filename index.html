@@ -819,7 +819,7 @@
     <div class="tn-handle"></div>
     <div class="tn-header">
       <div class="tn-title" id="tnTitle"></div>
-      <div class="tn-subtitle">Timetable notice from CalMac</div>
+      <div class="tn-subtitle">Service notice from CalMac</div>
     </div>
     <div class="tn-body" id="tnBody"></div>
   </div>
@@ -1946,13 +1946,13 @@ function buildCard(r, i) {
         })()}
       </div>
     </div>
-    ${disruption?.timetableNotice ? `<div class="timetable-notice" onclick='openTimetableNotice(${JSON.stringify(r.name)})'>
+    ${routeNotices(r.name).map((n, idx) => `<div class="timetable-notice" onclick='openTimetableNotice(${JSON.stringify(r.name)}, ${idx})'>
       <div class="timetable-notice-body">
-        <div class="timetable-notice-title">📋 ${disruption.timetableNotice.title}</div>
-        ${disruption.timetableNotice.detail ? `<div class="timetable-notice-detail">${(d => d.length > 120 ? d.substring(0, 120).trimEnd() + '…' : d)(disruption.timetableNotice.detail.replace(/https?:\/\/\S+/g, '').replace(/\s{2,}/g, ' ').trim())}</div>` : ''}
+        <div class="timetable-notice-title">${NOTICE_ICONS[n.type] || '📋'} ${escapeHtml(n.title)}</div>
+        ${n.detail ? `<div class="timetable-notice-detail">${escapeHtml((d => d.length > 120 ? d.substring(0, 120).trimEnd() + '…' : d)(n.detail.replace(/https?:\/\/\S+/g, '').replace(/\s{2,}/g, ' ').trim()))}</div>` : ''}
       </div>
       <div class="timetable-notice-chevron">›</div>
-    </div>` : ''}
+    </div>`).join('')}
     <div class="card-weather ${wc}">
       <div class="wx-item">💨 <strong>${(_useTomorrow && r.tomorrow?.maxGustMph !== null ? r.tomorrow.maxGustMph : r.maxGustMph) !== undefined ? (_useTomorrow && r.tomorrow?.maxGustMph !== null ? r.tomorrow.maxGustMph : r.maxGustMph)+' mph' : '–'}</strong>${r.windDirDeg !== null && r.windDirDeg !== undefined ? ` <span style="opacity:.6;font-size:.78rem">${windDirLabel(r.windDirDeg)}</span>` : ''}</div>
       <div class="wx-item">🌊 <strong>${(_useTomorrow ? r.tomorrow?.maxWaveM : r.maxWaveM) !== null && (_useTomorrow ? r.tomorrow?.maxWaveM : r.maxWaveM) !== undefined ? (_useTomorrow ? r.tomorrow.maxWaveM : r.maxWaveM)+'m' : '–'}</strong></div>
@@ -2007,9 +2007,13 @@ setInterval(loadDisruptionBanner, 10 * 60 * 1000); // refresh CalMac disruptions
 
 // Convert plain-text URLs in CalMac advisory text to clickable links.
 // Applied client-side in the modal only — cards show stripped plain text.
+function escapeHtml(text) {
+  return String(text ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+}
+
 function linkifyDetail(text) {
   const seen = new Set();
-  return (text || '').replace(/https?:\/\/[^\s]+/g, url => {
+  return escapeHtml(text).replace(/https?:\/\/[^\s]+/g, url => {
     if (seen.has(url)) return '';
     seen.add(url);
     const label = url.replace(/^https?:\/\/(www\.)?/, '').replace(/[/#?].*$/, '');
@@ -2301,11 +2305,26 @@ document.getElementById('modalOverlay').addEventListener('click', e => {
   if (e.target === document.getElementById('modalOverlay')) closeModal();
 });
 
-// ── TIMETABLE NOTICE POPUP ──
-function openTimetableNotice(routeName) {
-  const notice = liveDisruptions[routeName]?.timetableNotice;
+// ── CALMAC NOTICES (card banners + popup) ──
+const NOTICE_ICONS = { WARNING: '⚠️', SAILING: '⛴️', SERVICE: '📋' };
+
+// Up to 3 notices per card. Several CalMac routes can share one card, so
+// their notices are merged, de-duplicated by title and re-ranked.
+function routeNotices(routeName) {
+  const d = liveDisruptions[routeName];
+  if (!d) return [];
+  const list = d.notices || (d.timetableNotice ? [d.timetableNotice] : []);
+  const seen = new Set();
+  return list
+    .filter(n => { const k = (n.title || '').trim().toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; })
+    .sort((a, b) => (a.priority ?? 9) - (b.priority ?? 9))
+    .slice(0, 3);
+}
+
+function openTimetableNotice(routeName, idx = 0) {
+  const notice = routeNotices(routeName)[idx];
   if (!notice) return;
-  document.getElementById('tnTitle').textContent = notice.title || 'Timetable notice';
+  document.getElementById('tnTitle').textContent = notice.title || 'Service notice';
   document.getElementById('tnBody').innerHTML = linkifyDetail(notice.detail) || '<em style="opacity:.6">No further detail provided.</em>';
   document.getElementById('tnOverlay').classList.add('open');
   document.body.style.overflow = 'hidden';
@@ -2691,7 +2710,11 @@ async function loadDisruptionBanner() {
     const allRoutes_status = data.routes || disrupted;
     liveDisruptions = {};
     // Store ALL routes so sailingStatuses is available even for BE_AWARE routes
-    allRoutes_status.forEach(d => { if (d.routeKey) liveDisruptions[d.routeKey] = d; });
+    allRoutes_status.forEach(d => {
+      if (!d.routeKey) return;
+      const prevNotices = liveDisruptions[d.routeKey]?.notices || [];
+      liveDisruptions[d.routeKey] = { ...d, notices: [...prevNotices, ...(d.notices || [])] };
+    });
     lastDisruptionFetch = new Date();
     // Re-render so sailing rows reflect live CalMac status
     if (Object.keys(liveDisruptions).length > 0 && allRoutes.length > 0) {

@@ -109,6 +109,45 @@ function extractTimetableNotice(routeStatuses) {
   return null;
 }
 
+// Notices shown on a route card, most important first (max 3). INFORMATION
+// entries are skipped: they're boilerplate CalMac attaches to every route.
+// SERVICE entries are mostly roadworks/facilities, so only timetable ones count.
+const MAX_NOTICES = 3;
+const TIMETABLE_KEYWORDS = /timetable|vessel\s*sub|additional\s*sail|replacement\s*vessel|tidal\s*amend/i;
+
+function extractNotices(routeStatuses) {
+  const now = new Date();
+  const rank = s => {
+    const active = !s.startDateTime || new Date(s.startDateTime) <= now;
+    if (s.status === 'WARNING') return 0;
+    if (s.status === 'SAILING') return active ? 1 : 3;
+    if (s.status === 'SERVICE' && TIMETABLE_KEYWORDS.test(s.title || '')) return 2;
+    return null;
+  };
+
+  const seen = new Set();
+  return (routeStatuses || [])
+    .filter(s => !(s.endDateTime && new Date(s.endDateTime) < now))
+    .map(s => ({ s, rank: rank(s) }))
+    .filter(x => x.rank !== null)
+    .sort((a, b) => a.rank - b.rank || new Date(a.s.startDateTime || 0) - new Date(b.s.startDateTime || 0))
+    .filter(({ s }) => {
+      const key = (s.title || '').trim().toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, MAX_NOTICES)
+    .map(({ s, rank }) => ({
+      title:         s.title || 'Service notice',
+      type:          s.status,
+      priority:      rank,
+      detail:        cleanDetail(s.detail || ''),
+      startDateTime: s.startDateTime || null,
+      endDateTime:   s.endDateTime   || null,
+    }));
+}
+
 // Check if a routeStatus window covers today
 function coversToday(startDateTime, endDateTime) {
   if (!startDateTime || !endDateTime) return false;
@@ -196,6 +235,7 @@ module.exports = async function handler(req, res) {
           sailingStatuses,
           isUpcoming: r.isStatusChangeUpcoming || false,
           timetableNotice: extractTimetableNotice(r.routeStatuses),
+          notices: extractNotices(r.routeStatuses),
           raw: r.status,
         };
       })
