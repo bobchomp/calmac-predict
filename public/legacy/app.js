@@ -348,33 +348,6 @@ function sailingsFor(routeName, tomorrow) {
   return { sailings: live ?? TIMETABLE[routeName] ?? [], isLive: !!live };
 }
 
-// ── ROUTES with coordinates ──
-const ROUTES = [
-  { name: 'Ardrossan - Brodick (Arran)',                   lat: 55.58, lon: -5.09 },
-  { name: 'Troon - Brodick (Arran)',                       lat: 55.53, lon: -4.97 },
-  { name: 'Kennacraig - Port Ellen / Port Askaig (Islay)', lat: 55.87, lon: -5.50 },
-  { name: 'Oban - Craignure (Mull)',                       lat: 56.41, lon: -5.47 },
-  { name: 'Oban - Coll / Tiree',                          lat: 56.62, lon: -6.52 },
-  { name: 'Oban - Colonsay',                              lat: 56.07, lon: -6.19 },
-  { name: 'Oban - Castlebay / Lochboisdale',              lat: 56.95, lon: -7.32 },
-  { name: 'Mallaig - Armadale (Skye)',                    lat: 57.06, lon: -5.83 },
-  { name: 'Ullapool - Stornoway (Lewis)',                  lat: 58.20, lon: -6.39 },
-  { name: 'Uig - Tarbert / Lochmaddy',                    lat: 57.73, lon: -6.96 },
-  { name: 'Gourock - Dunoon',                             lat: 55.96, lon: -4.92 },
-  { name: 'Wemyss Bay - Rothesay (Bute)',                 lat: 55.84, lon: -5.05 },
-  { name: 'Colintraive - Rhubodach (Bute)',               lat: 55.92, lon: -5.15 },
-  { name: 'Largs - Cumbrae Slip',                         lat: 55.79, lon: -4.87 },
-  { name: 'Tarbert - Portavadie',                         lat: 55.87, lon: -5.41 },
-  { name: 'Claonaig - Lochranza (Arran)',                 lat: 55.70, lon: -5.39 },
-  { name: 'Tobermory - Kilchoan',                         lat: 56.62, lon: -6.08 },
-  { name: 'Fishnish - Lochaline',                         lat: 56.52, lon: -5.73 },
-  { name: 'Mallaig - Small Isles',                        lat: 56.97, lon: -6.30 },
-  { name: 'Oban - Lismore',                               lat: 56.50, lon: -5.49 },
-  { name: 'Seil - Luing',                                 lat: 56.23, lon: -5.62 },
-  { name: 'Port Askaig - Feolin (Jura)',                  lat: 55.85, lon: -6.10 },
-];
-
-
 const ROUTE_NAMES = ROUTES.map(r => r.name);
 
 // ── STATE ──
@@ -384,45 +357,6 @@ let searchQuery  = '';
 let lastFetched  = null;
 
 // ── HELPERS ──
-// ── ROUTE PROFILES ──
-// Each route has a wind threshold (mph gusts that typically cause cancellation)
-// and an exposure rating (1=sheltered, 2=moderate, 3=exposed, 4=very exposed)
-// Sheltered routes need much higher winds to cancel; exposed routes cancel earlier.
-// Winter months (Nov-Mar) lower effective threshold by ~15%.
-const ROUTE_PROFILES = {
-  'Ardrossan - Brodick (Arran)':                   { threshold: 45, exposure: 3 },
-  'Troon - Brodick (Arran)':                        { threshold: 45, exposure: 3 },
-  'Kennacraig - Port Ellen / Port Askaig (Islay)':  { threshold: 42, exposure: 3 },
-  'Oban - Craignure (Mull)':                        { threshold: 50, exposure: 2 },
-  'Oban - Coll / Tiree':                            { threshold: 38, exposure: 4 },
-  'Oban - Colonsay':                                { threshold: 40, exposure: 3 },
-  'Oban - Castlebay / Lochboisdale':                { threshold: 38, exposure: 4 },
-  'Mallaig - Armadale (Skye)':                      { threshold: 55, exposure: 1 },
-  'Ullapool - Stornoway (Lewis)':                   { threshold: 40, exposure: 4 },
-  'Uig - Tarbert / Lochmaddy':                      { threshold: 40, exposure: 4 },
-  'Gourock - Dunoon':                               { threshold: 65, exposure: 1 },
-  'Wemyss Bay - Rothesay (Bute)':                  { threshold: 60, exposure: 1 },
-  'Colintraive - Rhubodach (Bute)':                { threshold: 70, exposure: 1 },
-  'Largs - Cumbrae Slip':                          { threshold: 65, exposure: 1 },
-  'Tarbert - Portavadie':                          { threshold: 55, exposure: 2 },
-  'Claonaig - Lochranza (Arran)':                  { threshold: 48, exposure: 2 },
-  'Tobermory - Kilchoan':                          { threshold: 45, exposure: 3 },
-  'Fishnish - Lochaline':                          { threshold: 55, exposure: 2 },
-  'Mallaig - Small Isles':                         { threshold: 38, exposure: 4 },
-  'Oban - Lismore':                                { threshold: 55, exposure: 2 },
-  'Seil - Luing':                                  { threshold: 60, exposure: 1 },
-  'Port Askaig - Feolin (Jura)':                   { threshold: 58, exposure: 1 },
-  'Tayinloan - Gigha':                             { threshold: 62, exposure: 1 },
-  'Sconser - Raasay':                              { threshold: 55, exposure: 2 },
-  'Fionnphort - Iona':                             { threshold: 60, exposure: 1 },
-};
-
-// Routes with tidal restrictions that can cause cancellations independently of weather
-const TIDAL_ROUTES = new Set([
-  'Uig - Tarbert / Lochmaddy',  // Harris/Berneray tidal restrictions
-  'Mallaig - Small Isles',       // Some piers have tidal access windows
-]);
-
 // ── SAILING CHANCE CACHE ────────────────────────────────────────────────
 // Pre-computed per-sailing chances: { "RouteName|HH:MM": 79 }
 // Written by buildCard(), read by openModal()
@@ -457,20 +391,9 @@ async function loadHistoricalThresholds() {
   }
 }
 
-// Returns the historical reliability for a route in the current season (0–100),
-// or null if we have no data yet.
+// Historical reliability for a route in the current season (0–100), or null.
 function getHistoricalReliability(routeName) {
-  const t = historicalThresholds[routeName];
-  if (!t || !t.samples || t.samples < 2) return null; // not enough data to trust
-
-  const month = new Date().getMonth() + 1; // 1-based
-  const WINTER   = [11, 12, 1, 2];
-  const SUMMER   = [5, 6, 7, 8, 9];
-
-  if (WINTER.includes(month)  && t.winter)   return parseFloat(t.winter);
-  if (SUMMER.includes(month)  && t.summer)   return parseFloat(t.summer);
-  if (t.shoulder)                            return parseFloat(t.shoulder);
-  return parseFloat(t.base) || null;
+  return historicalReliability(historicalThresholds, routeName);
 }
 
 // ── WIND DIRECTION ──
@@ -503,139 +426,17 @@ function isBeforeDawn(hour, lat, lon) {
   return hour < Math.ceil(sunrise);
 }
 
-// ── SEASON FACTOR ──
-function seasonFactor() {
-  const month = new Date().getMonth(); // 0=Jan
-  // Winter Nov-Feb (months 10,11,0,1): sailings cancel at lower wind speeds
-  if (month >= 10 || month <= 1) return 0.85;
-  // Early spring Mar, late autumn Sep-Oct (months 2,8,9): slightly reduced
-  if (month === 2 || month === 8 || month === 9) return 0.93;
-  // Summer May-Aug + shoulder Apr (months 3,4,5,6,7): standard
-  return 1.0;
-}
-
-// ── CORE RISK ALGORITHM ──
-// Returns a risk score 0-100 using all available data for a specific hour
-function calcHourlyRisk(routeName, hour, hourlyWeather, hourlyMarine) {
-  const profile = ROUTE_PROFILES[routeName] || { threshold: 45, exposure: 2 };
-  const season  = seasonFactor();
-  const effectiveThreshold = profile.threshold * season;
-  let risk = 0;
-
-  // ── WIND (0-40 pts) ──
-  // How close are we to the route's specific cancellation threshold?
-  // Open-Meteo returns wind in m/s — convert to mph to match threshold values
-  const gust = (((hourlyWeather.windgusts_10m || [])[hour] ?? (hourlyWeather.windspeed_10m || [])[hour]) ?? 0) * 2.237;
-  const wind = ((hourlyWeather.windspeed_10m || [])[hour] ?? 0) * 2.237;
-  const gustRatio = gust / effectiveThreshold; // >1 means likely cancelled
-  if      (gustRatio >= 1.2)  risk += 40; // Well over threshold — very likely cancelled
-  else if (gustRatio >= 1.0)  risk += 34; // At or just over threshold
-  else if (gustRatio >= 0.9)  risk += 26; // 90% of threshold — high risk
-  else if (gustRatio >= 0.75) risk += 16; // 75% — moderate risk
-  else if (gustRatio >= 0.6)  risk += 8;  // 60% — low-moderate risk
-  else if (gustRatio >= 0.45) risk += 3;  // 45% — minimal risk
-
-  // ── WAVE HEIGHT (0-30 pts) ──
-  // Significant wave height is often more decisive than wind alone
-  if (hourlyMarine) {
-    const waveH = (hourlyMarine.wave_height || [])[hour] || 0;
-    const swellH = (hourlyMarine.swell_wave_height || [])[hour] || 0;
-    const wavePeriod = (hourlyMarine.wave_period || [])[hour] || 8;
-    // Long-period swell is more disruptive than short chop at same height
-    const periodFactor = wavePeriod > 12 ? 1.3 : wavePeriod > 8 ? 1.1 : 1.0;
-    const effectiveWave = Math.max(waveH, swellH * 0.8) * periodFactor;
-
-    // Thresholds vary by exposure: sheltered routes rarely see big waves
-    const waveThreshold = profile.exposure === 1 ? 3.0
-                        : profile.exposure === 2 ? 2.5
-                        : profile.exposure === 3 ? 2.0
-                        : 1.5; // very exposed
-    const waveRatio = effectiveWave / waveThreshold;
-    if (waveRatio >= 1.2)      risk += 30;
-    else if (waveRatio >= 1.0) risk += 22;
-    else if (waveRatio >= 0.8) risk += 14;
-    else if (waveRatio >= 0.6) risk += 7;
-    else if (waveRatio >= 0.4) risk += 2;
-  } else {
-    // No marine data — estimate wave risk from wind and exposure
-    const estimatedWave = (wind * 0.04) * profile.exposure;
-    if (estimatedWave > 2.5) risk += 15;
-    else if (estimatedWave > 1.5) risk += 8;
-    else if (estimatedWave > 1.0) risk += 3;
-  }
-
-  // ── VISIBILITY / FOG (0-15 pts) ──
-  const vis = (hourlyWeather.visibility || [])[hour];
-  if (vis !== undefined) {
-    if (vis < 500)        risk += 15; // Dense fog — serious disruption risk
-    else if (vis < 1000)  risk += 10;
-    else if (vis < 3000)  risk += 5;
-    else if (vis < 5000)  risk += 2;
-  }
-
-  // ── PRECIPITATION / SNOW (0-10 pts) ──
-  const snow   = (hourlyWeather.snowfall      || [])[hour] || 0;
-  const precip = (hourlyWeather.precipitation || [])[hour] || 0;
-  const code   = (hourlyWeather.weathercode   || [])[hour] || 0;
-  if (snow > 2 || code >= 71)                risk += 10; // Heavy snow/blizzard
-  else if (snow > 0.5 || code >= 61)         risk += 5;  // Light snow or heavy rain
-  else if (precip > 5  || code >= 51)        risk += 2;  // Moderate rain/drizzle
-
-  // ── TIDAL PENALTY (0-5 pts) ──
-  // Routes with known tidal restrictions get a small background risk
-  if (TIDAL_ROUTES.has(routeName)) risk += 3;
-
-  return Math.min(100, Math.round(risk));
-}
-
-// ── 12-HOUR OVERALL RISK ──
-// Takes the worst risk across the next 12 hours (weighted toward nearer hours)
-function calcOverallRisk(routeName, currentHour, hourlyWeather, hourlyMarine) {
-  const risks = [];
-  for (let i = 0; i < 12; i++) {
-    const h = Math.min(currentHour + i, 23);
-    const r = calcHourlyRisk(routeName, h, hourlyWeather, hourlyMarine);
-    // Weight nearer hours slightly higher — next 3 hours matter most
-    const weighted = i < 3 ? r * 1.1 : r;
-    risks.push(weighted);
-  }
-  risks.sort((a, b) => b - a);
-  // Use average of the 3 worst hours — more robust than pure max
-  // (single gusty hour shouldn't tank an otherwise calm day)
-  const worst3 = risks.slice(0, 3);
-  const score = worst3.reduce((a, b) => a + b, 0) / worst3.length;
-  return Math.min(100, Math.round(score));
-}
-
+// Risk scoring (seasonFactor, calcHourlyRisk, calcOverallRisk, verdictFromRisk,
+// ROUTES, ROUTE_PROFILES, TIDAL_ROUTES) lives in lib/risk.js and is put on
+// window by components/LegacyScript.js before this script runs.
 function sailingChance(risk, routeName) {
-  const weatherChance = Math.max(0, Math.min(100, Math.round(100 - risk)));
-
-  // If we have historical data, blend it in.
-  // Historical reliability caps the max possible score AND pulls the
-  // prediction toward the route's real-world track record.
-  // Weight: 70% weather model, 30% historical baseline.
-  const histRel = routeName ? getHistoricalReliability(routeName) : null;
-  if (histRel === null) return weatherChance;
-
-  // Hard cap: can never predict higher than historical reliability + 10%
-  // Allows genuinely calm days to score a bit higher than the route's average
-  const cap = Math.min(100, histRel + 10);
-
-  // Blended score: 70% weather model, 30% historical baseline
-  const blended = Math.round((weatherChance * 0.7) + (histRel * 0.3));
-  return Math.max(0, Math.min(cap, blended));
+  return chanceFromRisk(risk, routeName ? getHistoricalReliability(routeName) : null);
 }
 
 function chanceColor(pct) {
   if (pct >= 75) return 'var(--green)';
   if (pct >= 45) return 'var(--amber)';
   return 'var(--red)';
-}
-
-function verdictFromRisk(risk) {
-  if (risk >= 50) return 'unlikely'; // >50% risk score = unlikely to sail
-  if (risk >= 20) return 'caution';  // 20-49% = use caution
-  return 'likely';                    // <20% = likely to sail
 }
 
 function verdictEmoji(v) { return {likely:'✅',caution:'⚠️',unlikely:'❌',unknown:'❓'}[v]||'❓'; }
