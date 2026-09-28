@@ -1,7 +1,7 @@
 "use client";
 
-// A route card's sailing list. The legacy script still works out each row's
-// data (chance, status, next sailing); this renders it.
+// A route card's sailing list; lib/card.js works out each row's data
+// (chance, status, next sailing).
 export default function SailingsSection({ routeName, title, rows, emptyText }) {
   return (
     <>
