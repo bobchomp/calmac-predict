@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
+import * as appState from "../lib/appState";
+import * as card from "../lib/card";
 import * as config from "../lib/config";
 import * as disruptions from "../lib/disruptions";
 import * as format from "../lib/format";
@@ -16,7 +18,7 @@ import * as timetable from "../lib/timetable";
 export default function LegacyScript({ src }) {
   useEffect(() => {
     if (document.querySelector(`script[src="${src}"]`)) return;
-    Object.assign(window, config, disruptions, format, prefs, risk, routes, sun, timetable);
+    Object.assign(window, appState, card, config, disruptions, format, prefs, risk, routes, sun, timetable);
     const script = document.createElement("script");
     script.src = src;
     document.body.appendChild(script);

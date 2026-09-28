@@ -1,14 +1,14 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { getNotifThreshold, getPrefs, getServerPrefs, subscribePrefs } from "../lib/prefs";
+import { getNotifThreshold, getPrefs, getServerPrefs, subscribePrefs, toggleFavourite } from "../lib/prefs";
 import CardHead from "./CardHead";
 import CardNotices from "./CardNotices";
 import { CardWeather, WindBar } from "./CardWeather";
 import SailingsSection from "./SailingsSection";
 
-// A route card's contents. The legacy script still works out the data for
-// each section; favourites and alert settings come from lib/prefs.js.
+// A route card's contents, from lib/card.js; favourites and alert settings
+// come from lib/prefs.js.
 export default function RouteCard({ name, head, notices, weather, windClass, gustPct, sailings, foot }) {
   const prefs = useSyncExternalStore(subscribePrefs, getPrefs, getServerPrefs);
   const favourite = prefs.favourites.includes(name);
@@ -19,7 +19,7 @@ export default function RouteCard({ name, head, notices, weather, windClass, gus
         className="fav-btn"
         data-route={name}
         title="Favourite this route"
-        onClick={e => { e.stopPropagation(); window.toggleFav(name); }}
+        onClick={e => { e.stopPropagation(); toggleFavourite(name); }}
       >
         {favourite ? "★" : "☆"}
       </button>
