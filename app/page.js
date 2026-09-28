@@ -1,4 +1,5 @@
 import AboutTab from "../components/AboutTab";
+import { AppStart } from "../components/AppStart";
 import { InstallBanner, OfflineBanner } from "../components/AppBanners";
 import BottomNav from "../components/BottomNav";
 import FavouritesTab from "../components/FavouritesTab";
@@ -41,6 +42,7 @@ export default function Home() {
       <ThresholdPicker />
       <SharePicker />
       <InstallBanner />
+      <AppStart />
       <LegacyScript src={`/legacy/app.js?v=${process.env.NEXT_PUBLIC_BUILD_ID}`} />
     </>
   );
