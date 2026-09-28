@@ -7,6 +7,7 @@ import * as config from "../lib/config";
 import * as disruptions from "../lib/disruptions";
 import * as format from "../lib/format";
 import * as modal from "../lib/modal";
+import * as overlays from "../lib/overlays";
 import * as prefs from "../lib/prefs";
 import * as risk from "../lib/risk";
 import * as routes from "../lib/routes";
@@ -19,7 +20,7 @@ import * as timetable from "../lib/timetable";
 export default function LegacyScript({ src }) {
   useEffect(() => {
     if (document.querySelector(`script[src="${src}"]`)) return;
-    Object.assign(window, appState, card, config, disruptions, format, modal, prefs, risk, routes, sun, timetable);
+    Object.assign(window, appState, card, config, disruptions, format, modal, overlays, prefs, risk, routes, sun, timetable);
     const script = document.createElement("script");
     script.src = src;
     document.body.appendChild(script);
