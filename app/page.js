@@ -2,6 +2,7 @@ import AboutTab from "../components/AboutTab";
 import BottomNav from "../components/BottomNav";
 import FavouritesTab from "../components/FavouritesTab";
 import Header from "../components/Header";
+import Islands from "../components/Islands";
 import LegacyScript from "../components/LegacyScript";
 import LoadingScreen from "../components/LoadingScreen";
 import NoticePopup from "../components/NoticePopup";
@@ -35,6 +36,7 @@ export default function Home() {
       <RouteModal />
       <VesselTracker />
       <NoticePopup />
+      <Islands />
       <LegacyScript src={`/legacy/app.js?v=${process.env.NEXT_PUBLIC_BUILD_ID}`} />
     </>
   );
