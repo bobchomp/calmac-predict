@@ -125,7 +125,8 @@ module.exports = async function handler(req, res) {
       body:  message || 'New update from CalMac.',
       icon:  '/icon-120.png',
       badge: '/icon-120.png',
-      data:  { url: url || 'https://calmac-predict.vercel.app' },
+      // Relative links open on whichever domain the subscriber signed up on
+      data:  { url: url || '/' },
     };
 
     let sent = 0;
@@ -162,7 +163,7 @@ module.exports = async function handler(req, res) {
       body: message || `Sailing chance has dropped to ${chance}% \u2014 check before you travel.`,
       icon: '/icon-120.png',
       badge: '/icon-120.png',
-      data: { route, chance, url: `https://calmac-predict.vercel.app/?route=${encodeURIComponent(route)}` },
+      data: { route, chance, url: `/?route=${encodeURIComponent(route)}&alert=1` },
     };
 
     let sent = 0;

@@ -148,7 +148,7 @@ async function sendHealthAlertEmail(failedChecks, isTest = false, overrideTo = n
           <tbody>${rows}</tbody>
         </table>
         <p style="margin:16px 20px;font-size:13px;color:#6b7280">
-          <a href="https://willitsail.rossmackenzie.co.uk/#status" style="color:#7f1d1d">View Status page →</a>
+          <a href="https://willitsail.co.uk/#status" style="color:#7f1d1d">View Status page →</a>
         </p>
       </div>
     </div>`;
