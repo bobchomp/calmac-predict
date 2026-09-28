@@ -22,33 +22,7 @@ const GRAPHQL_QUERY = `{
   }
 }`;
 
-const ROUTE_MAP = {
-  'Gourock - Dunoon':                                          'Gourock - Dunoon',
-  'Wemyss Bay - Rothesay':                                     'Wemyss Bay - Rothesay (Bute)',
-  'Ardrossan - Brodick':                                       'Ardrossan - Brodick (Arran)',
-  'Troon - Brodick':                                           'Troon - Brodick (Arran)',
-  'Claonaig - Lochranza':                                      'Claonaig - Lochranza (Arran)',
-  'Largs - Cumbrae Slip (Millport)':                           'Largs - Cumbrae Slip',
-  'Colintraive - Rhubodach':                                   'Colintraive - Rhubodach (Bute)',
-  'Tarbert (Loch Fyne) - Portavadie':                          'Tarbert - Portavadie',
-  'Uig - Lochmaddy':                                           'Uig - Tarbert / Lochmaddy',
-  'Uig - Tarbert':                                             'Uig - Tarbert / Lochmaddy',
-  'Kennacraig - Port Askaig (Islay) / Port Ellen (Islay)':    'Kennacraig - Port Ellen / Port Askaig (Islay)',
-  'Oban - Craignure':                                          'Oban - Craignure (Mull)',
-  'Oban - Castlebay':                                          'Oban - Castlebay / Lochboisdale',
-  'Mallaig / Oban - Lochboisdale':                             'Oban - Castlebay / Lochboisdale',
-  'Mallaig - Armadale':                                        'Mallaig - Armadale (Skye)',
-  'Ullapool - Stornoway':                                      'Ullapool - Stornoway (Lewis)',
-  'Lochaline - Fishnish':                                      'Fishnish - Lochaline',
-  'Mallaig - Eigg/Muck/Rum/Canna':                             'Mallaig - Small Isles',
-  'Oban - Coll/Tiree':                                         'Oban - Coll / Tiree',
-  'Oban - Colonsay - Port Askaig - Kennacraig':               'Oban - Colonsay',
-  'Oban - Lismore':                                            'Oban - Lismore',
-  'Tobermory - Kilchoan':                                      'Tobermory - Kilchoan',
-  'Tayinloan - Gigha':                                         'Tayinloan - Gigha',
-  'Sconser - Raasay':                                          'Sconser - Raasay',
-  'Fionnphort - Iona':                                         'Fionnphort - Iona',
-};
+const ROUTE_MAP = require('./_route-map');
 
 // Top-level route status → our status
 function normaliseTopStatus(status) {
