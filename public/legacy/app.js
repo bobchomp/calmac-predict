@@ -457,8 +457,6 @@ function buildCard(r, i) {
     const pct = _sailHourly ? sailingRisk(time, r.name, _sailHourly, _sailMarine) : null;
     // Store in cache so modal can read the exact same value
     if (pct !== null) sailingChanceCache[r.name + '|' + time] = pct;
-    const col = pct !== null ? chanceColor(pct) : 'var(--muted)';
-    const barW = pct !== null ? pct : 0;
     const sailingInfo = sailingStatusFor(sailingStatuses_card, time, s.f);
     const sailingStatus = sailingInfo?.status || null;
 
@@ -467,47 +465,16 @@ function buildCard(r, i) {
     const reasonIcon = sailingInfo?.reason ? (reasonIcons[sailingInfo.reason] || 'ℹ️') : null;
     const reasonLabel = sailingInfo?.reason && sailingInfo.reason !== 'Other' ? sailingInfo.reason : null;
 
-    if (sailingStatus === 'cancelled') {
-      return `<div class="sailing-row${isPast ? ' sailing-past' : ''}" style="background:#fceaed;border:1px solid #ffcdd2;cursor:pointer" title="${(sailingInfo.detail||'').substring(0,120)}">
-        <div class="sailing-time" style="color:#c62828">${time}</div>
-        <div class="sailing-direction" style="color:#c62828;text-decoration:line-through;flex:1">${s.f} → ${s.to}</div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0">
-          <div style="font-size:.75rem;font-weight:700;color:#c62828;white-space:nowrap">🚨 Cancelled</div>
-          ${reasonLabel ? `<div style="font-size:.65rem;color:#c62828;opacity:.8;white-space:nowrap">${reasonIcon} ${reasonLabel}</div>` : ''}
-        </div>
-      </div>`;
-    }
-
-    if (sailingStatus === 'disrupted' || sailingStatus === 'amber') {
-      return `<div class="sailing-row${isPast ? ' sailing-past' : ''}" style="background:#fff8e1;border:1px solid #ffe082;cursor:pointer" onclick="openModal('${r.name.replace(/'/g,"\\'")}','${time}')">
-        <div class="sailing-time" style="color:#e65100">${time}</div>
-        <div class="sailing-direction" style="color:#e65100;flex:1">${s.f} → ${s.to}</div>
-        <div class="sailing-bar-wrap">
-          <div class="sailing-bar-track">
-            <div class="sailing-bar-fill" style="width:${barW}%;background:${col}"></div>
-          </div>
-        </div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0">
-          <div style="font-size:.72rem;font-weight:700;color:#e65100;white-space:nowrap">${pct !== null ? pct+'%' : '–'} ⚠️</div>
-          ${reasonLabel ? `<div style="font-size:.65rem;color:#e65100;opacity:.8;white-space:nowrap">${reasonIcon} ${reasonLabel}</div>` : ''}
-        </div>
-      </div>`;
-    }
-
-    return `<div class="sailing-row${isPast?' sailing-past':''}${isNext?' sailing-next':''}" style="cursor:pointer${isNext?';border:1.5px solid var(--blue);background:var(--offwhite)':''}" onclick="openModal('${r.name.replace(/'/g,"\\'")}','${time}')">
-      <div class="sailing-time">${time}</div>
-      <div style="flex:1;min-width:0">
-        <div class="sailing-direction">${s.f} → ${s.to}</div>
-        ${isNext ? `<div style="font-size:.6rem;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.05em;margin-top:1px">${isBeforeDawn(hh, routeCoords.lat, routeCoords.lon) ? '🌙 Pre-dawn · Next' : 'Next sailing'}</div>` : ''}
-      </div>
-      <div class="sailing-bar-wrap">
-        <div class="sailing-bar-track">
-          <div class="sailing-bar-fill" style="width:${barW}%;background:${col}"></div>
-        </div>
-      </div>
-      <div class="sailing-pct-label" style="color:${col}">${pct !== null ? pct+'%' : '–'}</div>
-    </div>`;
-  }).join('');
+    return {
+      time, from: s.f, to: s.to, pct,
+      color: pct !== null ? chanceColor(pct) : 'var(--muted)',
+      isPast, isNext,
+      nextLabel: isNext ? (isBeforeDawn(hh, routeCoords.lat, routeCoords.lon) ? '🌙 Pre-dawn · Next' : 'Next sailing') : null,
+      status: sailingStatus === 'cancelled' ? 'cancelled' : (sailingStatus === 'disrupted' || sailingStatus === 'amber') ? 'disrupted' : null,
+      statusTitle: sailingStatus === 'cancelled' ? (sailingInfo.detail || '').substring(0, 120) : null,
+      reasonIcon, reasonLabel,
+    };
+  });
 
   return `<div class="route-card" style="animation-delay:${delay}ms">
     <button class="fav-btn" data-route="${r.name}" title="Favourite this route">${favStar}</button>
@@ -553,15 +520,14 @@ function buildCard(r, i) {
     <div class="wind-bar-wrap ${wc}">
       <div class="wind-bar-track"><div class="wind-bar-fill" style="width:${gustPct}%"></div></div>
     </div>
-    ${sailings.length > 0 ? `<div class="sailings-section">
-      <div class="sailings-title">${_useTomorrow ? "Tomorrow's sailings" : "Today's sailings"}</div>
-      <div class="sailings-list">${sailingRows}</div>
-    </div>` : `<div class="sailings-section">
-      <div class="sailings-title">${_useTomorrow ? "Tomorrow's sailings" : "Today's sailings"}</div>
-      <div style="padding:10px 0;font-size:.8rem;color:var(--muted);text-align:center">${!sailingsLive ? 'No timetable available'
+    <div class="sailings-section" data-island="sailings" data-props="${escapeHtml(JSON.stringify({
+      routeName: r.name,
+      title: _useTomorrow ? "Tomorrow's sailings" : "Today's sailings",
+      rows: sailingRows,
+      emptyText: !sailingsLive ? 'No timetable available'
         : hasServiceChange ? `Normal sailings aren't running ${_useTomorrow ? 'tomorrow' : 'today'} — see CalMac's service update above`
-        : `No sailings scheduled ${_useTomorrow ? 'tomorrow' : 'today'}`} — <a href="https://www.calmac.co.uk/timetables" target="_blank" style="color:var(--blue);font-weight:600">check calmac.co.uk</a></div>
-    </div>`}
+        : `No sailings scheduled ${_useTomorrow ? 'tomorrow' : 'today'}`,
+    }))}"></div>
     <div class="card-foot">
       <div class="conf-pips">
         ${[1,2,3].map(n=>`<div class="conf-pip ${n<=pips?'filled':''}"></div>`).join('')}
