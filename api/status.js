@@ -112,12 +112,16 @@ function extractTimetableNotice(routeStatuses) {
 // Notices shown on a route card, most important first (max 3). INFORMATION
 // entries are skipped: they're boilerplate CalMac attaches to every route.
 // SERVICE entries are mostly roadworks/facilities, so only timetable ones count.
+// Seasonal timetable announcements are skipped: /api/timetable already loads
+// those sailings from CalMac's schedule.
 const MAX_NOTICES = 3;
 const TIMETABLE_KEYWORDS = /timetable|vessel\s*sub|additional\s*sail|replacement\s*vessel|tidal\s*amend/i;
+const SEASONAL_TIMETABLE = /\b(winter|summer)\b.*\btimetables?\b|\btimetables?\b.*\b(winter|summer)\b/i;
 
 function extractNotices(routeStatuses) {
   const now = new Date();
   const rank = s => {
+    if (SEASONAL_TIMETABLE.test(s.title || '')) return null;
     const active = !s.startDateTime || new Date(s.startDateTime) <= now;
     if (s.status === 'WARNING') return 0;
     if (s.status === 'SAILING') return active ? 1 : 3;
