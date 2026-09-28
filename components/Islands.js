@@ -2,21 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { createPortal, flushSync } from "react-dom";
-import CardHead from "./CardHead";
-import CardNotices from "./CardNotices";
-import { CardWeather, WindBar } from "./CardWeather";
-import SailingsSection from "./SailingsSection";
+import RouteCard from "./RouteCard";
 
-const COMPONENTS = {
-  cardHead: CardHead,
-  notices: CardNotices,
-  weather: CardWeather,
-  windBar: WindBar,
-  sailings: SailingsSection,
-};
+const COMPONENTS = { card: RouteCard };
 
 // HTML built by the legacy script can contain island placeholders:
-//   <div data-island="sailings" data-props="{…json…}"></div>
+//   <div data-island="card" data-props="{…json…}"></div>
 // Each is rendered into by the matching React component through a portal.
 // Placeholders are picked up as soon as the legacy script inserts them, in
 // the same task, so nothing flashes empty.

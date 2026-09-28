@@ -98,8 +98,6 @@ function renderRoutes() {
     return;
   }
   grid.innerHTML = filtered.map((r, i) => buildCard(r, i)).join('');
-  attachFavButtons(grid);
-  attachCardClicks(grid);
 }
 
 function updateSummary() {
@@ -307,25 +305,9 @@ async function fetchData() {
 }
 
 // ── FAVOURITES ──
-let favourites = JSON.parse(localStorage.getItem('wis_favs') || '[]');
-
-function saveFavourites() {
-  localStorage.setItem('wis_favs', JSON.stringify(favourites));
-}
-
-function isFav(name) { return favourites.includes(name); }
-
+// Favourites are kept in lib/prefs.js; the card stars re-render from it
 function toggleFav(name) {
-  if (isFav(name)) {
-    favourites = favourites.filter(f => f !== name);
-  } else {
-    favourites.push(name);
-  }
-  saveFavourites();
-  // Just update the star icons — no full re-render to avoid recursion
-  document.querySelectorAll('.fav-btn').forEach(btn => {
-    if (btn.dataset.route === name) btn.textContent = isFav(name) ? '★' : '☆';
-  });
+  toggleFavourite(name);
   // Only re-render favourites tab if it's currently visible
   if (activeTab === 'tabFavs') renderFavourites();
 }
@@ -333,16 +315,14 @@ function toggleFav(name) {
 function renderFavourites() {
   const grid = document.getElementById('favsGrid');
   const empty = document.getElementById('favsEmpty');
-  const favRoutes = allRoutes.filter(r => isFav(r.name));
+  const favRoutes = allRoutes.filter(r => isFavourite(r.name));
   if (favRoutes.length === 0) {
     grid.innerHTML = '';
     empty.style.display = '';
   } else {
     empty.style.display = 'none';
     grid.innerHTML = favRoutes.map((r, i) => buildCard(r, i)).join('');
-    attachFavButtons(grid);
-    attachCardClicks(grid);
-    }
+  }
 }
 
 // ── BOTTOM NAV ──
@@ -428,7 +408,6 @@ function buildCard(r, i) {
   const pips     = r.maxGustMph !== undefined ? (r.hasMarine ? 3 : 2) : 1;
   const routeCoords = ROUTES.find(x => x.name === r.name) || { lat: 57, lon: -5.5 };
   const delay    = Math.min(i * 30, 350);
-  const favStar  = isFav(r.name) ? '★' : '☆';
 
   // CalMac live status for this route
   const disruption   = liveDisruptions[r.name];
@@ -522,41 +501,26 @@ function buildCard(r, i) {
     desc: r.weatherCode !== undefined ? weatherDesc(r.weatherCode, r.minVisM) : '',
   };
 
-  return `<div class="route-card" style="animation-delay:${delay}ms">
-    <button class="fav-btn" data-route="${r.name}" title="Favourite this route">${favStar}</button>
-    <div class="card-head" ${islandAttrs('cardHead', cardHead)}></div>
-    <div style="display:contents" ${islandAttrs('notices', { routeName: r.name, notices: cardNotices })}></div>
-    <div class="card-weather ${wc}" ${islandAttrs('weather', cardWeather)}></div>
-    <div class="wind-bar-wrap ${wc}" ${islandAttrs('windBar', { gustPct })}></div>
-    <div class="sailings-section" ${islandAttrs('sailings', {
-      routeName: r.name,
+  return `<div class="route-card" style="animation-delay:${delay}ms" ${islandAttrs('card', {
+    name: r.name,
+    head: cardHead,
+    notices: cardNotices,
+    weather: cardWeather,
+    windClass: wc,
+    gustPct,
+    sailings: {
       title: _useTomorrow ? "Tomorrow's sailings" : "Today's sailings",
       rows: sailingRows,
       emptyText: !sailingsLive ? 'No timetable available'
         : hasServiceChange ? `Normal sailings aren't running ${_useTomorrow ? 'tomorrow' : 'today'} — see CalMac's service update above`
         : `No sailings scheduled ${_useTomorrow ? 'tomorrow' : 'today'}`,
-    })}></div>
-    <div class="card-foot">
-      <div class="conf-pips">
-        ${[1,2,3].map(n=>`<div class="conf-pip ${n<=pips?'filled':''}"></div>`).join('')}
-        <span>${pips===3?'High':pips===2?'Medium':'Low'} confidence</span>
-      </div>
-      <span>Updated ${lastFetched ? lastFetched.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '–'}</span>
-    </div>
-
-  </div>`;
+    },
+    foot: {
+      pips,
+      updated: lastFetched ? lastFetched.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '–',
+    },
+  })}></div>`;
 }
-
-function attachFavButtons(container) {
-  container.querySelectorAll('.fav-btn').forEach(btn => {
-    btn.addEventListener('click', e => {
-      e.stopPropagation();
-      toggleFav(btn.dataset.route);
-    });
-  });
-}
-
-
 
 // ── EVENTS ──
 document.getElementById('search').addEventListener('input', e => { searchQuery = e.target.value; renderRoutes(); });
@@ -894,10 +858,7 @@ document.getElementById('modalContent').addEventListener('touchend', e => {
   if (dy > 60 && document.getElementById('modalContent').scrollTop === 0) closeModal();
 }, { passive: true });
 
-// Card click → no longer opens a modal (sailings rows handle that)
-function attachCardClicks(container) {
-  // Intentionally empty — modal is opened by clicking individual sailing rows
-}
+
 
 
 
@@ -1092,7 +1053,7 @@ async function getPushSubscription() {
 }
 
 // Toggle push notification for a route (called from card bell button)
-async function toggleRouteNotification(routeName, btn) {
+async function toggleRouteNotification(routeName) {
   if (!pushSupported) {
     alert('Push notifications are not supported in this browser.');
     return;
@@ -1106,9 +1067,7 @@ async function toggleRouteNotification(routeName, btn) {
     const reg = await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
 
-    // Check if already subscribed for this route
-    const notifiedRoutes = JSON.parse(localStorage.getItem('notifRoutes') || '[]');
-    const isOn = notifiedRoutes.includes(routeName);
+    const isOn = isRouteNotified(routeName);
 
     if (isOn) {
       // Unsubscribe for this route
@@ -1117,11 +1076,7 @@ async function toggleRouteNotification(routeName, btn) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'unsubscribe', route: routeName, endpoint: sub?.endpoint }),
       });
-      const updated = notifiedRoutes.filter(r => r !== routeName);
-      localStorage.setItem('notifRoutes', JSON.stringify(updated));
-      btn.classList.remove('notif-on');
-      btn.title = 'Get notified when this route drops below 70%';
-      btn.querySelector('span').textContent = '🔔';
+      setRouteNotified(routeName, false);
     } else {
       // Request permission if needed
       if (Notification.permission !== 'granted') {
@@ -1142,20 +1097,11 @@ async function toggleRouteNotification(routeName, btn) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'subscribe', route: routeName, subscription: sub.toJSON(), threshold: getNotifThreshold(routeName) }),
       });
-      notifiedRoutes.push(routeName);
-      localStorage.setItem('notifRoutes', JSON.stringify(notifiedRoutes));
-      btn.classList.add('notif-on');
-      btn.title = 'Notifications on — tap to turn off';
-      btn.querySelector('span').textContent = '🔔';
+      setRouteNotified(routeName, true);
     }
   } catch (err) {
     console.warn('Push toggle error:', err);
   }
-}
-
-function isRouteNotified(routeName) {
-  const routes = JSON.parse(localStorage.getItem('notifRoutes') || '[]');
-  return routes.includes(routeName);
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -1329,65 +1275,8 @@ async function getVesselForRoute(routeName) {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// ── CARD ACTION ROW BUILDER ──
-// Appended to every route card — share + notification bell
-// ─────────────────────────────────────────────────────────────────────────
-function buildCardActions(routeName) {
-  const notifOn = isRouteNotified(routeName);
-  const threshold = getNotifThreshold(routeName);
-  const bellTitle = notifOn ? `Alerts on (below ${threshold}%) — tap to turn off` : 'Get notified if sailing chance drops';
-  const hasTomorrow = allRoutes.find(r => r.name === routeName)?.tomorrow?.maxGustMph !== null;
-  return `
-    <div class="card-actions">
-      <button class="card-action-btn share-btn" data-route="${routeName}" title="Share this route">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-        <span>Share</span>
-      </button>
-      <button class="card-action-btn notif-btn${notifOn ? ' notif-on' : ''}" data-route="${routeName}" title="${bellTitle}">
-        <span>🔔</span>
-        <span>${notifOn ? `Alerts <${threshold}%` : 'Alert me'}</span>
-      </button>
-    </div>`;
-}
-
-// Wire up card action buttons (called after render)
-function attachCardActions(container) {
-  container.querySelectorAll('.share-btn').forEach(btn => {
-    btn.addEventListener('click', e => {
-      e.stopPropagation();
-      shareRoute(btn.dataset.route);
-    });
-  });
-
-  container.querySelectorAll('.notif-btn').forEach(btn => {
-    btn.addEventListener('click', async e => {
-      e.stopPropagation();
-      const routeName = btn.dataset.route;
-      const isOn = isRouteNotified(routeName);
-      if (isOn) {
-        // Already on — long-press would set threshold, single tap turns off
-        // Check if they held for >500ms (threshold edit) vs quick tap (toggle off)
-        toggleRouteNotification(routeName, btn);
-        return;
-      }
-      // Show threshold picker before subscribing
-      showThresholdPicker(routeName, btn);
-    });
-  });
-}
-
-// ── SMART NOTIFICATION THRESHOLD ──
-function getNotifThreshold(routeName) {
-  const thresholds = JSON.parse(localStorage.getItem('notifThresholds') || '{}');
-  return thresholds[routeName] || 70;
-}
-function setNotifThreshold(routeName, value) {
-  const thresholds = JSON.parse(localStorage.getItem('notifThresholds') || '{}');
-  thresholds[routeName] = value;
-  localStorage.setItem('notifThresholds', JSON.stringify(thresholds));
-}
-
+// ── ALERT THRESHOLD PICKER ──
+// Shown before turning alerts on; the card's Alert button passes itself as btn
 function showThresholdPicker(routeName, btn) {
   // Remove any existing picker
   document.querySelectorAll('.threshold-picker').forEach(p => p.remove());
@@ -1437,7 +1326,7 @@ function showThresholdPicker(routeName, btn) {
       return;
     }
     if (!pushSupported) await initPush();
-    toggleRouteNotification(routeName, btn);
+    toggleRouteNotification(routeName);
   });
 
   // Dismiss on outside tap
@@ -1525,23 +1414,6 @@ async function enrichModalWithVessel(routeName) {
 // ─────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────
-// ── PATCH: renderRoutes — inject card-actions after each card ──
-// ─────────────────────────────────────────────────────────────────────────
-// Hook into the grid render to add card actions
-function postRenderHook(container) {
-  // Add card-actions to every card that doesn't already have one
-  container.querySelectorAll('.route-card:not([data-actions])').forEach(card => {
-    const routeName = card.querySelector('.fav-btn')?.dataset.route;
-    if (!routeName) return;
-    card.setAttribute('data-actions', '1');
-    const actionsHtml = buildCardActions(routeName);
-    card.insertAdjacentHTML('beforeend', actionsHtml);
-  });
-  attachCardClicks(container);
-  attachCardActions(container);
-}
-
-// ─────────────────────────────────────────────────────────────────────────
 // ── PATCH MODAL: add vessel chip + route info grid ──
 // ─────────────────────────────────────────────────────────────────────────
 const _origOpenModal = openModal;
@@ -1584,50 +1456,6 @@ window.openModal = function(routeName, sailingTime) {
   }, 50);
 };
 
-
-// ── HOOK POST-RENDER ──
-// ─────────────────────────────────────────────────────────────────────────
-// We need to call postRenderHook after renderRoutes. 
-// The simplest approach: wrap the existing renderRoutes function.
-// Next.js loads this script after the document is parsed, so DOMContentLoaded
-// has usually fired already; run on the next tick in that case.
-const onDomReady = fn => document.readyState === 'loading'
-  ? document.addEventListener('DOMContentLoaded', fn)
-  : setTimeout(fn, 0);
-
-onDomReady(() => {
-  // Observe routesGrid and favsGrid for new cards
-  const observer = new MutationObserver(mutations => {
-    mutations.forEach(m => {
-      if (m.addedNodes.length) {
-        const container = m.target;
-        postRenderHook(container);
-      }
-    });
-  });
-  const grids = ['routesGrid', 'favsGrid'];
-  grids.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) observer.observe(el, { childList: true });
-  });
-});
-
-// Also hook tab switches
-const _origTabSwitch = document.querySelector ? null : null;
-document.querySelectorAll('.nav-tab').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const tab = btn.dataset.tab;
-    if (tab === 'tabAbout') {
-      
-    }
-    if (tab === 'tabRoutes' || tab === 'tabFavs') {
-      setTimeout(() => {
-        const grid = document.getElementById(tab === 'tabRoutes' ? 'routesGrid' : 'favsGrid');
-        if (grid) postRenderHook(grid);
-      }, 100);
-    }
-  });
-});
 
 // ─────────────────────────────────────────────────────────────────────────
 // ── STATUS PAGE ──
@@ -1941,7 +1769,6 @@ function dismissInstallBanner() {
     // Post-boot: load disruption banner + handle share deep links
     loadDisruptionBanner();
     setTimeout(() => {
-      postRenderHook(document.getElementById('routesGrid'));
       handleShareDeepLink();
       // Refresh map if it's already open
     }, 200);
