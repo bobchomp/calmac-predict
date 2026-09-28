@@ -8,7 +8,7 @@
 //
 // Called daily by api/cron.js — secrets checked there, not here.
 // Can also be triggered manually:
-//   GET /api/check-timetables?secret=<CRON_SECRET>
+//   GET /api/check-timetables  with header  Authorization: Bearer <CRON_SECRET>  (or ?secret=)
 
 const BASE_URL    = process.env.CRON_BASE_URL || 'https://calmac-predict.vercel.app';
 const KV_URL      = process.env.UPSTASH_REDIS_REST_URL   || '';

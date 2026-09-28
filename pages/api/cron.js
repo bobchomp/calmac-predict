@@ -212,8 +212,8 @@ async function recordToSheet(route, calMacStatus, predictedChance) {
 module.exports = async function handler(req, res) {
   const secret = process.env.CRON_SECRET;
   // Accept auth from:
-  // 1. Vercel cron: Authorization: Bearer <secret>
-  // 2. cron-job.org: GET /api/cron?secret=<secret>
+  // 1. Header: Authorization: Bearer <secret> (Vercel cron, cron-job.org)
+  // 2. Query: GET /api/cron?secret=<secret>
   const headerAuth = req.headers['authorization'] === `Bearer ${secret}`;
   const queryAuth  = req.query?.secret === secret;
   if (!headerAuth && !queryAuth) {
@@ -444,7 +444,9 @@ module.exports = async function handler(req, res) {
     // ── Check for new seasonal timetable PDFs on calmac.co.uk ────────────
     let timetableResult = null;
     try {
-      const ttResp = await fetch(`${BASE_URL}/api/check-timetables?secret=${encodeURIComponent(secret || '')}`, {
+      // Secret in a header, so it stays out of URLs and request logs
+      const ttResp = await fetch(`${BASE_URL}/api/check-timetables`, {
+        headers: secret ? { Authorization: `Bearer ${secret}` } : {},
         signal: AbortSignal.timeout(55000),
       });
       timetableResult = ttResp.ok ? await ttResp.json() : { error: `HTTP ${ttResp.status}` };
