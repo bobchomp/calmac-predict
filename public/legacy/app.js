@@ -165,6 +165,8 @@ async function fetchAllWeather() {
       ? rawGusts.map((v, i) => v != null ? v : (rawWinds[i] ?? 0))
       : rawWinds;
     const mergedHourly = { ...hourly, weathercode: weatherHourly, windgusts_10m: patchedGusts };
+    // Tomorrow's 24 hours, indexed from tomorrow midnight like today's are
+    const tomorrowOf = data => data && Object.fromEntries(Object.entries(data).map(([k, v]) => [k, Array.isArray(v) ? v.slice(tomorrowStart, tomorrowStart + 24) : v]));
 
     return {
       route: route.name, hourly: mergedHourly, marine,
@@ -181,8 +183,8 @@ async function fetchAllWeather() {
       tomorrow: {
         maxGustMph: mx(effectiveTGusts) !== null ? Math.round(mx(effectiveTGusts) * 2.237) : null,
         maxWaveM:   mx(tWaves)          !== null ? Math.round(mx(tWaves)          * 10) / 10 : null,
-        hourly:     mergedHourly,
-        marine,
+        hourly:     tomorrowOf(mergedHourly),
+        marine:     tomorrowOf(marine),
       },
     };
   });
