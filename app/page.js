@@ -1,19 +1,41 @@
-import fs from "node:fs";
-import path from "node:path";
-import Script from "next/script";
+import AboutTab from "../components/AboutTab";
+import BottomNav from "../components/BottomNav";
+import FavouritesTab from "../components/FavouritesTab";
+import Header from "../components/Header";
+import LegacyScript from "../components/LegacyScript";
+import LoadingScreen from "../components/LoadingScreen";
+import NoticePopup from "../components/NoticePopup";
+import RouteModal from "../components/RouteModal";
+import RoutesTab from "../components/RoutesTab";
+import ShareBanner from "../components/ShareBanner";
+import ShareToast from "../components/ShareToast";
+import StatusBar from "../components/StatusBar";
+import StatusTab from "../components/StatusTab";
+import Toolbar from "../components/Toolbar";
+import VesselTracker from "../components/VesselTracker";
 
-export const dynamic = "force-static";
-
-// Stage 1 of the Next.js move: the original page markup and script, unchanged.
-// The script expects global functions for its inline onclick handlers, so it
-// stays a classic script loaded after hydration rather than a bundled module.
-const bodyHtml = fs.readFileSync(path.join(process.cwd(), "legacy/body.html"), "utf8");
-
+// The components render the page shell; public/legacy/app.js still fills in
+// and drives the dynamic parts, finding elements by the same ids and classes.
 export default function Home() {
   return (
     <>
-      <div style={{ display: "contents" }} dangerouslySetInnerHTML={{ __html: bodyHtml }} />
-      <Script src={`/legacy/app.js?v=${process.env.NEXT_PUBLIC_BUILD_ID}`} strategy="afterInteractive" />
+      <LoadingScreen />
+      <Header />
+      <ShareBanner />
+      <Toolbar />
+      <main>
+        <StatusBar />
+        <RoutesTab />
+        <FavouritesTab />
+        <StatusTab />
+        <AboutTab />
+      </main>
+      <ShareToast />
+      <BottomNav />
+      <RouteModal />
+      <VesselTracker />
+      <NoticePopup />
+      <LegacyScript src={`/legacy/app.js?v=${process.env.NEXT_PUBLIC_BUILD_ID}`} />
     </>
   );
 }
