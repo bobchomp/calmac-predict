@@ -8,7 +8,7 @@
 // each PDF, and posts all extracted rows to Google Apps Script → Google Sheets.
 //
 // Called by cron-job.org on the 1st of each month:
-//   GET /api/ingest-report?secret=<CRON_SECRET>
+//   GET /api/ingest-report  with header  Authorization: Bearer <CRON_SECRET>  (or ?secret=)
 //
 // To target a single route (useful for testing / fixing a bad slug):
 //   GET /api/ingest-report?secret=<SECRET>&route=oban-colonsay

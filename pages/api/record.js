@@ -1,6 +1,6 @@
 // api/record.js — Real-time sailing status recorder
 // Called by cron-job.org every 30 minutes via:
-//   GET https://willitsail.rossmackenzie.co.uk/api/record?secret=<CRON_SECRET>
+//   GET /api/record  with header  Authorization: Bearer <CRON_SECRET>  (or ?secret=)
 //
 // Fetches live CalMac route status + current weather for all 22 routes,
 // then appends one row per route to the Google Sheet "SailingRecords" tab.
