@@ -3,7 +3,7 @@
 // Returns { date, routes: { [siteRouteName]: [{ t:'HH:MM', f:'Origin', to:'Destination' }] } }
 // Each leg of a multi-stop sailing is its own row. Times are Europe/London.
 
-const ROUTE_MAP = require('./_route-map');
+const ROUTE_MAP = require('../../lib/route-map');
 
 const ukDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London' });
 const ukTime = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });

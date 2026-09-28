@@ -6,11 +6,16 @@
     "node": "24.x"
   },
   "scripts": {
-    "build": "node -e \"const fs=require('fs');const sw=fs.readFileSync('sw.js','utf8');fs.writeFileSync('sw.js',sw.replace('__BUILD__',Date.now()));console.log('sw.js stamped with build timestamp');\""
+    "dev": "next dev",
+    "build": "node -e \"const fs=require('fs');const f='public/sw.js';fs.writeFileSync(f,fs.readFileSync(f,'utf8').replace('__BUILD__',Date.now()));console.log('sw.js stamped with build timestamp');\" && next build",
+    "start": "next start"
   },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",
+    "next": "^16.3.6",
     "pdf-parse": "^1.1.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "web-push": "^3.6.7",
     "ws": "^8.21.0"
   }

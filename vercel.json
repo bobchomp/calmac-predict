@@ -1,19 +1,34 @@
 {
+  "framework": "nextjs",
   "buildCommand": "npm run build",
-  "outputDirectory": ".",
+  "outputDirectory": ".next",
   "functions": {
-    "api/weather.js":       { "maxDuration": 30 },
-    "api/status.js":        { "maxDuration": 15 },
-    "api/timetable.js":     { "maxDuration": 20 },
-    "api/vessel.js":        { "maxDuration": 20 },
-    "api/notify.js":        { "maxDuration": 15 },
-    "api/cron.js":          { "maxDuration": 60 },
-    "api/record.js":        { "maxDuration": 55 },
-    "api/ingest-report.js":     { "maxDuration": 55 },
-    "api/check-timetables.js": { "maxDuration": 55 },
-    "api/accuracy.js":         { "maxDuration": 10 }
-  },
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
-  ]
+    "pages/api/status.js": {
+      "maxDuration": 15
+    },
+    "pages/api/timetable.js": {
+      "maxDuration": 20
+    },
+    "pages/api/vessel.js": {
+      "maxDuration": 20
+    },
+    "pages/api/notify.js": {
+      "maxDuration": 15
+    },
+    "pages/api/cron.js": {
+      "maxDuration": 60
+    },
+    "pages/api/record.js": {
+      "maxDuration": 55
+    },
+    "pages/api/ingest-report.js": {
+      "maxDuration": 55
+    },
+    "pages/api/check-timetables.js": {
+      "maxDuration": 55
+    },
+    "pages/api/accuracy.js": {
+      "maxDuration": 10
+    }
+  }
 }
