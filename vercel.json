@@ -1,6 +1,7 @@
 {
   "framework": "nextjs",
   "buildCommand": "npm run build",
+  "outputDirectory": ".next",
   "functions": {
     "pages/api/status.js": {
       "maxDuration": 15
