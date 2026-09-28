@@ -22,8 +22,7 @@ async function loadLiveTimetable() {
 }
 
 function sailingsFor(routeName, tomorrow) {
-  const live = liveTimetable[ukDateStr(tomorrow ? 1 : 0)]?.[routeName];
-  return { sailings: live ?? TIMETABLE[routeName] ?? [], isLive: !!live };
+  return sailingsForDay(liveTimetable, routeName, tomorrow);
 }
 
 const ROUTE_NAMES = ROUTES.map(r => r.name);
@@ -35,11 +34,6 @@ let searchQuery  = '';
 let lastFetched  = null;
 
 // ── HELPERS ──
-// ── SAILING CHANCE CACHE ────────────────────────────────────────────────
-// Pre-computed per-sailing chances: { "RouteName|HH:MM": 79 }
-// Written by buildCard(), read by openModal()
-const sailingChanceCache = {};
-
 // ── LIVE DISRUPTION STATUS ──────────────────────────────────────────────
 // Populated by loadDisruptionBanner() from /api/status
 // Maps routeKey → { status, message }
@@ -76,28 +70,20 @@ function sailingChance(risk, routeName) {
   return chanceFromRisk(risk, routeName ? getHistoricalReliability(routeName) : null);
 }
 
-// Per-sailing risk at a specific departure time
-function sailingRisk(departureTime, routeName, hourlyWeather, hourlyMarine) {
-  if (!hourlyWeather) return null;
-  const [hh] = departureTime.split(':').map(Number);
-  const idx = Math.min(hh, 23);
-  const risk = calcHourlyRisk(routeName, idx, hourlyWeather, hourlyMarine);
-  return sailingChance(risk, routeName);
-}
-
 // ── RENDER ──
+// The route grids are rendered by components/RouteGrids.js from this state
 function renderRoutes() {
-  const grid = document.getElementById('routesGrid');
-  let filtered = allRoutes.filter(r => {
-    const mf = activeFilter === 'all' || r.verdict === activeFilter;
-    const ms = r.name.toLowerCase().includes(searchQuery.toLowerCase());
-    return mf && ms;
+  setAppState({
+    phase: 'ready',
+    routes: allRoutes.map(r => ({ ...r })),
+    disruptions: { ...liveDisruptions },
+    timetable: { ...liveTimetable },
+    thresholds: historicalThresholds,
+    showingTomorrow: showingTomorrowGlobal,
+    filter: activeFilter,
+    search: searchQuery,
+    lastFetched,
   });
-  if (filtered.length === 0) {
-    grid.innerHTML = '<div class="empty"><div class="empty-icon">🔍</div><p>No routes match your filter.</p></div>';
-    return;
-  }
-  grid.innerHTML = filtered.map((r, i) => buildCard(r, i)).join('');
 }
 
 function updateSummary() {
@@ -112,17 +98,7 @@ function updateSummary() {
 }
 
 function showSkeletons() {
-  const grid = document.getElementById('routesGrid');
-  grid.innerHTML = Array(6).fill(0).map(() => `
-    <div class="route-card">
-      <div class="card-head">
-        <div class="verdict-badge unknown"></div>
-        <div style="flex:1"><div class="skeleton" style="height:13px;width:70%;margin-bottom:6px"></div><div class="skeleton" style="height:10px;width:45%"></div></div>
-      </div>
-      <div style="padding:10px 16px;background:var(--offwhite)"><div class="skeleton" style="height:10px"></div></div>
-      <div style="padding:12px 16px"><div class="skeleton" style="height:10px;margin-bottom:8px"></div><div class="skeleton" style="height:10px;margin-bottom:8px"></div><div class="skeleton" style="height:10px"></div></div>
-    </div>
-  `).join('');
+  setAppState({ phase: 'loading' });
 }
 
 function setStatus(type, msg) {
@@ -304,27 +280,6 @@ async function fetchData() {
   }
 }
 
-// ── FAVOURITES ──
-// Favourites are kept in lib/prefs.js; the card stars re-render from it
-function toggleFav(name) {
-  toggleFavourite(name);
-  // Only re-render favourites tab if it's currently visible
-  if (activeTab === 'tabFavs') renderFavourites();
-}
-
-function renderFavourites() {
-  const grid = document.getElementById('favsGrid');
-  const empty = document.getElementById('favsEmpty');
-  const favRoutes = allRoutes.filter(r => isFavourite(r.name));
-  if (favRoutes.length === 0) {
-    grid.innerHTML = '';
-    empty.style.display = '';
-  } else {
-    empty.style.display = 'none';
-    grid.innerHTML = favRoutes.map((r, i) => buildCard(r, i)).join('');
-  }
-}
-
 // ── BOTTOM NAV ──
 let activeTab = 'tabRoutes';
 
@@ -340,7 +295,6 @@ function switchTab(target, updateHash = true) {
   document.getElementById(target).classList.add('active');
   const showToolbar = target === 'tabRoutes';
   document.querySelector('.toolbar').style.display = showToolbar ? '' : 'none';
-  if (target === 'tabFavs') renderFavourites();
   if (target === 'tabAbout') loadAboutStats();
   if (target === 'tabStatus') runStatusCheck();
   window.scrollTo(0, 0);
@@ -382,146 +336,6 @@ const ls = (() => {
   };
 })();
 
-// Attributes for an island placeholder, rendered by components/Islands.js
-function islandAttrs(type, props) {
-  return `data-island="${type}" data-props="${escapeHtml(JSON.stringify(props))}"`;
-}
-
-// ── BUILD CARD (extracted so both tabs can use it) ──
-function buildCard(r, i) {
-  const currentHour = new Date().getHours();
-  const currentMin  = new Date().getMinutes();
-  const v        = r.verdict || 'unknown';
-  const profile  = ROUTE_PROFILES[r.name] || {threshold:45,exposure:2};
-  // Use tomorrow data if global toggle is active
-  const _useTomorrow = showingTomorrowGlobal && r.tomorrow?.maxGustMph !== null;
-  const _tomorrowNoon = 12;
-  const _tomorrowRisk = _useTomorrow && r.tomorrow?.hourly
-    ? calcOverallRisk(r.name, _tomorrowNoon, r.tomorrow.hourly, r.tomorrow.marine)
-    : null;
-  const overall  = r.maxGustMph !== undefined
-    ? (_useTomorrow && _tomorrowRisk !== null ? sailingChance(_tomorrowRisk, r.name) : sailingChance(r.risk || 0, r.name))
-    : null;
-  const colour   = overall !== null ? chanceColor(overall) : 'var(--muted)';
-  const gustPct  = Math.min(100, Math.round(((r.maxGustMph||0) / 65) * 100));
-  const wc       = windClass(r.maxGustMph || 0);
-  const pips     = r.maxGustMph !== undefined ? (r.hasMarine ? 3 : 2) : 1;
-  const routeCoords = ROUTES.find(x => x.name === r.name) || { lat: 57, lon: -5.5 };
-  const delay    = Math.min(i * 30, 350);
-
-  // CalMac live status for this route
-  const disruption   = liveDisruptions[r.name];
-  const calMacStatus = disruption?.status || null;
-
-  // Check if ALL sailings on this route are cancelled (wildcard '*' entry).
-  // The route-level status is live, so it only counts for today.
-  const sailingStatuses_card = statusesForDay(disruption, _useTomorrow);
-  const allCancelled = (!_useTomorrow && calMacStatus === 'cancelled') ||
-    (sailingStatuses_card['*']?.status === 'cancelled') ||
-    (Object.keys(sailingStatuses_card).length > 0 &&
-     Object.values(sailingStatuses_card).every(s => s.status === 'cancelled'));
-
-  const { sailings, isLive: sailingsLive } = sailingsFor(r.name, _useTomorrow);
-  // CalMac has an amended service or disruption in place (e.g. replacement
-  // sailings described only in a notice, or a diversion to another port)
-  const hasServiceChange = Object.keys(sailingStatuses_card).length > 0 || routeNotices(r.name).some(n => n.type === 'SAILING');
-  // Find the next upcoming sailing time for this route
-  // In tomorrow mode there's no "next" or "past" — all sailings are future
-  const nextSailingTime = _useTomorrow ? null : (sailings.find(s => {
-    const [hh, mm] = s.t.split(':').map(Number);
-    return (hh > currentHour) || (hh === currentHour && mm > currentMin);
-  })?.t || null);
-  const sailingRows = sailings.map(s => {
-    const time = s.t;
-    const [hh, mm] = time.split(':').map(Number);
-    const isPast = _useTomorrow ? false : ((hh < currentHour) || (hh === currentHour && mm <= currentMin));
-    const isNext = time === nextSailingTime;
-    const _sailHourly = _useTomorrow && r.tomorrow?.hourly ? r.tomorrow.hourly : r.hourlyData;
-    const _sailMarine = _useTomorrow && r.tomorrow?.marine ? r.tomorrow.marine : r.marineData;
-    const pct = _sailHourly ? sailingRisk(time, r.name, _sailHourly, _sailMarine) : null;
-    // Store in cache so modal can read the exact same value
-    if (pct !== null) sailingChanceCache[r.name + '|' + time] = pct;
-    const sailingInfo = sailingStatusFor(sailingStatuses_card, time, s.f);
-    const sailingStatus = sailingInfo?.status || null;
-
-    // Reason icon for disruption rows
-    const reasonIcons = { Weather: '🌊', Technical: '🔧', Operational: '⛴️', Tidal: '🌊', Other: 'ℹ️' };
-    const reasonIcon = sailingInfo?.reason ? (reasonIcons[sailingInfo.reason] || 'ℹ️') : null;
-    const reasonLabel = sailingInfo?.reason && sailingInfo.reason !== 'Other' ? sailingInfo.reason : null;
-
-    return {
-      time, from: s.f, to: s.to, pct,
-      color: pct !== null ? chanceColor(pct) : 'var(--muted)',
-      isPast, isNext,
-      nextLabel: isNext ? (isBeforeDawn(hh, routeCoords.lat, routeCoords.lon) ? '🌙 Pre-dawn · Next' : 'Next sailing') : null,
-      status: sailingStatus === 'cancelled' ? 'cancelled' : (sailingStatus === 'disrupted' || sailingStatus === 'amber') ? 'disrupted' : null,
-      statusTitle: sailingStatus === 'cancelled' ? (sailingInfo.detail || '').substring(0, 120) : null,
-      reasonIcon, reasonLabel,
-    };
-  });
-
-  const calibration = (() => {
-    const t = historicalThresholds[r.name];
-    if (!t || t.samples < 2) return null;
-    // Only show badge if calibration meaningfully affected the score
-    const weatherOnly = Math.max(0, Math.min(100, Math.round(100 - (r.risk || 0))));
-    const diff = Math.abs((overall || 0) - weatherOnly);
-    return diff < 3 ? null : { samples: t.samples, diff };
-  })();
-  const cardHead = {
-    verdictClass: allCancelled ? 'unlikely' : v,
-    verdictIcon: allCancelled ? '❌' : verdictEmoji(v),
-    name: r.name,
-    cancelled: allCancelled,
-    chanceText: overall !== null ? overall + '%' : '–',
-    chanceColor: colour,
-    chanceLabel: _useTomorrow ? "Tomorrow" : "Next 12h",
-    exposureLabel: ['', '🛡 Sheltered', '🌊 Moderate', '🌊🌊 Exposed', '⚠️ Very exposed'][profile.exposure],
-    // [background, text, border] colours
-    badges: [
-      calMacStatus === 'cancelled' && { text: '🚨 Cancelled', colors: ['#fceaed', '#c62828', '#ffcdd2'] },
-      calMacStatus === 'disrupted' && { text: '⚠️ Disrupted', colors: ['#fff3e0', '#e65100', '#ffe082'] },
-      calMacStatus === 'amber' && { text: '⚠️ Be Aware', colors: ['#fff8e1', '#e65100', '#ffe082'] },
-      disruption?.isUpcoming && !['cancelled', 'disrupted', 'amber'].includes(calMacStatus) && { text: '⏰ Change coming', colors: ['#fff8e1', '#e65100', '#ffe082'] },
-      calibration && { text: '📊 Calibrated', title: `Calibrated using ${calibration.samples} months of real CalMac data — shifted score by ${calibration.diff}%` },
-    ].filter(Boolean),
-  };
-  const cardNotices = routeNotices(r.name).map(n => ({
-    icon: NOTICE_ICONS[n.type] || '📋',
-    title: n.title,
-    preview: n.detail ? (d => d.length > 120 ? d.substring(0, 120).trimEnd() + '…' : d)(n.detail.replace(/https?:\/\/\S+/g, '').replace(/\s{2,}/g, ' ').trim()) : null,
-  }));
-  const gustShown = _useTomorrow && r.tomorrow?.maxGustMph !== null ? r.tomorrow.maxGustMph : r.maxGustMph;
-  const waveShown = _useTomorrow ? r.tomorrow?.maxWaveM : r.maxWaveM;
-  const cardWeather = {
-    gust: gustShown !== undefined ? gustShown + ' mph' : '–',
-    windDir: r.windDirDeg !== null && r.windDirDeg !== undefined ? windDirLabel(r.windDirDeg) : null,
-    wave: waveShown !== null && waveShown !== undefined ? waveShown + 'm' : '–',
-    vis: r.minVisM !== null && r.minVisM !== undefined && r.minVisM < 5000 ? (r.minVisM < 1000 ? r.minVisM + 'm' : Math.round(r.minVisM / 1000 * 10) / 10 + 'km') : null,
-    desc: r.weatherCode !== undefined ? weatherDesc(r.weatherCode, r.minVisM) : '',
-  };
-
-  return `<div class="route-card" style="animation-delay:${delay}ms" ${islandAttrs('card', {
-    name: r.name,
-    head: cardHead,
-    notices: cardNotices,
-    weather: cardWeather,
-    windClass: wc,
-    gustPct,
-    sailings: {
-      title: _useTomorrow ? "Tomorrow's sailings" : "Today's sailings",
-      rows: sailingRows,
-      emptyText: !sailingsLive ? 'No timetable available'
-        : hasServiceChange ? `Normal sailings aren't running ${_useTomorrow ? 'tomorrow' : 'today'} — see CalMac's service update above`
-        : `No sailings scheduled ${_useTomorrow ? 'tomorrow' : 'today'}`,
-    },
-    foot: {
-      pips,
-      updated: lastFetched ? lastFetched.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '–',
-    },
-  })}></div>`;
-}
-
 // ── EVENTS ──
 document.getElementById('search').addEventListener('input', e => { searchQuery = e.target.value; renderRoutes(); });
 document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -551,7 +365,7 @@ function openModal(routeName, sailingTime) {
   const season   = seasonFactor();
 
   // ── Use the SAME calculation path as the sailing row cards ──
-  // sailingRisk() → calcHourlyRisk() is the single source of truth
+  // sailingChanceAt() → calcHourlyRisk() is the single source of truth
   const h = sailingTime ? Math.min(parseInt(sailingTime.split(':')[0]), 23) : hour;
   const hw = r.hourlyData || {};
   const hm = r.marineData || null;
@@ -634,9 +448,8 @@ function openModal(routeName, sailingTime) {
     : 'Summer — standard thresholds apply';
 
   // ── SINGLE SOURCE OF TRUTH for percentage ──
-  // Read from the cache written by buildCard() — guaranteed same value as card row
-  const cacheKey = sailingTime ? r.name + '|' + sailingTime : null;
-  const cached = cacheKey ? sailingChanceCache[cacheKey] : null;
+  // Same calculation as the card's sailing row (lib/card.js)
+  const cached = sailingTime ? sailingChanceAt(r, sailingTime, modalTomorrow, historicalThresholds) : null;
   const totalRisk = r.hourlyData
     ? calcHourlyRisk(r.name, h, hw, hm)
     : (r.risk || 0);
@@ -1361,7 +1174,6 @@ function toggleTomorrowGlobal() {
   }
   // Re-render all cards with tomorrow data
   renderRoutes();
-  if (activeTab === 'tabFavs') renderFavourites();
 }
 
 
