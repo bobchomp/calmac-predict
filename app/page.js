@@ -1,10 +1,12 @@
 import AboutTab from "../components/AboutTab";
+import { InstallBanner, OfflineBanner } from "../components/AppBanners";
 import BottomNav from "../components/BottomNav";
 import FavouritesTab from "../components/FavouritesTab";
 import Header from "../components/Header";
 import LegacyScript from "../components/LegacyScript";
 import LoadingScreen from "../components/LoadingScreen";
 import NoticePopup from "../components/NoticePopup";
+import { SharePicker, ThresholdPicker } from "../components/Pickers";
 import RouteModal from "../components/RouteModal";
 import RoutesTab from "../components/RoutesTab";
 import ShareBanner from "../components/ShareBanner";
@@ -19,6 +21,7 @@ import VesselTracker from "../components/VesselTracker";
 export default function Home() {
   return (
     <>
+      <OfflineBanner />
       <LoadingScreen />
       <Header />
       <ShareBanner />
@@ -35,6 +38,9 @@ export default function Home() {
       <RouteModal />
       <VesselTracker />
       <NoticePopup />
+      <ThresholdPicker />
+      <SharePicker />
+      <InstallBanner />
       <LegacyScript src={`/legacy/app.js?v=${process.env.NEXT_PUBLIC_BUILD_ID}`} />
     </>
   );

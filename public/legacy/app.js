@@ -339,33 +339,6 @@ document.getElementById('refreshBtn').addEventListener('click', fetchData);
 setInterval(fetchData, 30 * 60 * 1000);
 setInterval(loadDisruptionBanner, 10 * 60 * 1000); // refresh CalMac disruptions every 10 min
 
-// ── CALMAC NOTICES (card banners + popup) ──
-function routeNotices(routeName) {
-  return topNotices(liveDisruptions[routeName]);
-}
-
-function openTimetableNotice(routeName, idx = 0) {
-  const notice = routeNotices(routeName)[idx];
-  if (!notice) return;
-  document.getElementById('tnTitle').textContent = notice.title || 'Service notice';
-  document.getElementById('tnBody').innerHTML = linkifyDetail(notice.detail) || '<em style="opacity:.6">No further detail provided.</em>';
-  document.getElementById('tnOverlay').classList.add('open');
-  document.body.style.overflow = 'hidden';
-}
-function closeTimetableNotice() {
-  document.getElementById('tnOverlay').classList.remove('open');
-  document.body.style.overflow = '';
-}
-document.getElementById('tnOverlay').addEventListener('click', e => {
-  if (e.target === document.getElementById('tnOverlay')) closeTimetableNotice();
-});
-// Swipe down to close
-let _tnTouchY = 0;
-document.querySelector('#tnOverlay .tn-popup').addEventListener('touchstart', e => { _tnTouchY = e.touches[0].clientY; }, { passive: true });
-document.querySelector('#tnOverlay .tn-popup').addEventListener('touchend', e => {
-  if (e.changedTouches[0].clientY - _tnTouchY > 60 && document.querySelector('#tnOverlay .tn-popup').scrollTop === 0) closeTimetableNotice();
-}, { passive: true });
-
 // ── ABOUT TAB STATS ──
 let aboutStatsLoaded = false;
 async function loadAboutStats() {
@@ -426,13 +399,10 @@ function handleShareDeepLink() {
   const from  = window._shareFrom;
 
   // Show the share banner (not for alert links)
-  const banner = document.getElementById('shareBanner');
-  const text   = document.getElementById('shareBannerText');
-  if (banner && text && !window._shareAlert) {
-    text.textContent = from
+  if (!window._shareAlert) {
+    showShareBanner(from
       ? `${from} shared "${route}" with you 🚢`
-      : `Someone shared "${route}" with you 🚢`;
-    banner.style.display = 'flex';
+      : `Someone shared "${route}" with you 🚢`);
   }
 
   // Open the route modal
@@ -440,85 +410,6 @@ function handleShareDeepLink() {
 
   // Clean URL without reloading
   history.replaceState(null, '', location.pathname);
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// ── SHARE BUTTON ──
-// ─────────────────────────────────────────────────────────────────────────
-function shareRoute(routeName, sailing) {
-  // Show a non-blocking name picker so we don't break the iOS gesture chain
-  // We collect the name first, then call share directly from the button tap
-  const existing = document.getElementById('shareNamePicker');
-  if (existing) existing.remove();
-
-  const picker = document.createElement('div');
-  picker.id = 'shareNamePicker';
-  picker.style.cssText = `position:fixed;bottom:calc(80px + env(safe-area-inset-bottom));left:12px;right:12px;
-    z-index:1000;background:var(--white);border-radius:16px;padding:16px;
-    box-shadow:0 8px 40px rgba(0,48,135,0.2);`;
-  picker.innerHTML = `
-    <div style="font-size:.85rem;font-weight:700;color:var(--navy);margin-bottom:10px">Share this route</div>
-    <input id="shareNameInput" type="text" placeholder="Your name (optional)"
-      style="width:100%;padding:9px 12px;border:1.5px solid var(--light);border-radius:10px;
-      font-family:inherit;font-size:.88rem;box-sizing:border-box;margin-bottom:10px;outline:none"/>
-    <div style="display:flex;gap:8px">
-      <button onclick="document.getElementById('shareNamePicker').remove()"
-        style="flex:1;padding:9px;border-radius:10px;border:1.5px solid var(--light);
-        background:var(--white);font-family:inherit;font-size:.85rem;font-weight:600;cursor:pointer">
-        Cancel
-      </button>
-      <button id="shareConfirmBtn"
-        style="flex:1;padding:9px;border-radius:10px;border:none;background:var(--blue);
-        color:#fff;font-family:inherit;font-size:.85rem;font-weight:600;cursor:pointer">
-        Share
-      </button>
-    </div>`;
-  document.body.appendChild(picker);
-  setTimeout(() => document.getElementById('shareNameInput')?.focus(), 50);
-
-  // Dismiss on outside tap
-  setTimeout(() => {
-    document.addEventListener('click', function dismiss(e) {
-      if (!picker.contains(e.target)) { picker.remove(); document.removeEventListener('click', dismiss); }
-    });
-  }, 100);
-
-  document.getElementById('shareConfirmBtn').addEventListener('click', () => {
-    const name = (document.getElementById('shareNameInput')?.value || '').trim();
-    picker.remove();
-
-    const params = new URLSearchParams({ route: routeName });
-    if (sailing)   params.set('sailing', sailing);
-    if (name)      params.set('from', name);
-
-    const url   = `${location.origin}${location.pathname}?${params}`;
-    const title = `Will It Sail? — ${routeName}`;
-    const text  = name ? `${name} shared a CalMac route with you` : `Check this CalMac route on Will It Sail?`;
-
-    if (navigator.share) {
-      navigator.share({ title, text, url }).catch(() => {
-        // Fallback to clipboard if share fails
-        _copyToClipboard(url);
-      });
-    } else {
-      _copyToClipboard(url);
-    }
-  });
-}
-
-function _copyToClipboard(url) {
-  navigator.clipboard.writeText(url).then(() => {
-    const toast = document.getElementById('shareToast');
-    toast.textContent = '✅ Link copied!';
-    toast.classList.add('show');
-    setTimeout(() => toast.classList.remove('show'), 2500);
-  }).catch(() => {
-    // Last resort — show the URL in a selectable input
-    const t = document.getElementById('shareToast');
-    t.textContent = '📋 Copy: ' + url.slice(0, 40) + '…';
-    t.classList.add('show');
-    setTimeout(() => t.classList.remove('show'), 4000);
-  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -721,110 +612,22 @@ async function loadDisruptionBanner() {
   } catch (_) {}
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// ── VESSEL TRACKER ──
-// ─────────────────────────────────────────────────────────────────────────
-function openVesselTracker(routeName, vesselName, mmsi) {
-  const ports = ROUTE_PORTS[routeName];
-  const midLat = ports ? ((ports.a[0] + ports.b[0]) / 2).toFixed(4) : '57.0';
-  const midLon = ports ? ((ports.a[1] + ports.b[1]) / 2).toFixed(4) : '-5.5';
-  const zoom   = ports ? 10 : 8;
-
-  document.getElementById('vtVesselName').textContent = vesselName || 'Vessel Tracker';
-  document.getElementById('vtRouteName').textContent  = routeName  || '';
-  document.getElementById('vtStatus').textContent     = '🟢 Live AIS via MarineTraffic';
-
-  const mtLink = document.getElementById('vtMTLink');
-  if (mmsi) {
-    mtLink.href          = `https://www.marinetraffic.com/en/ais/details/ships/mmsi:${mmsi}`;
-    mtLink.style.display = '';
-  } else {
-    mtLink.style.display = 'none';
+// ── ENABLE ALERTS ──
+// Run once the threshold picker (components/Pickers.js) is confirmed
+async function enableRouteAlerts(routeName) {
+  if (!pushSupported) {
+    let waited = 0;
+    while (!pushSupported && waited < 3000) {
+      await new Promise(r => setTimeout(r, 200));
+      waited += 200;
+    }
   }
-
-  // MarineTraffic embed centred on route midpoint — vessel visible in area with live AIS icons
-  const embedUrl = `https://www.marinetraffic.com/en/ais/embed/zoom:${zoom}/centery:${midLat}/centerx:${midLon}/maptype:0/shownames:false/mmsi:${mmsi || 0}/shipid:0/fleet:/fleet_id:/vtypes:/showmenu:/remember:false`;
-
-  document.getElementById('vtOverlay').classList.add('open');
-  document.body.style.overflow = 'hidden';
-  // Small delay so overlay transition starts before the iframe begins loading
-  setTimeout(() => { document.getElementById('vtFrame').src = embedUrl; }, 80);
-}
-
-function closeVesselTracker() {
-  document.getElementById('vtOverlay').classList.remove('open');
-  document.body.style.overflow = '';
-  // Reset iframe so it doesn't keep running in background
-  setTimeout(() => { document.getElementById('vtFrame').src = 'about:blank'; }, 300);
-}
-
-document.getElementById('vtOverlay').addEventListener('click', e => {
-  if (e.target === document.getElementById('vtOverlay')) closeVesselTracker();
-});
-
-// ── ALERT THRESHOLD PICKER ──
-// Shown before turning alerts on; the card's Alert button passes itself as btn
-function showThresholdPicker(routeName, btn) {
-  // Remove any existing picker
-  document.querySelectorAll('.threshold-picker').forEach(p => p.remove());
-
-  const current = getNotifThreshold(routeName);
-  const picker = document.createElement('div');
-  picker.className = 'threshold-picker';
-  picker.style.cssText = `
-    position:fixed;bottom:calc(80px + env(safe-area-inset-bottom) + 8px);left:50%;transform:translateX(-50%);
-    background:var(--white);border-radius:16px;box-shadow:0 8px 40px rgba(0,48,135,0.18);
-    padding:18px 20px;z-index:900;width:min(320px,90vw);
-  `;
-  picker.innerHTML = `
-    <div style="font-weight:700;font-size:.9rem;color:var(--navy);margin-bottom:4px">Alert threshold for</div>
-    <div style="font-size:.8rem;color:var(--muted);margin-bottom:14px">${routeName}</div>
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
-      <span style="font-size:.8rem;color:var(--muted)">Always</span>
-      <input type="range" min="30" max="90" step="5" value="${current}" id="threshSlider" style="flex:1;accent-color:var(--blue)">
-      <span style="font-size:.8rem;color:var(--muted)">Never</span>
-    </div>
-    <div style="text-align:center;font-family:'Syne',sans-serif;font-size:1.4rem;font-weight:800;color:var(--blue);margin-bottom:16px" id="threshVal">Below <span id="threshNum">${current}</span>%</div>
-    <div style="display:flex;gap:8px">
-      <button onclick="document.querySelector('.threshold-picker').remove()" style="flex:1;padding:10px;border-radius:10px;border:1.5px solid var(--light);background:var(--white);font-family:inherit;font-size:.85rem;font-weight:600;cursor:pointer">Cancel</button>
-      <button id="threshConfirm" style="flex:1;padding:10px;border-radius:10px;border:none;background:var(--blue);color:#fff;font-family:inherit;font-size:.85rem;font-weight:600;cursor:pointer">Enable alerts</button>
-    </div>
-  `;
-  document.body.appendChild(picker);
-
-  const slider = picker.querySelector('#threshSlider');
-  const numEl = picker.querySelector('#threshNum');
-  slider.addEventListener('input', () => { numEl.textContent = slider.value; });
-
-  picker.querySelector('#threshConfirm').addEventListener('click', async () => {
-    const val = parseInt(slider.value);
-    setNotifThreshold(routeName, val);
-    picker.remove();
-    // Now proceed with subscription
-    if (!pushSupported) {
-      let waited = 0;
-      while (!pushSupported && waited < 3000) {
-        await new Promise(r => setTimeout(r, 200));
-        waited += 200;
-      }
-    }
-    if (!pushSupported && !('PushManager' in window)) {
-      alert('Push notifications require HTTPS and a modern browser.');
-      return;
-    }
-    if (!pushSupported) await initPush();
-    toggleRouteNotification(routeName);
-  });
-
-  // Dismiss on outside tap
-  setTimeout(() => {
-    document.addEventListener('click', function dismiss(e) {
-      if (!picker.contains(e.target) && e.target !== btn) {
-        picker.remove();
-        document.removeEventListener('click', dismiss);
-      }
-    });
-  }, 100);
+  if (!pushSupported && !('PushManager' in window)) {
+    alert('Push notifications require HTTPS and a modern browser.');
+    return;
+  }
+  if (!pushSupported) await initPush();
+  toggleRouteNotification(routeName);
 }
 
 // ── TOMORROW GLOBAL TOGGLE ──
@@ -1042,83 +845,6 @@ async function runStatusCheck() {
 
 // Store route for modal open from map panel
 window._mapSelectedRoute = null;
-
-// ─────────────────────────────────────────────────────────────────────────
-// ── OFFLINE BANNER ──
-// ─────────────────────────────────────────────────────────────────────────
-let offlineBannerShown = false;
-let lastOnlineTime = null;
-
-function updateOfflineBanner() {
-  let banner = document.getElementById('offlineBanner');
-  if (!navigator.onLine) {
-    if (!banner) {
-      banner = document.createElement('div');
-      banner.id = 'offlineBanner';
-      banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9998;background:#1a2c4e;color:#fff;text-align:center;padding:10px 16px;font-size:.82rem;font-weight:600;padding-top:calc(10px + env(safe-area-inset-top))';
-      banner.innerHTML = `📵 You're offline — showing cached data${lastOnlineTime ? ' from ' + lastOnlineTime.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : ''}`;
-      document.body.prepend(banner);
-    }
-  } else {
-    lastOnlineTime = new Date();
-    if (banner) { banner.remove(); }
-  }
-}
-
-window.addEventListener('online', updateOfflineBanner);
-window.addEventListener('offline', updateOfflineBanner);
-updateOfflineBanner();
-
-// ─────────────────────────────────────────────────────────────────────────
-// ── PWA INSTALL PROMPT ──
-// ─────────────────────────────────────────────────────────────────────────
-let deferredInstallPrompt = null;
-
-window.addEventListener('beforeinstallprompt', e => {
-  e.preventDefault();
-  deferredInstallPrompt = e;
-  // Only show if not dismissed before and not already installed
-  if (!localStorage.getItem('pwaInstallDismissed')) {
-    showInstallBanner();
-  }
-});
-
-function showInstallBanner() {
-  if (document.getElementById('installBanner')) return;
-  const banner = document.createElement('div');
-  banner.id = 'installBanner';
-  banner.style.cssText = `
-    position:fixed;bottom:calc(72px + env(safe-area-inset-bottom));left:12px;right:12px;z-index:800;
-    background:var(--navy);color:#fff;border-radius:14px;
-    padding:14px 16px;box-shadow:0 8px 32px rgba(0,48,135,.25);
-    display:flex;align-items:center;gap:12px;
-    animation:fadeUp .3s ease;
-  `;
-  banner.innerHTML = `
-    <div style="font-size:1.4rem">📱</div>
-    <div style="flex:1">
-      <div style="font-weight:700;font-size:.88rem">Add to Home Screen</div>
-      <div style="font-size:.75rem;opacity:.8;margin-top:2px">Get faster access and offline support</div>
-    </div>
-    <button onclick="installPWA()" style="padding:8px 14px;border-radius:10px;background:var(--sky);border:none;color:var(--navy);font-family:inherit;font-size:.8rem;font-weight:700;cursor:pointer;white-space:nowrap">Install</button>
-    <button onclick="dismissInstallBanner()" style="background:none;border:none;color:rgba(255,255,255,.6);font-size:1.2rem;cursor:pointer;padding:4px;line-height:1">✕</button>
-  `;
-  document.body.appendChild(banner);
-}
-
-async function installPWA() {
-  if (!deferredInstallPrompt) return;
-  deferredInstallPrompt.prompt();
-  const { outcome } = await deferredInstallPrompt.userChoice;
-  if (outcome === 'accepted') localStorage.setItem('pwaInstallDismissed', '1');
-  deferredInstallPrompt = null;
-  document.getElementById('installBanner')?.remove();
-}
-
-function dismissInstallBanner() {
-  localStorage.setItem('pwaInstallDismissed', '1');
-  document.getElementById('installBanner')?.remove();
-}
 
 // ─────────────────────────────────────────────────────────────────────────
 // ── BOOT ──
