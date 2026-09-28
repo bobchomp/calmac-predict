@@ -22,7 +22,7 @@ const GRAPHQL_QUERY = `{
   }
 }`;
 
-const ROUTE_MAP = require('./_route-map');
+const ROUTE_MAP = require('../../lib/route-map');
 
 // Top-level route status → our status
 function normaliseTopStatus(status) {
