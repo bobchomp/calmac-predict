@@ -56,7 +56,9 @@
 
     .routes-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;}
 
-    .route-card{background:var(--white);border-radius:14px;box-shadow:var(--shadow);overflow:hidden;animation:fadeUp .4s ease both;}
+    .route-card{background:var(--white);border-radius:14px;box-shadow:var(--shadow);overflow:hidden;animation:fadeUp .4s ease both;display:flex;flex-direction:column;}
+    /* Cards in a row share the tallest card's height; keep the footer and actions at the bottom */
+    .route-card > .card-foot{margin-top:auto;}
     .route-card:hover{transform:translateY(-2px);box-shadow:0 6px 24px rgba(0,48,135,0.14);}
     @keyframes fadeUp{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
 
