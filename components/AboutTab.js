@@ -1,4 +1,4 @@
-import LegacyButton from "./LegacyButton";
+import { AboutStat, TestNotification } from "./InfoTabs";
 
 export default function AboutTab() {
   return (
@@ -13,11 +13,11 @@ export default function AboutTab() {
         <h3>Database</h3>
         <div id="db-stats" style={{display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 12}}>
           <div style={{textAlign: 'center', background: 'var(--light)', borderRadius: 8, padding: 12}}>
-            <div style={{fontSize: '1.6rem', fontWeight: 800, color: 'var(--navy)'}} id="stat-months">–</div>
+            <AboutStat field="months" id="stat-months" />
             <div style={{fontSize: '.72rem', color: 'var(--muted)', marginTop: 2}}>Months of<br />real data</div>
           </div>
           <div style={{textAlign: 'center', background: 'var(--light)', borderRadius: 8, padding: 12}}>
-            <div style={{fontSize: '1.6rem', fontWeight: 800, color: 'var(--navy)'}} id="stat-routes">–</div>
+            <AboutStat field="routes" id="stat-routes" />
             <div style={{fontSize: '.72rem', color: 'var(--muted)', marginTop: 2}}>Routes<br />calibrated</div>
           </div>
           <div style={{textAlign: 'center', background: 'var(--light)', borderRadius: 8, padding: 12}}>
@@ -92,12 +92,7 @@ export default function AboutTab() {
             <span style={{fontWeight: 700, fontSize: '.9rem', color: 'var(--text)'}}>Smart route notifications</span>
           </div>
           <p style={{fontSize: '.83rem', color: 'var(--muted)', lineHeight: '1.6', margin: 0}}>Tap <strong>Alert me</strong> on any route to subscribe to push notifications. A slider lets you set your own alert threshold per route — anywhere from 30% to 90% — so you can choose exactly how sensitive the alert is. The notification fires when the sailing chance drops below your threshold, with a 2-hour cooldown per route to avoid spam. Works on Chrome, Edge, Firefox, and Safari on iOS 16.4+ when added to your home screen.</p>
-          <div id="testNotifWrap" style={{marginTop: 12}}>
-            <LegacyButton id="testNotifBtn" action="testNotification" style={{display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 10, border: '1.5px solid var(--light)', background: 'var(--white)', fontFamily: 'inherit', fontSize: '.85rem', fontWeight: 600, color: 'var(--text)', cursor: 'pointer', transition: 'all .18s'}}>
-              <span>🔔</span> Send a test notification
-            </LegacyButton>
-            <div id="testNotifStatus" style={{marginTop: 8, fontSize: '.78rem', color: 'var(--muted)', display: 'none'}} />
-          </div>
+          <TestNotification />
         </div>
         {/* Wind direction */}
         <div style={{marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid var(--light)'}}>

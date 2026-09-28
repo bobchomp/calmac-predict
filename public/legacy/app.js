@@ -35,7 +35,6 @@ let lastFetched  = null;
 // Maps routeKey → { status, message }
 let liveDisruptions = {};
 let showingTomorrowGlobal = false;
-let lastDisruptionFetch = null;
 
 // ── GOOGLE SHEET INTEGRATION ─────────────────────────────────
 // Stores historical reliability thresholds fetched from the Sheet.
@@ -251,6 +250,7 @@ async function fetchData() {
     updateSummary();
     renderRoutes();
     lastFetched = new Date();
+    setAppState({ lastFetched });
 
     const marineCount = allRoutes.filter(r => r.hasMarine).length;
     setStatus('ok', 'Updated ' + lastFetched.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})
@@ -339,24 +339,6 @@ document.getElementById('refreshBtn').addEventListener('click', fetchData);
 setInterval(fetchData, 30 * 60 * 1000);
 setInterval(loadDisruptionBanner, 10 * 60 * 1000); // refresh CalMac disruptions every 10 min
 
-// ── ABOUT TAB STATS ──
-let aboutStatsLoaded = false;
-async function loadAboutStats() {
-  if (aboutStatsLoaded) return;
-  try {
-    const res = await fetch(`${SHEET_SCRIPT_URL}?action=getStats`);
-    const json = await res.json();
-    if (json.reliability_months !== undefined) {
-      document.getElementById('stat-months').textContent  = json.reliability_months;
-      document.getElementById('stat-routes').textContent  = json.routes_calibrated;
-      document.getElementById('stat-reports').textContent = json.user_reports;
-      aboutStatsLoaded = true;
-    }
-  } catch(_) {
-    // Sheet unavailable — leave dashes
-  }
-}
-
 // ─────────────────────────────────────────────────────────────────────────
 // ── SERVICE WORKER REGISTRATION ──
 // ─────────────────────────────────────────────────────────────────────────
@@ -426,6 +408,7 @@ async function initPush() {
     if (!data.available) return;
     vapidPublicKey = data.publicKey;
     pushSupported = true;
+    setAppState({ pushSupported });
   } catch (_) {}
 }
 initPush();
@@ -500,85 +483,6 @@ async function toggleRouteNotification(routeName) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// ── TEST NOTIFICATION ──
-// ─────────────────────────────────────────────────────────────────────────
-async function testNotification() {
-  const btn    = document.getElementById('testNotifBtn');
-  const status = document.getElementById('testNotifStatus');
-
-  function setStatus(msg, color) {
-    status.textContent = msg;
-    status.style.color = color || 'var(--muted)';
-    status.style.display = 'block';
-  }
-
-  // Check basic support
-  if (!('Notification' in window)) {
-    setStatus('❌ This browser does not support notifications.', 'var(--red)');
-    return;
-  }
-  if (!('serviceWorker' in navigator)) {
-    setStatus('❌ Service workers not supported — try adding the app to your home screen on iOS.', 'var(--red)');
-    return;
-  }
-
-  btn.disabled = true;
-  btn.style.opacity = '0.6';
-  setStatus('Requesting permission…', 'var(--muted)');
-
-  // Request permission if not already granted
-  if (Notification.permission === 'denied') {
-    setStatus('❌ Notifications are blocked. Open your browser settings and allow notifications for this site, then try again.', 'var(--red)');
-    btn.disabled = false; btn.style.opacity = '1';
-    return;
-  }
-
-  if (Notification.permission !== 'granted') {
-    const perm = await Notification.requestPermission();
-    if (perm !== 'granted') {
-      setStatus("❌ Permission denied — notifications won't work until you allow them.", 'var(--red)');
-      btn.disabled = false; btn.style.opacity = '1';
-      return;
-    }
-  }
-
-  setStatus('Sending test notification…', 'var(--muted)');
-
-  try {
-    const reg = await navigator.serviceWorker.ready;
-
-    // Use the service worker to show the notification
-    // (required on iOS — direct Notification() doesn't work from SW context)
-    await reg.showNotification('🚢 Will It Sail? — Test', {
-      body: "Notifications are working! You'll receive alerts like this when a starred route drops below 70%.",
-      icon: '/icon-120.png',
-      badge: '/icon-120.png',
-      tag: 'test-notification',
-      data: { url: location.href },
-      actions: [
-        { action: 'view', title: 'View app' },
-      ],
-    });
-
-    setStatus('✅ Test notification sent! Check your notifications.', 'var(--green)');
-  } catch (err) {
-    // Fall back to basic Notification API if SW showNotification fails
-    try {
-      new Notification('🚢 Will It Sail? — Test', {
-        body: "Notifications are working! You'll receive alerts when a starred route drops below 70%.",
-        icon: '/icon-120.png',
-      });
-      setStatus('✅ Test notification sent!', 'var(--green)');
-    } catch (err2) {
-      setStatus(`❌ Failed: ${err2.message}. On iOS, make sure the app is added to your home screen.`, 'var(--red)');
-    }
-  }
-
-  btn.disabled = false;
-  btn.style.opacity = '1';
-}
-
-// ─────────────────────────────────────────────────────────────────────────
 // ── LIVE STATUS LOADER ──
 // Loads CalMac disruption data silently — shown inline on each sailing row
 // ─────────────────────────────────────────────────────────────────────────
@@ -604,7 +508,7 @@ async function loadDisruptionBanner() {
         sailingStatusesTomorrow: mergeStatuses(prev?.sailingStatusesTomorrow, d.sailingStatusesTomorrow),
       };
     });
-    lastDisruptionFetch = new Date();
+    setAppState({ lastDisruptionFetch: new Date() });
     // Re-render so sailing rows reflect live CalMac status
     if (Object.keys(liveDisruptions).length > 0 && allRoutes.length > 0) {
       renderRoutes();
@@ -652,194 +556,6 @@ function toggleTomorrowGlobal() {
   // Re-render all cards with tomorrow data
   renderRoutes();
 }
-
-
-
-// ─────────────────────────────────────────────────────────────────────────
-// ── STATUS PAGE ──
-// ─────────────────────────────────────────────────────────────────────────
-async function runStatusCheck() {
-  const container = document.getElementById('statusItems');
-  const lastEl    = document.getElementById('statusLastChecked');
-  if (!container) return;
-
-  // Show loading state
-  container.innerHTML = [
-    'Weather API', 'Marine/Wave API', 'CalMac Status API',
-    'Push Notifications', 'Service Worker', 'Historical Data'
-  ].map(name => `
-    <div class="status-item">
-      <div class="status-dot grey"></div>
-      <div class="status-info"><div class="status-name">${name}</div><div class="status-detail">Checking…</div></div>
-      <div class="status-badge grey">–</div>
-    </div>`).join('');
-
-  const results = [];
-
-  // ── 1. Weather API ──
-  try {
-    const t0 = Date.now();
-    const r = await fetch('https://api.open-meteo.com/v1/forecast?latitude=57.0&longitude=-5.8&hourly=windspeed_10m&forecast_days=1', { signal: AbortSignal.timeout(8000) });
-    const ms = Date.now() - t0;
-    const routesLoaded = allRoutes.filter(rt => rt.maxGustMph !== null && rt.maxGustMph !== undefined).length;
-    if (!r.ok) {
-      results.push({ name:'Weather API', icon:'🌤', dot:'red', badge:'err', badgeText:'✗ Error', detail:`HTTP ${r.status} — weather data unavailable` });
-    } else if (routesLoaded === 0) {
-      results.push({ name:'Weather API', icon:'🌤', dot:'amber', badge:'warn', badgeText:'⚠ No data', detail:`Open-Meteo responding (${ms}ms) — app data failed to load, try refreshing` });
-    } else {
-      results.push({ name:'Weather API', icon:'🌤', dot:'green', badge:'ok', badgeText:'✓ OK', detail:`Open-Meteo responding (${ms}ms) · ${routesLoaded}/22 routes loaded` });
-    }
-  } catch(e) {
-    results.push({ name:'Weather API', icon:'🌤', dot:'red', badge:'err', badgeText:'✗ Error', detail: e.message });
-  }
-
-  // ── 2. Marine/Wave API ──
-  try {
-    const t0 = Date.now();
-    const r = await fetch('https://marine-api.open-meteo.com/v1/marine?latitude=57.0&longitude=-5.8&hourly=wave_height&forecast_days=1', { signal: AbortSignal.timeout(8000) });
-    const ms = Date.now() - t0;
-    const marineCount = allRoutes.filter(rt => rt.hasMarine).length;
-    results.push({
-      name: 'Marine / Wave API',
-      icon: '🌊',
-      dot: r.ok ? 'green' : 'amber',
-      badge: r.ok ? 'ok' : 'warn',
-      badgeText: r.ok ? '✓ OK' : '⚠ Degraded',
-      detail: r.ok
-        ? `Open-Meteo Marine responding (${ms}ms) · ${marineCount}/22 routes have wave data`
-        : `HTTP ${r.status} — wave predictions estimated from wind`
-    });
-  } catch(e) {
-    results.push({ name:'Marine / Wave API', icon:'🌊', dot:'amber', badge:'warn', badgeText:'⚠ Degraded', detail:'Unavailable — wave risk estimated from wind' });
-  }
-
-  // ── 3. CalMac Status API ──
-  try {
-    const t0 = Date.now();
-    const r = await fetch('/api/status', { signal: AbortSignal.timeout(10000) });
-    const ms = Date.now() - t0;
-    const data = await r.json();
-    const isFallback = data.fallback === true;
-    const routeCount = data.routes?.length || 0;
-    const disruptedCount = data.disrupted?.length || 0;
-    results.push({
-      name: 'CalMac Status API',
-      icon: '🚨',
-      dot: isFallback ? 'red' : 'green',
-      badge: isFallback ? 'err' : 'ok',
-      badgeText: isFallback ? '✗ Fallback' : '✓ Live',
-      detail: isFallback
-        ? `API unavailable (${data.error || 'unknown error'}) — showing link to CalMac website`
-        : `${routeCount} routes · ${disruptedCount} disrupted · fetched in ${ms}ms${lastDisruptionFetch ? ' · last loaded ' + lastDisruptionFetch.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : ''}`
-    });
-  } catch(e) {
-    results.push({ name:'CalMac Status API', icon:'🚨', dot:'red', badge:'err', badgeText:'✗ Error', detail: e.message });
-  }
-
-  // ── 4. Push Notifications ──
-  const hasSW  = 'serviceWorker' in navigator;
-  const hasPush = 'PushManager' in window;
-  const hasNotif = 'Notification' in window;
-  const notifPerm = hasNotif ? Notification.permission : 'unsupported';
-  const subscribedRoutes = JSON.parse(localStorage.getItem('notifRoutes') || '[]');
-  let pushDetail = '';
-  let pushDot = 'grey';
-  let pushBadge = 'grey';
-  let pushBadgeText = '–';
-
-  if (!hasSW || !hasPush || !hasNotif) {
-    pushDot = 'red'; pushBadge = 'err'; pushBadgeText = '✗ Unsupported';
-    pushDetail = 'Push notifications not supported in this browser';
-  } else if (notifPerm === 'denied') {
-    pushDot = 'red'; pushBadge = 'err'; pushBadgeText = '✗ Blocked';
-    pushDetail = 'Notifications blocked — enable in browser settings';
-  } else if (notifPerm === 'granted' && pushSupported) {
-    pushDot = 'green'; pushBadge = 'ok'; pushBadgeText = '✓ Active';
-    pushDetail = subscribedRoutes.length > 0
-      ? `Subscribed to ${subscribedRoutes.length} route${subscribedRoutes.length > 1 ? 's' : ''}: ${subscribedRoutes.join(', ').substring(0,60)}`
-      : 'Permission granted · No routes subscribed yet — tap "Alert me" on a route';
-  } else {
-    pushDot = 'amber'; pushBadge = 'warn'; pushBadgeText = '⚠ Not set up';
-    pushDetail = 'Tap "Alert me" on a route to enable push notifications';
-  }
-  results.push({ name:'Push Notifications', icon:'🔔', dot:pushDot, badge:pushBadge, badgeText:pushBadgeText, detail:pushDetail });
-
-  // ── 5. Service Worker ──
-  let swDot = 'grey', swBadge = 'grey', swText = '–', swDetail = 'Not supported';
-  if (hasSW) {
-    try {
-      const reg = await navigator.serviceWorker.getRegistration('/');
-      if (reg) {
-        const state = reg.active?.state || reg.installing?.state || reg.waiting?.state || 'unknown';
-        swDot = state === 'activated' ? 'green' : 'amber';
-        swBadge = state === 'activated' ? 'ok' : 'warn';
-        swText = state === 'activated' ? '✓ Active' : '⚠ ' + state;
-        swDetail = `Service worker ${state} · Scope: ${reg.scope}`;
-      } else {
-        swDot = 'amber'; swBadge = 'warn'; swText = '⚠ Not registered';
-        swDetail = 'Service worker not yet registered — reload the page';
-      }
-    } catch(e) {
-      swDot = 'red'; swBadge = 'err'; swText = '✗ Error'; swDetail = e.message;
-    }
-  }
-  results.push({ name:'Service Worker', icon:'⚙️', dot:swDot, badge:swBadge, badgeText:swText, detail:swDetail });
-
-  // ── 6. Historical Data ──
-  const calibrated = Object.keys(historicalThresholds).length;
-  const hasThresholds = calibrated > 0;
-  results.push({
-    name: 'Historical Calibration',
-    icon: '📊',
-    dot: hasThresholds ? 'green' : 'amber',
-    badge: hasThresholds ? 'ok' : 'warn',
-    badgeText: hasThresholds ? '✓ Loaded' : '⚠ Loading',
-    detail: hasThresholds
-      ? `${calibrated} routes calibrated with real CalMac data · Last weather fetch: ${lastFetched ? lastFetched.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : 'never'}`
-      : 'Historical thresholds not yet loaded — predictions use weather only'
-  });
-
-  // ── 7. Prediction Accuracy ──
-  try {
-    const accResp = await fetch('/api/accuracy', { signal: AbortSignal.timeout(5000) });
-    if (accResp.ok) {
-      const acc = await accResp.json();
-      if (!acc.points) {
-        results.push({ name: 'Prediction Accuracy', icon: '🎯', dot: 'amber', badge: 'warn', badgeText: '⚠ No data', detail: 'Accuracy tracking starts from today — check back in a few days' });
-      } else if (acc.last30 < 10) {
-        results.push({ name: 'Prediction Accuracy', icon: '🎯', dot: 'amber', badge: 'warn', badgeText: '⚠ Building', detail: `${acc.last30} data point${acc.last30 !== 1 ? 's' : ''} collected so far — need more to show accuracy` });
-      } else {
-        const dot        = acc.accuracy >= 80 ? 'green' : acc.accuracy >= 60 ? 'amber' : 'red';
-        const badge      = acc.accuracy >= 80 ? 'ok'    : acc.accuracy >= 60 ? 'warn'  : 'err';
-        const badgeText  = `${acc.accuracy >= 80 ? '✓' : acc.accuracy >= 60 ? '⚠' : '✗'} ${acc.accuracy}%`;
-        const bucketStr  = acc.buckets
-          .filter(b => b.count > 0 && b.sailedPct !== null)
-          .map(b => `${b.label} → ${b.sailedPct}% sailed`)
-          .join(' · ');
-        results.push({ name: 'Prediction Accuracy', icon: '🎯', dot, badge, badgeText, detail: `${acc.accuracy}% accurate (last 30 days · ${acc.last30} predictions)${bucketStr ? ' · ' + bucketStr : ''}` });
-      }
-    }
-  } catch (_) {}
-
-  // ── Render ──
-  container.innerHTML = results.map(r => `
-    <div class="status-item">
-      <div class="status-dot ${r.dot}"></div>
-      <div class="status-info">
-        <div class="status-name">${r.icon} ${r.name}</div>
-        <div class="status-detail">${r.detail}</div>
-      </div>
-      <div class="status-badge ${r.badge}">${r.badgeText}</div>
-    </div>`).join('');
-
-  const now = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
-  if (lastEl) lastEl.textContent = `Last checked: ${now}`;
-}
-
-
-
-
-
 
 
 
