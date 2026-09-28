@@ -402,6 +402,11 @@ const ls = (() => {
   };
 })();
 
+// Attributes for an island placeholder, rendered by components/Islands.js
+function islandAttrs(type, props) {
+  return `data-island="${type}" data-props="${escapeHtml(JSON.stringify(props))}"`;
+}
+
 // ── BUILD CARD (extracted so both tabs can use it) ──
 function buildCard(r, i) {
   const currentHour = new Date().getHours();
@@ -476,58 +481,61 @@ function buildCard(r, i) {
     };
   });
 
+  const calibration = (() => {
+    const t = historicalThresholds[r.name];
+    if (!t || t.samples < 2) return null;
+    // Only show badge if calibration meaningfully affected the score
+    const weatherOnly = Math.max(0, Math.min(100, Math.round(100 - (r.risk || 0))));
+    const diff = Math.abs((overall || 0) - weatherOnly);
+    return diff < 3 ? null : { samples: t.samples, diff };
+  })();
+  const cardHead = {
+    verdictClass: allCancelled ? 'unlikely' : v,
+    verdictIcon: allCancelled ? '❌' : verdictEmoji(v),
+    name: r.name,
+    cancelled: allCancelled,
+    chanceText: overall !== null ? overall + '%' : '–',
+    chanceColor: colour,
+    chanceLabel: _useTomorrow ? "Tomorrow" : "Next 12h",
+    exposureLabel: ['', '🛡 Sheltered', '🌊 Moderate', '🌊🌊 Exposed', '⚠️ Very exposed'][profile.exposure],
+    // [background, text, border] colours
+    badges: [
+      calMacStatus === 'cancelled' && { text: '🚨 Cancelled', colors: ['#fceaed', '#c62828', '#ffcdd2'] },
+      calMacStatus === 'disrupted' && { text: '⚠️ Disrupted', colors: ['#fff3e0', '#e65100', '#ffe082'] },
+      calMacStatus === 'amber' && { text: '⚠️ Be Aware', colors: ['#fff8e1', '#e65100', '#ffe082'] },
+      disruption?.isUpcoming && !['cancelled', 'disrupted', 'amber'].includes(calMacStatus) && { text: '⏰ Change coming', colors: ['#fff8e1', '#e65100', '#ffe082'] },
+      calibration && { text: '📊 Calibrated', title: `Calibrated using ${calibration.samples} months of real CalMac data — shifted score by ${calibration.diff}%` },
+    ].filter(Boolean),
+  };
+  const cardNotices = routeNotices(r.name).map(n => ({
+    icon: NOTICE_ICONS[n.type] || '📋',
+    title: n.title,
+    preview: n.detail ? (d => d.length > 120 ? d.substring(0, 120).trimEnd() + '…' : d)(n.detail.replace(/https?:\/\/\S+/g, '').replace(/\s{2,}/g, ' ').trim()) : null,
+  }));
+  const gustShown = _useTomorrow && r.tomorrow?.maxGustMph !== null ? r.tomorrow.maxGustMph : r.maxGustMph;
+  const waveShown = _useTomorrow ? r.tomorrow?.maxWaveM : r.maxWaveM;
+  const cardWeather = {
+    gust: gustShown !== undefined ? gustShown + ' mph' : '–',
+    windDir: r.windDirDeg !== null && r.windDirDeg !== undefined ? windDirLabel(r.windDirDeg) : null,
+    wave: waveShown !== null && waveShown !== undefined ? waveShown + 'm' : '–',
+    vis: r.minVisM !== null && r.minVisM !== undefined && r.minVisM < 5000 ? (r.minVisM < 1000 ? r.minVisM + 'm' : Math.round(r.minVisM / 1000 * 10) / 10 + 'km') : null,
+    desc: r.weatherCode !== undefined ? weatherDesc(r.weatherCode, r.minVisM) : '',
+  };
+
   return `<div class="route-card" style="animation-delay:${delay}ms">
     <button class="fav-btn" data-route="${r.name}" title="Favourite this route">${favStar}</button>
-    <div class="card-head">
-      <div class="verdict-badge ${allCancelled ? 'unlikely' : v}">${allCancelled ? '❌' : verdictEmoji(v)}</div>
-      <div class="card-head-text">
-        <div class="route-name">${r.name}</div>
-      </div>
-      <div class="overall-chance">
-        ${allCancelled
-          ? `<div class="chance-pct" style="color:var(--red);font-size:1.1rem;line-height:1.2">Cancelled</div>`
-          : `<div class="chance-pct" style="color:${colour}">${overall !== null ? overall+'%' : '–'}</div>`}
-        <div class="chance-lbl">${_useTomorrow ? "Tomorrow" : "Next 12h"}</div>
-        <div class="exposure-lbl">${['','🛡 Sheltered','🌊 Moderate','🌊🌊 Exposed','⚠️ Very exposed'][profile.exposure]}</div>
-        ${calMacStatus === 'cancelled' ? '<div class="calibrated-badge" style="background:#fceaed;color:#c62828;border-color:#ffcdd2">🚨 Cancelled</div>' : ''}
-        ${calMacStatus === 'disrupted' ? '<div class="calibrated-badge" style="background:#fff3e0;color:#e65100;border-color:#ffe082">⚠️ Disrupted</div>' : ''}
-        ${calMacStatus === 'amber' ? '<div class="calibrated-badge" style="background:#fff8e1;color:#e65100;border-color:#ffe082">⚠️ Be Aware</div>' : ''}
-        ${disruption?.isUpcoming && !['cancelled','disrupted','amber'].includes(calMacStatus) ? '<div class="calibrated-badge" style="background:#fff8e1;color:#e65100;border-color:#ffe082">⏰ Change coming</div>' : ''}
-        ${(()=>{
-          const t = historicalThresholds[r.name];
-          if (!t || t.samples < 2) return '';
-          // Only show badge if calibration meaningfully affected the score
-          const weatherOnly = Math.max(0, Math.min(100, Math.round(100 - (r.risk || 0))));
-          const diff = Math.abs((overall || 0) - weatherOnly);
-          if (diff < 3) return '';
-          return `<div class="calibrated-badge" title="Calibrated using ${t.samples} months of real CalMac data — shifted score by ${diff}%">📊 Calibrated</div>`;
-        })()}
-      </div>
-    </div>
-    ${routeNotices(r.name).map((n, idx) => `<div class="timetable-notice" onclick='openTimetableNotice(${JSON.stringify(r.name)}, ${idx})'>
-      <div class="timetable-notice-body">
-        <div class="timetable-notice-title">${NOTICE_ICONS[n.type] || '📋'} ${escapeHtml(n.title)}</div>
-        ${n.detail ? `<div class="timetable-notice-detail">${escapeHtml((d => d.length > 120 ? d.substring(0, 120).trimEnd() + '…' : d)(n.detail.replace(/https?:\/\/\S+/g, '').replace(/\s{2,}/g, ' ').trim()))}</div>` : ''}
-      </div>
-      <div class="timetable-notice-chevron">›</div>
-    </div>`).join('')}
-    <div class="card-weather ${wc}">
-      <div class="wx-item">💨 <strong>${(_useTomorrow && r.tomorrow?.maxGustMph !== null ? r.tomorrow.maxGustMph : r.maxGustMph) !== undefined ? (_useTomorrow && r.tomorrow?.maxGustMph !== null ? r.tomorrow.maxGustMph : r.maxGustMph)+' mph' : '–'}</strong>${r.windDirDeg !== null && r.windDirDeg !== undefined ? ` <span style="opacity:.6;font-size:.78rem">${windDirLabel(r.windDirDeg)}</span>` : ''}</div>
-      <div class="wx-item">🌊 <strong>${(_useTomorrow ? r.tomorrow?.maxWaveM : r.maxWaveM) !== null && (_useTomorrow ? r.tomorrow?.maxWaveM : r.maxWaveM) !== undefined ? (_useTomorrow ? r.tomorrow.maxWaveM : r.maxWaveM)+'m' : '–'}</strong></div>
-      ${r.minVisM !== null && r.minVisM !== undefined && r.minVisM < 5000 ? `<div class="wx-item">🌫 <strong>${r.minVisM < 1000 ? (r.minVisM+'m') : (Math.round(r.minVisM/1000*10)/10+'km')} vis</strong></div>` : ''}
-      <div class="wx-item">${r.weatherCode !== undefined ? weatherDesc(r.weatherCode, r.minVisM) : ''}</div>
-    </div>
-    <div class="wind-bar-wrap ${wc}">
-      <div class="wind-bar-track"><div class="wind-bar-fill" style="width:${gustPct}%"></div></div>
-    </div>
-    <div class="sailings-section" data-island="sailings" data-props="${escapeHtml(JSON.stringify({
+    <div class="card-head" ${islandAttrs('cardHead', cardHead)}></div>
+    <div style="display:contents" ${islandAttrs('notices', { routeName: r.name, notices: cardNotices })}></div>
+    <div class="card-weather ${wc}" ${islandAttrs('weather', cardWeather)}></div>
+    <div class="wind-bar-wrap ${wc}" ${islandAttrs('windBar', { gustPct })}></div>
+    <div class="sailings-section" ${islandAttrs('sailings', {
       routeName: r.name,
       title: _useTomorrow ? "Tomorrow's sailings" : "Today's sailings",
       rows: sailingRows,
       emptyText: !sailingsLive ? 'No timetable available'
         : hasServiceChange ? `Normal sailings aren't running ${_useTomorrow ? 'tomorrow' : 'today'} — see CalMac's service update above`
         : `No sailings scheduled ${_useTomorrow ? 'tomorrow' : 'today'}`,
-    }))}"></div>
+    })}></div>
     <div class="card-foot">
       <div class="conf-pips">
         ${[1,2,3].map(n=>`<div class="conf-pip ${n<=pips?'filled':''}"></div>`).join('')}
@@ -1523,7 +1531,7 @@ async function enrichModalWithVessel(routeName) {
 function postRenderHook(container) {
   // Add card-actions to every card that doesn't already have one
   container.querySelectorAll('.route-card:not([data-actions])').forEach(card => {
-    const routeName = card.querySelector('.route-name')?.textContent?.trim();
+    const routeName = card.querySelector('.fav-btn')?.dataset.route;
     if (!routeName) return;
     card.setAttribute('data-actions', '1');
     const actionsHtml = buildCardActions(routeName);

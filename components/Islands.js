@@ -2,9 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { createPortal, flushSync } from "react-dom";
+import CardHead from "./CardHead";
+import CardNotices from "./CardNotices";
+import { CardWeather, WindBar } from "./CardWeather";
 import SailingsSection from "./SailingsSection";
 
-const COMPONENTS = { sailings: SailingsSection };
+const COMPONENTS = {
+  cardHead: CardHead,
+  notices: CardNotices,
+  weather: CardWeather,
+  windBar: WindBar,
+  sailings: SailingsSection,
+};
 
 // HTML built by the legacy script can contain island placeholders:
 //   <div data-island="sailings" data-props="{…json…}"></div>
