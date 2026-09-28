@@ -786,6 +786,23 @@ const ls = (() => {
   };
 })();
 
+// CalMac per-sailing statuses for today or tomorrow (see /api/status)
+function statusesForDay(disruption, tomorrow) {
+  return (tomorrow ? disruption?.sailingStatusesTomorrow : disruption?.sailingStatuses) || {};
+}
+
+// A sailing's status: a notice naming this departure port first, then one
+// giving only the time, then one covering all sailings.
+function sailingStatusFor(statuses, time, from) {
+  const norm = p => (p || '').toLowerCase().replace(/\(.*?\)/g, '').trim();
+  const origin = norm(from);
+  for (const [key, info] of Object.entries(statuses)) {
+    const [t, port] = key.split('|');
+    if (t === time && port && origin && (origin.startsWith(norm(port)) || norm(port).startsWith(origin))) return info;
+  }
+  return statuses[time] || statuses['*'] || null;
+}
+
 // ── BUILD CARD (extracted so both tabs can use it) ──
 function buildCard(r, i) {
   const currentHour = new Date().getHours();
@@ -813,14 +830,18 @@ function buildCard(r, i) {
   const disruption   = liveDisruptions[r.name];
   const calMacStatus = disruption?.status || null;
 
-  // Check if ALL sailings on this route are cancelled (wildcard '*' entry)
-  const sailingStatuses_card = disruption?.sailingStatuses || {};
-  const allCancelled = calMacStatus === 'cancelled' ||
+  // Check if ALL sailings on this route are cancelled (wildcard '*' entry).
+  // The route-level status is live, so it only counts for today.
+  const sailingStatuses_card = statusesForDay(disruption, _useTomorrow);
+  const allCancelled = (!_useTomorrow && calMacStatus === 'cancelled') ||
     (sailingStatuses_card['*']?.status === 'cancelled') ||
     (Object.keys(sailingStatuses_card).length > 0 &&
      Object.values(sailingStatuses_card).every(s => s.status === 'cancelled'));
 
   const { sailings, isLive: sailingsLive } = sailingsFor(r.name, _useTomorrow);
+  // CalMac has an amended service or disruption in place (e.g. replacement
+  // sailings described only in a notice, or a diversion to another port)
+  const hasServiceChange = Object.keys(sailingStatuses_card).length > 0 || routeNotices(r.name).some(n => n.type === 'SAILING');
   // Find the next upcoming sailing time for this route
   // In tomorrow mode there's no "next" or "past" — all sailings are future
   const nextSailingTime = _useTomorrow ? null : (sailings.find(s => {
@@ -839,9 +860,7 @@ function buildCard(r, i) {
     if (pct !== null) sailingChanceCache[r.name + '|' + time] = pct;
     const col = pct !== null ? chanceColor(pct) : 'var(--muted)';
     const barW = pct !== null ? pct : 0;
-    // Per-sailing CalMac status — check specific time then wildcard '*'
-    const sailingStatuses = disruption?.sailingStatuses || {};
-    const sailingInfo = sailingStatuses[time] || sailingStatuses['*'] || null;
+    const sailingInfo = sailingStatusFor(sailingStatuses_card, time, s.f);
     const sailingStatus = sailingInfo?.status || null;
 
     // Reason icon for disruption rows
@@ -940,7 +959,9 @@ function buildCard(r, i) {
       <div class="sailings-list">${sailingRows}</div>
     </div>` : `<div class="sailings-section">
       <div class="sailings-title">${_useTomorrow ? "Tomorrow's sailings" : "Today's sailings"}</div>
-      <div style="padding:10px 0;font-size:.8rem;color:var(--muted);text-align:center">${sailingsLive ? `No sailings scheduled ${_useTomorrow ? 'tomorrow' : 'today'}` : 'No timetable available'} — <a href="https://www.calmac.co.uk/timetables" target="_blank" style="color:var(--blue);font-weight:600">check calmac.co.uk</a></div>
+      <div style="padding:10px 0;font-size:.8rem;color:var(--muted);text-align:center">${!sailingsLive ? 'No timetable available'
+        : hasServiceChange ? `Normal sailings aren't running ${_useTomorrow ? 'tomorrow' : 'today'} — see CalMac's service update above`
+        : `No sailings scheduled ${_useTomorrow ? 'tomorrow' : 'today'}`} — <a href="https://www.calmac.co.uk/timetables" target="_blank" style="color:var(--blue);font-weight:600">check calmac.co.uk</a></div>
     </div>`}
     <div class="card-foot">
       <div class="conf-pips">
@@ -1000,7 +1021,8 @@ function openModal(routeName, sailingTime) {
   if (!r) return;
 
   const profile  = ROUTE_PROFILES[r.name] || { threshold: 45, exposure: 2 };
-  const { sailings } = sailingsFor(r.name, showingTomorrowGlobal && r.tomorrow?.maxGustMph !== null);
+  const modalTomorrow = showingTomorrowGlobal && r.tomorrow?.maxGustMph !== null;
+  const { sailings } = sailingsFor(r.name, modalTomorrow);
   // If a specific sailing time is given, use that hour; else use current hour
   const hour     = sailingTime ? parseInt(sailingTime.split(':')[0]) : new Date().getHours();
   const hourly   = r.hourlyData || {};
@@ -1116,9 +1138,9 @@ function openModal(routeName, sailingTime) {
 
   // CalMac live disruption info for this route (and specific sailing)
   const disruption = liveDisruptions[r.name];
-  const sailingStatuses = disruption?.sailingStatuses || {};
+  const sailingStatuses = statusesForDay(disruption, modalTomorrow);
   const sailingInfo = sailingTime
-    ? (sailingStatuses[sailingTime] || sailingStatuses['*'] || null)
+    ? sailingStatusFor(sailingStatuses, sailingTime, sailings.find(x => x.t === sailingTime)?.f)
     : (sailingStatuses['*'] || Object.values(sailingStatuses)[0] || null);
   const sailingIsCancelled = sailingInfo?.status === 'cancelled';
   const sailingIsDisrupted = sailingInfo?.status === 'disrupted' || sailingInfo?.status === 'amber';
@@ -1683,10 +1705,22 @@ async function loadDisruptionBanner() {
     const allRoutes_status = data.routes || disrupted;
     liveDisruptions = {};
     // Store ALL routes so sailingStatuses is available even for BE_AWARE routes
+    // Several CalMac routes can share one card: combine their notices and
+    // sailing statuses (a cancellation wins over a lesser status)
+    const mergeStatuses = (a = {}, b = {}) => {
+      const out = { ...a };
+      for (const [k, v] of Object.entries(b)) if (out[k]?.status !== 'cancelled') out[k] = v;
+      return out;
+    };
     allRoutes_status.forEach(d => {
       if (!d.routeKey) return;
-      const prevNotices = liveDisruptions[d.routeKey]?.notices || [];
-      liveDisruptions[d.routeKey] = { ...d, notices: [...prevNotices, ...(d.notices || [])] };
+      const prev = liveDisruptions[d.routeKey];
+      liveDisruptions[d.routeKey] = {
+        ...d,
+        notices: [...(prev?.notices || []), ...(d.notices || [])],
+        sailingStatuses: mergeStatuses(prev?.sailingStatuses, d.sailingStatuses),
+        sailingStatusesTomorrow: mergeStatuses(prev?.sailingStatusesTomorrow, d.sailingStatusesTomorrow),
+      };
     });
     lastDisruptionFetch = new Date();
     // Re-render so sailing rows reflect live CalMac status
