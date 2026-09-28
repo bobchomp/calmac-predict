@@ -4,6 +4,7 @@
   "functions": {
     "api/weather.js":       { "maxDuration": 30 },
     "api/status.js":        { "maxDuration": 15 },
+    "api/timetable.js":     { "maxDuration": 20 },
     "api/vessel.js":        { "maxDuration": 20 },
     "api/notify.js":        { "maxDuration": 15 },
     "api/cron.js":          { "maxDuration": 60 },
