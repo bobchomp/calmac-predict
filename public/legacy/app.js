@@ -392,11 +392,11 @@ if ('serviceWorker' in navigator) {
   // Listen for messages from SW (e.g. navigate to route from notification)
   navigator.serviceWorker.addEventListener('message', e => {
     if (e.data?.type === 'NAVIGATE' && e.data.url) {
-      const hash = new URL(e.data.url, location.href).hash;
-      if (hash.startsWith('#route=')) {
-        const route = decodeURIComponent(hash.replace('#route=', ''));
-        openModal(route);
-      }
+      // Alert links are /?route=…; older ones used #route=…
+      const target = new URL(e.data.url, location.href);
+      const route = target.searchParams.get('route')
+        || (target.hash.startsWith('#route=') ? decodeURIComponent(target.hash.replace('#route=', '')) : null);
+      if (route) openModal(route, target.searchParams.get('sailing'));
     }
   });
 }
@@ -415,6 +415,7 @@ function parseShareLink() {
     window._shareRoute   = route;
     window._shareSailing = sailing;
     window._shareFrom    = params.get('from') || null;
+    window._shareAlert   = params.has('alert'); // opened from an alert, not a share
   }
 }
 parseShareLink();
@@ -424,10 +425,10 @@ function handleShareDeepLink() {
   const route = window._shareRoute;
   const from  = window._shareFrom;
 
-  // Show the share banner
+  // Show the share banner (not for alert links)
   const banner = document.getElementById('shareBanner');
   const text   = document.getElementById('shareBannerText');
-  if (banner && text) {
+  if (banner && text && !window._shareAlert) {
     text.textContent = from
       ? `${from} shared "${route}" with you 🚢`
       : `Someone shared "${route}" with you 🚢`;

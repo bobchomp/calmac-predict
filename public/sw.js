@@ -99,17 +99,18 @@ self.addEventListener('push', e => {
 self.addEventListener('notificationclick', e => {
   e.notification.close();
   if (e.action === 'dismiss') return;
-  const targetUrl = e.notification.data?.url || '/';
+  // Links may be relative (this site) or absolute (e.g. CalMac timetables)
+  const target = new URL(e.notification.data?.url || '/', self.location.origin);
+  const ours = target.origin === self.location.origin;
   e.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
-      for (const client of list) {
-        if (client.url.includes('calmac-predict') && 'focus' in client) {
-          client.focus();
-          client.postMessage({ type: 'NAVIGATE', url: targetUrl });
-          return;
-        }
+      // Reuse an open tab of this site for its own links
+      const client = ours && list.find(c => new URL(c.url).origin === self.location.origin && 'focus' in c);
+      if (client) {
+        client.postMessage({ type: 'NAVIGATE', url: target.href });
+        return client.focus();
       }
-      if (clients.openWindow) return clients.openWindow(targetUrl);
+      if (clients.openWindow) return clients.openWindow(target.href);
     })
   );
 });
