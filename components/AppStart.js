@@ -1,12 +1,41 @@
 "use client";
 
 import { useEffect, useSyncExternalStore } from "react";
-import { getAppState, getServerAppState, subscribeAppState } from "../lib/appState";
+import * as appState from "../lib/appState";
+import * as card from "../lib/card";
+import * as config from "../lib/config";
 import { fetchData, startApp } from "../lib/data";
+import * as disruptions from "../lib/disruptions";
+import * as format from "../lib/format";
+import * as infoTabs from "../lib/infoTabs";
+import * as modal from "../lib/modal";
+import * as overlays from "../lib/overlays";
+import * as prefs from "../lib/prefs";
+import * as push from "../lib/push";
+import * as risk from "../lib/risk";
+import * as routes from "../lib/routes";
+import * as sun from "../lib/sun";
+import * as tabs from "../lib/tabs";
+import * as timetable from "../lib/timetable";
 
-// Starts loading the page's data once React has hydrated
+const { getAppState, getServerAppState, subscribeAppState } = appState;
+
+// Once React has hydrated: load the data, set up push and the service
+// worker, and follow #tab links. lib/ is also put on window, which some
+// components' click handlers still call through.
+let started = false;
+
 export function AppStart() {
-  useEffect(() => { startApp(); }, []);
+  useEffect(() => {
+    // Effects run twice in development; start once
+    if (started) return;
+    started = true;
+    Object.assign(window, appState, card, config, disruptions, format, infoTabs, modal, overlays, prefs, push, risk, routes, sun, tabs, timetable);
+    startApp();
+    push.initPush();
+    push.registerServiceWorker();
+    tabs.watchTabHash();
+  }, []);
   return null;
 }
 

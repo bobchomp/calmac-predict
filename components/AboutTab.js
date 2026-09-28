@@ -1,8 +1,9 @@
 import { AboutStat, TestNotification } from "./InfoTabs";
+import TabPage from "./TabPage";
 
 export default function AboutTab() {
   return (
-    <div className="tab-page" id="tabAbout" style={{paddingBottom: 80}}>
+    <TabPage id="tabAbout" style={{paddingBottom: 80}}>
       {/* HERO INTRO */}
       <div className="about-card" style={{background: 'linear-gradient(135deg,#0a2540 0%,#1a3a5c 100%)', color: '#fff'}}>
         <h3 style={{color: '#fff', fontSize: '1.1rem', marginBottom: 8}}>Will It Sail? 🚢</h3>
@@ -191,6 +192,6 @@ export default function AboutTab() {
         <p style={{fontSize: '.78rem', color: 'var(--muted)'}}>Inverness, Scotland 🏴󠁧󠁢󠁳󠁣󠁴󠁿</p>
         <p style={{fontSize: '.78rem', color: 'var(--muted)', marginTop: 8}}>Sailing times from CalMac's live schedule. Always verify at <a href="https://www.calmac.co.uk/timetables" target="_blank">calmac.co.uk</a>.</p>
       </div>
-    </div>
+    </TabPage>
   );
 }

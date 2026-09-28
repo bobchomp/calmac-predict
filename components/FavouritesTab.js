@@ -1,9 +1,10 @@
 import { FavouritesGrid } from "./RouteGrids";
+import TabPage from "./TabPage";
 
 export default function FavouritesTab() {
   return (
-    <div className="tab-page" id="tabFavs">
+    <TabPage id="tabFavs">
       <FavouritesGrid />
-    </div>
+    </TabPage>
   );
 }

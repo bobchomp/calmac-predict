@@ -4,7 +4,6 @@ import { InstallBanner, OfflineBanner } from "../components/AppBanners";
 import BottomNav from "../components/BottomNav";
 import FavouritesTab from "../components/FavouritesTab";
 import Header from "../components/Header";
-import LegacyScript from "../components/LegacyScript";
 import LoadingScreen from "../components/LoadingScreen";
 import NoticePopup from "../components/NoticePopup";
 import { SharePicker, ThresholdPicker } from "../components/Pickers";
@@ -17,8 +16,7 @@ import StatusTab from "../components/StatusTab";
 import Toolbar from "../components/Toolbar";
 import VesselTracker from "../components/VesselTracker";
 
-// The components render the page shell; public/legacy/app.js still fills in
-// and drives the dynamic parts, finding elements by the same ids and classes.
+// The whole page; components/AppStart.js loads the data once it has hydrated.
 export default function Home() {
   return (
     <>
@@ -43,7 +41,6 @@ export default function Home() {
       <SharePicker />
       <InstallBanner />
       <AppStart />
-      <LegacyScript src={`/legacy/app.js?v=${process.env.NEXT_PUBLIC_BUILD_ID}`} />
     </>
   );
 }
