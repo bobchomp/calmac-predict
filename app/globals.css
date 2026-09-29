@@ -97,6 +97,14 @@
     .timetable-notice-title{font-size:.8rem;font-weight:700;color:#1565c0;}
     .timetable-notice-detail{font-size:.75rem;color:#1976d2;margin-top:3px;line-height:1.4;}
     .timetable-notice-chevron{font-size:.85rem;color:#90caf9;flex-shrink:0;margin-top:1px;}
+    .timetable-notice.notice-cancelled{background:#fceaed;border-bottom-color:#ffcdd2;}
+    .notice-cancelled .timetable-notice-title{color:#c62828;}
+    .notice-cancelled .timetable-notice-detail{color:#b71c1c;}
+    .notice-cancelled .timetable-notice-chevron{color:#ef9a9a;}
+    .timetable-notice.notice-risk{background:#fff8e1;border-bottom-color:#ffe082;}
+    .notice-risk .timetable-notice-title{color:#e65100;}
+    .notice-risk .timetable-notice-detail{color:#ef6c00;}
+    .notice-risk .timetable-notice-chevron{color:#ffb74d;}
     /* Timetable notice popup */
     .tn-overlay{position:fixed;inset:0;z-index:600;background:rgba(0,18,60,0.55);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);display:flex;align-items:flex-end;justify-content:center;opacity:0;visibility:hidden;transition:opacity .22s ease,visibility .22s ease;}
     .tn-overlay.open{opacity:1;visibility:visible;}
