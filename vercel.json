@@ -29,6 +29,12 @@
     },
     "pages/api/accuracy.js": {
       "maxDuration": 10
+    },
+    "pages/api/track-sailings.js": {
+      "maxDuration": 60
+    },
+    "pages/api/sailings.js": {
+      "maxDuration": 15
     }
   }
 }
