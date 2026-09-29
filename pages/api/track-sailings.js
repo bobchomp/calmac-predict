@@ -15,7 +15,7 @@ import { disruptionsByRoute } from '../../lib/disruptions';
 import { forecastUrls, routeWeather } from '../../lib/forecast';
 import { kvConfigured, kvGetJsonMany, kvSetJson } from '../../lib/kv';
 import { ROUTES } from '../../lib/routes';
-import { LOG_KEY, TRACKER_KEY, departureMs, predictsSailing, sailingOutcome } from '../../lib/sailingLog';
+import { LOG_KEY, STATS_KEY, TRACKER_KEY, dayStats, departureMs, predictsSailing, sailingOutcome } from '../../lib/sailingLog';
 import { ukDateStr } from '../../lib/timetable';
 
 const BASE_URL = process.env.CRON_BASE_URL || 'https://www.willitsail.co.uk';
@@ -145,8 +145,12 @@ async function trackSailings(progress) {
     }
   }
 
+  // Each changed day, and the figures for days that have had departures
   progress.stage = 'saving the log';
-  await Promise.all([...changed].map(date => kvSetJson(LOG_KEY(date), log[date], KEEP_SECONDS)));
+  await Promise.all([...changed].flatMap(date => [
+    kvSetJson(LOG_KEY(date), log[date], KEEP_SECONDS),
+    date !== tomorrow && kvSetJson(STATS_KEY(date), dayStats(log[date]), KEEP_SECONDS),
+  ].filter(Boolean)));
 
   return {
     predicted,
