@@ -3,6 +3,8 @@
 // POST /api/notify { action: 'subscribe', route, subscription }
 // POST /api/notify { action: 'unsubscribe', route, endpoint }
 // POST /api/notify { action: 'send', route, message, chance }  (called by cron)
+// POST /api/notify { action: 'broadcast', title, message, url }  (called by check-timetables)
+//   send and broadcast need the header  Authorization: Bearer <CRON_SECRET>
 // GET  /api/notify  — returns public VAPID key
 
 // VAPID keys — generate with: npx web-push generate-vapid-keys
@@ -14,6 +16,7 @@ const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || '';
 const VAPID_EMAIL   = process.env.VAPID_EMAIL       || 'mailto:hello@willitsail.app';
 const KV_URL        = process.env.UPSTASH_REDIS_REST_URL   || '';
 const KV_TOKEN      = process.env.UPSTASH_REDIS_REST_TOKEN || '';
+const CRON_SECRET   = process.env.CRON_SECRET || '';
 
 // ── Upstash Redis REST helpers ──────────────────────────────────────────
 // Upstash REST API: POST /<command>/<args...>  with Bearer token
@@ -76,10 +79,21 @@ module.exports = async function handler(req, res) {
   const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
   const { action, route, subscription, endpoint, message, chance } = body || {};
 
+  // Only the cron jobs may send alerts: anyone else could push any message
+  // and link to every subscriber
+  if ((action === 'send' || action === 'broadcast') &&
+      (!CRON_SECRET || req.headers['authorization'] !== `Bearer ${CRON_SECRET}`)) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
   // ── SUBSCRIBE ──
   if (action === 'subscribe') {
     if (!route || !subscription?.endpoint) {
       return res.status(400).json({ error: 'route and subscription required' });
+    }
+    // Browsers' push services are all https; the alerts are POSTed there
+    if (!/^https:\/\//.test(subscription.endpoint)) {
+      return res.status(400).json({ error: 'invalid subscription' });
     }
     if (!KV_URL) return res.status(200).json({ ok: true, note: 'KV not configured' });
 

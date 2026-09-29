@@ -346,7 +346,7 @@ module.exports = async function handler(req, res) {
             try {
               const notifyResp = await fetch(`${BASE_URL}/api/notify`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
                 body: JSON.stringify({
                   action: 'send',
                   route: routeKey,
@@ -428,7 +428,7 @@ module.exports = async function handler(req, res) {
           if (subs.length > 0) {
             await fetch(`${BASE_URL}/api/notify`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
               body: JSON.stringify({
                 action:  'send',
                 route:   routeKey,
