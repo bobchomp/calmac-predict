@@ -146,7 +146,7 @@ module.exports = async function handler(req, res) {
     try {
       const notifyResp = await fetch(`${BASE_URL}/api/notify`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${CRON_SECRET}` },
         body: JSON.stringify({
           action:  'broadcast',
           title:   '📅 New CalMac Timetable',
