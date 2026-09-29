@@ -9,17 +9,16 @@
 // 2. From 10 minutes after departure: records whether it sailed (CalMac
 //    hadn't cancelled it) and whether the last prediction was right.
 
-import { SHEET_SCRIPT_URL as DEFAULT_SHEET_URL } from '../../lib/config';
 import { sailingChanceAt, sailingsForDay } from '../../lib/card';
 import { disruptionsByRoute } from '../../lib/disruptions';
 import { forecastUrls, routeWeather } from '../../lib/forecast';
 import { kvConfigured, kvGetJsonMany, kvSetJson } from '../../lib/kv';
 import { ROUTES } from '../../lib/routes';
+import { loadThresholds } from '../../lib/thresholds';
 import { LOG_KEY, STATS_KEY, TRACKER_KEY, dayStats, departureMs, predictsSailing, sailingOutcome } from '../../lib/sailingLog';
 import { ukDateStr } from '../../lib/timetable';
 
 const BASE_URL = process.env.CRON_BASE_URL || 'https://www.willitsail.co.uk';
-const SHEET_SCRIPT_URL = process.env.SHEET_SCRIPT_URL || DEFAULT_SHEET_URL;
 const CRON_SECRET = process.env.CRON_SECRET || '';
 
 const RESOLVE_AFTER_MS = 10 * 60 * 1000;
@@ -68,7 +67,7 @@ async function trackSailings(progress) {
     getJson(`${BASE_URL}/api/timetable?date=${tomorrow}`, 20000),
     getJson(windUrl, 15000),
     getJson(marineUrl, 15000),
-    getJson(`${SHEET_SCRIPT_URL}?action=getThresholds`, 20000),
+    loadThresholds(),
     kvGetJsonMany([yesterday, today, tomorrow].map(LOG_KEY)),
   ]);
   if (logs.status === 'rejected') { progress.stage = 'reading the log'; throw logs.reason; }
@@ -85,6 +84,7 @@ async function trackSailings(progress) {
     ? Object.fromEntries(ROUTES.map((r, i) => [r.name, { name: r.name, ...routeWeather(windArr[i]?.hourly || {}, marineArr[i]?.hourly || null, hour) }]))
     : null;
   const thresholdData = value(thresholds)?.thresholds || null;
+  const thresholdSource = value(thresholds)?.source || null;
   const timetable = { [today]: value(ttToday)?.routes, [tomorrow]: value(ttTomorrow)?.routes };
   const statusData = value(status);
   const disruptions = statusData && !statusData.fallback ? disruptionsByRoute(statusData) : null;
@@ -157,7 +157,8 @@ async function trackSailings(progress) {
     resolved,
     inputs: {
       forecast: !!routes,
-      thresholds: !!thresholdData,
+      thresholds: thresholdSource || false,
+      ...(value(thresholds)?.error && { thresholdsError: value(thresholds).error }),
       calmacStatus: !!disruptions,
       timetables: { [today]: !!timetable[today], [tomorrow]: !!timetable[tomorrow] },
     },

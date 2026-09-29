@@ -2,11 +2,9 @@
 // The sailing chance the site would show for a route over the next 12 hours,
 // using the same Open-Meteo data and risk model. Used by api/cron.js.
 
-import { SHEET_SCRIPT_URL as DEFAULT_SHEET_URL } from "../../lib/config";
 import { calcOverallRisk, chanceFromRisk, historicalReliability, verdictFromRisk } from "../../lib/risk";
 import { ROUTES } from "../../lib/routes";
-
-const SHEET_SCRIPT_URL = process.env.SHEET_SCRIPT_URL || DEFAULT_SHEET_URL;
+import { loadThresholds } from "../../lib/thresholds";
 
 const ukParts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: 'numeric', month: 'numeric', hourCycle: 'h23' });
 
@@ -33,7 +31,7 @@ export default async function handler(req, res) {
     getJson(`https://api.open-meteo.com/v1/forecast?${loc}&windspeed_unit=ms`
       + '&hourly=windspeed_10m,windgusts_10m,winddirection_10m,weather_code,visibility,precipitation,snowfall', 8000),
     getJson(`https://marine-api.open-meteo.com/v1/marine?${loc}&hourly=wave_height,wave_period,swell_wave_height`, 8000),
-    getJson(`${SHEET_SCRIPT_URL}?action=getThresholds`, 6000),
+    loadThresholds(),
   ]);
 
   if (forecast.status === 'rejected') {
