@@ -1,10 +1,11 @@
 // api/sailings.js — the per-sailing log (lib/sailingLog.js)
-//   GET /api/sailings                     how the predictions did, last 30 days (?days= up to 90)
+//   GET /api/sailings                     how the predictions did, last 30 days (?days= up to 90),
+//                                         and how the tracker's latest run went
 //   GET /api/sailings?date=YYYY-MM-DD     every sailing logged that day
 //   GET /api/sailings?date=…&format=csv   the same as a spreadsheet
 
 import { kvConfigured, kvGetJsonMany } from '../../lib/kv';
-import { LOG_KEY, summarise } from '../../lib/sailingLog';
+import { LOG_KEY, TRACKER_KEY, summarise } from '../../lib/sailingLog';
 import { ukDateStr } from '../../lib/timetable';
 
 const CSV_COLUMNS = [
@@ -39,11 +40,11 @@ export default async function handler(req, res) {
 
     const days = Math.min(90, Math.max(1, parseInt(req.query?.days, 10) || 30));
     const dates = Array.from({ length: days }, (_, i) => ukDateStr(-i));
-    const logs = await kvGetJsonMany(dates.map(LOG_KEY));
+    const [tracker, ...logs] = await kvGetJsonMany([TRACKER_KEY, ...dates.map(LOG_KEY)]);
     const records = logs.flatMap(log => Object.values(log || {}));
     const withData = dates.filter((d, i) => logs[i] && Object.keys(logs[i]).length);
     res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=300');
-    return res.status(200).json({ ok: true, days, since: withData.at(-1) || null, ...summarise(records) });
+    return res.status(200).json({ ok: true, days, since: withData.at(-1) || null, tracker, ...summarise(records) });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }

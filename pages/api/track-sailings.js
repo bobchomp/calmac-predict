@@ -15,7 +15,7 @@ import { disruptionsByRoute } from '../../lib/disruptions';
 import { forecastUrls, routeWeather } from '../../lib/forecast';
 import { kvConfigured, kvGetJsonMany, kvSetJson } from '../../lib/kv';
 import { ROUTES } from '../../lib/routes';
-import { LOG_KEY, departureMs, predictsSailing, sailingOutcome } from '../../lib/sailingLog';
+import { LOG_KEY, TRACKER_KEY, departureMs, predictsSailing, sailingOutcome } from '../../lib/sailingLog';
 import { ukDateStr } from '../../lib/timetable';
 
 const BASE_URL = process.env.CRON_BASE_URL || 'https://www.willitsail.co.uk';
@@ -40,6 +40,23 @@ export default async function handler(req, res) {
   if (!CRON_SECRET || secret !== CRON_SECRET) return res.status(401).json({ error: 'Unauthorized' });
   if (!kvConfigured()) return res.status(200).json({ ok: false, note: 'Redis not configured' });
 
+  // Each run leaves a note of how it went (shown by /api/sailings and the
+  // Status tab), so a failing run can be seen without the server logs
+  const progress = { stage: 'starting' };
+  try {
+    const result = await trackSailings(progress);
+    await kvSetJson(TRACKER_KEY, { at: new Date().toISOString(), ok: true, predicted: result.predicted, resolved: result.resolved, inputs: result.inputs }).catch(() => {});
+    return res.status(200).json({ ok: true, ...result });
+  } catch (err) {
+    const error = `${progress.stage}: ${err?.message || err}${err?.cause?.message ? ` (${err.cause.message})` : ''}`;
+    console.error('[track-sailings] failed', error, err);
+    await kvSetJson(TRACKER_KEY, { at: new Date().toISOString(), ok: false, error }).catch(() => {});
+    return res.status(500).json({ ok: false, error });
+  }
+}
+
+async function trackSailings(progress) {
+  progress.stage = 'fetching';
   const now = Date.now();
   const at = new Date(now).toISOString();
   const [yesterday, today, tomorrow] = [ukDateStr(-1), ukDateStr(0), ukDateStr(1)];
@@ -54,7 +71,7 @@ export default async function handler(req, res) {
     getJson(`${SHEET_SCRIPT_URL}?action=getThresholds`, 20000),
     kvGetJsonMany([yesterday, today, tomorrow].map(LOG_KEY)),
   ]);
-  if (logs.status === 'rejected') return res.status(500).json({ error: 'Could not read the log: ' + logs.reason?.message });
+  if (logs.status === 'rejected') { progress.stage = 'reading the log'; throw logs.reason; }
   const log = { [yesterday]: logs.value[0] || {}, [today]: logs.value[1] || {}, [tomorrow]: logs.value[2] || {} };
   const changed = new Set();
 
@@ -73,6 +90,7 @@ export default async function handler(req, res) {
   const disruptions = statusData && !statusData.fallback ? disruptionsByRoute(statusData) : null;
 
   // 1. Predictions (and today's CalMac status) for sailings yet to leave
+  progress.stage = 'predicting';
   let predicted = 0;
   for (const [date, isTomorrow] of [[today, false], [tomorrow, true]]) {
     for (const { name } of ROUTES) {
@@ -102,6 +120,7 @@ export default async function handler(req, res) {
   }
 
   // 2. Outcomes for sailings that have left
+  progress.stage = 'recording outcomes';
   let resolved = 0;
   for (const date of [yesterday, today]) {
     for (const rec of Object.values(log[date])) {
@@ -126,10 +145,10 @@ export default async function handler(req, res) {
     }
   }
 
+  progress.stage = 'saving the log';
   await Promise.all([...changed].map(date => kvSetJson(LOG_KEY(date), log[date], KEEP_SECONDS)));
 
-  return res.status(200).json({
-    ok: true,
+  return {
     predicted,
     resolved,
     inputs: {
@@ -139,5 +158,5 @@ export default async function handler(req, res) {
       timetables: { [today]: !!timetable[today], [tomorrow]: !!timetable[tomorrow] },
     },
     logged: Object.fromEntries([yesterday, today, tomorrow].map(d => [d, Object.keys(log[d]).length])),
-  });
+  };
 }
