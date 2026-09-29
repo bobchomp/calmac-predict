@@ -1,11 +1,13 @@
 // api/sailings.js — the per-sailing log (lib/sailingLog.js)
-//   GET /api/sailings                     how the predictions did, last 30 days (?days= up to 90),
-//                                         and how the tracker's latest run went
+//   GET /api/sailings                     how the predictions did, last 30 days (?days= up to 90,
+//                                         ?route= for one route): totals, by day, by route and by
+//                                         what we said, and how the tracker's latest run went
 //   GET /api/sailings?date=YYYY-MM-DD     every sailing logged that day
 //   GET /api/sailings?date=…&format=csv   the same as a spreadsheet
 
 import { kvConfigured, kvGetJsonMany } from '../../lib/kv';
-import { LOG_KEY, TRACKER_KEY, summarise } from '../../lib/sailingLog';
+import { ROUTES } from '../../lib/routes';
+import { LOG_KEY, STATS_KEY, TRACKER_KEY, addStats, calibration, dayStats, figures, summarise, verdictBands } from '../../lib/sailingLog';
 import { ukDateStr } from '../../lib/timetable';
 
 const CSV_COLUMNS = [
@@ -35,16 +37,29 @@ export default async function handler(req, res) {
         res.setHeader('Content-Disposition', `attachment; filename="sailings-${date}.csv"`);
         return res.status(200).send([CSV_COLUMNS.map(c => c[0]).join(','), ...records.map(r => CSV_COLUMNS.map(c => csvCell(c[1](r))).join(','))].join('\n') + '\n');
       }
-      return res.status(200).json({ ok: true, date, ...summarise(records), records });
+      return res.status(200).json({ ok: true, date, ...summarise(log), records });
     }
 
     const days = Math.min(90, Math.max(1, parseInt(req.query?.days, 10) || 30));
-    const dates = Array.from({ length: days }, (_, i) => ukDateStr(-i));
-    const [tracker, ...logs] = await kvGetJsonMany([TRACKER_KEY, ...dates.map(LOG_KEY)]);
-    const records = logs.flatMap(log => Object.values(log || {}));
-    const withData = dates.filter((d, i) => logs[i] && Object.keys(logs[i]).length);
-    res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=300');
-    return res.status(200).json({ ok: true, days, since: withData.at(-1) || null, tracker, ...summarise(records) });
+    const route = req.query?.route || null;
+    const dates = Array.from({ length: days }, (_, i) => ukDateStr(-i)).reverse();
+    const [tracker, ...stats] = await kvGetJsonMany([TRACKER_KEY, ...dates.map(STATS_KEY)]);
+    // Figures for the last two days come from their logs if the tracker
+    // hasn't written them yet
+    const missing = dates.slice(-2).filter((d, i) => !stats[dates.length - 2 + i]);
+    if (missing.length) {
+      const logs = await kvGetJsonMany(missing.map(LOG_KEY));
+      missing.forEach((d, i) => { if (logs[i]) stats[dates.indexOf(d)] = dayStats(logs[i]); });
+    }
+    const total = addStats(stats, route);
+    const byDay = dates.map((date, i) => ({ date, ...figures(addStats([stats[i]], route)) })).filter(d => d.sailings);
+    const byRoute = ROUTES.map(r => r.name).filter(name => !route || name === route)
+      .map(name => ({ route: name, ...figures(addStats(stats, name)) })).filter(r => r.sailings);
+    res.setHeader('Cache-Control', 's-maxage=120, stale-while-revalidate=120');
+    return res.status(200).json({
+      ok: true, days, route, since: byDay[0]?.date || null, tracker,
+      ...figures(total), bands: verdictBands(total), calibration: calibration(total), byDay, byRoute,
+    });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }

@@ -23,7 +23,7 @@ export function StatusChecks() {
               <div className="status-name">{item.icon ? `${item.icon} ${item.name}` : item.name}</div>
               <div className="status-detail">
                 {item.detail}
-                {item.link && <> · <a href={item.link.href} download>{item.link.text}</a></>}
+                {item.link && <> · <a href={item.link.href}>{item.link.text}</a></>}
               </div>
             </div>
             <div className={`status-badge ${item.badge}`}>{item.badgeText}</div>

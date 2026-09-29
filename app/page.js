@@ -1,4 +1,5 @@
 import AboutTab from "../components/AboutTab";
+import AccuracyTab from "../components/AccuracyTab";
 import { AppStart } from "../components/AppStart";
 import { InstallBanner, OfflineBanner } from "../components/AppBanners";
 import BottomNav from "../components/BottomNav";
@@ -29,6 +30,7 @@ export default function Home() {
         <StatusBar />
         <RoutesTab />
         <FavouritesTab />
+        <AccuracyTab />
         <StatusTab />
         <AboutTab />
       </main>
