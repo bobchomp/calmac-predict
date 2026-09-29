@@ -38,10 +38,11 @@ export default function RouteModal() {
   );
 }
 
-function ModalContent({ routeName, sailingTime, title, subtitle, notice, chance, color, verdict, verdictText, rows, pills }) {
+function ModalContent({ routeName, sailingTime, title, subtitle, notice, chance, basis, color, verdict, verdictText, rows, pills }) {
   // Chance ring
   const radius = 36, circ = 2 * Math.PI * radius;
-  const dash = ((100 - chance) / 100) * circ;
+  const dash = ((100 - (chance ?? 0)) / 100) * circ;
+  const shown = chance === null ? "–" : chance + "%";
 
   return (
     <>
@@ -63,7 +64,7 @@ function ModalContent({ routeName, sailingTime, title, subtitle, notice, chance,
                 strokeLinecap="round" style={{ transition: "stroke-dashoffset .6s ease" }}
               />
             </svg>
-            <div className="chance-ring-num" style={{ color }}>{chance}%</div>
+            <div className="chance-ring-num" style={{ color }}>{shown}</div>
           </div>
           <div className="modal-verdict">
             <div className="modal-verdict-label" style={{ color }}>{verdict}</div>
@@ -71,7 +72,7 @@ function ModalContent({ routeName, sailingTime, title, subtitle, notice, chance,
           </div>
         </div>
 
-        <div className="breakdown-title">Conditions</div>
+        {rows.length > 0 && <div className="breakdown-title">Conditions</div>}
         {rows.map(row => (
           <div key={row.name} className="breakdown-row">
             <div className="br-icon">{row.icon}</div>
@@ -87,9 +88,9 @@ function ModalContent({ routeName, sailingTime, title, subtitle, notice, chance,
         <div className="breakdown-total">
           <div>
             <div className="bt-label">Sailing chance</div>
-            <div style={{ fontSize: ".72rem", opacity: 0.6, marginTop: 2 }}>Based on weather forecast</div>
+            <div style={{ fontSize: ".72rem", opacity: 0.6, marginTop: 2 }}>{basis}</div>
           </div>
-          <div className="bt-chance">{chance}%</div>
+          <div className="bt-chance">{shown}</div>
         </div>
 
         <div className="profile-pills">
