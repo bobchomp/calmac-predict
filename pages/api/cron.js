@@ -5,6 +5,8 @@
 // 4. Emails teddaharry@gmail.com + ross.mackenzie1@invernessroyalacademy.org.uk
 //    when NEW disruptions appear (first seen, not every day ongoing)
 
+const { waitUntil } = require('@vercel/functions');
+
 const BASE_URL = process.env.CRON_BASE_URL || 'https://www.willitsail.co.uk';
 
 const KV_URL   = process.env.UPSTASH_REDIS_REST_URL   || '';
@@ -177,11 +179,16 @@ async function sendHealthAlertEmail(failedChecks, isTest = false, overrideTo = n
   }
 }
 
-// ── Accuracy log — push a prediction/outcome data point to Redis ─────────
-async function recordAccuracyPoint(routeKey, predictedChance, sailed) {
-  if (!KV_URL || predictedChance === null) return;
+// ── Accuracy log — prediction/outcome data points in Redis ───────────────
+// All of a run's points in one read and one write (writes side by side
+// would overwrite each other's points)
+async function recordAccuracyPoints(points) {
+  const fresh = points
+    .filter(p => p.predictedChance !== null && p.predictedChance !== undefined)
+    .map(p => ({ ts: Date.now(), r: p.routeKey, p: Math.round(p.predictedChance), s: p.sailed }));
+  if (!KV_URL || !fresh.length) return;
   const log = (await kvGet('accuracy:log')) || [];
-  log.push({ ts: Date.now(), r: routeKey, p: Math.round(predictedChance), s: sailed });
+  log.push(...fresh);
   if (log.length > 1000) log.splice(0, log.length - 1000);
   await kvSet('accuracy:log', log);
 }
@@ -301,74 +308,52 @@ module.exports = async function handler(req, res) {
     return res.status(200).send(html);
   }
 
-  const results = [];
+  const weatherChance = async routeKey => {
+    const coords = ROUTE_COORDS[routeKey];
+    try {
+      const weatherResp = await fetch(
+        `${BASE_URL}/api/weather?lat=${coords.lat}&lon=${coords.lon}&route=${encodeURIComponent(routeKey)}`,
+        { signal: AbortSignal.timeout(10000) }
+      );
+      if (!weatherResp.ok) return null;
+      const weather = await weatherResp.json();
+      return weather?.sailingChance ?? weather?.chance ?? null;
+    } catch (_) {
+      return null;
+    }
+  };
+  const slug = routeKey => routeKey.replace(/[^a-z0-9]/gi, '_');
+  const sendPushTo = (routeKey, body) => fetch(`${BASE_URL}/api/notify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
+    body: JSON.stringify({ action: 'send', route: routeKey, ...body }),
+  });
 
+  // cron-job.org gives up after 30s, and a stormy day can have 20 disrupted
+  // routes. So the independent steps run side by side, and the slow ones
+  // that nothing waits on (the Google Sheet log, the timetable PDF check)
+  // carry on after the reply (waitUntil keeps the function running for them).
   try {
+    // ── New seasonal timetable PDFs on calmac.co.uk (its own function) ──
+    const timetables = fetch(`${BASE_URL}/api/check-timetables`, {
+      // Secret in a header, so it stays out of URLs and request logs
+      headers: secret ? { Authorization: `Bearer ${secret}` } : {},
+      signal: AbortSignal.timeout(55000),
+    })
+      .then(r => (r.ok ? r.json() : { error: `HTTP ${r.status}` }))
+      .catch(err => ({ error: err.message }));
+    waitUntil(timetables);
+
     // ── Step 1: fetch live CalMac status ──
     const statusResp = await fetch(`${BASE_URL}/api/status`, {
       signal: AbortSignal.timeout(12000),
     });
     const statusData = statusResp.ok ? await statusResp.json() : { routes: [], disrupted: [] };
-    const disrupted = statusData.disrupted || [];
+    const disrupted = (statusData.disrupted || []).filter(d => d.routeKey && ROUTE_COORDS[d.routeKey]);
 
-    // ── Step 2: for each disrupted route, get predicted chance & record to sheet ──
-    for (const disruption of disrupted) {
-      const routeKey = disruption.routeKey;
-      if (!routeKey || !ROUTE_COORDS[routeKey]) continue;
-
-      const coords = ROUTE_COORDS[routeKey];
-      let predictedChance = null;
-
-      try {
-        const weatherResp = await fetch(
-          `${BASE_URL}/api/weather?lat=${coords.lat}&lon=${coords.lon}&route=${encodeURIComponent(routeKey)}`,
-          { signal: AbortSignal.timeout(10000) }
-        );
-        if (weatherResp.ok) {
-          const weather = await weatherResp.json();
-          predictedChance = weather?.sailingChance ?? weather?.chance ?? null;
-        }
-      } catch (_) {}
-
-      // Record to Google Sheet as ground truth + accuracy log
-      await recordToSheet(routeKey, disruption.status, predictedChance);
-      await recordAccuracyPoint(routeKey, predictedChance, disruption.status !== 'cancelled');
-      results.push({ route: routeKey, calMacStatus: disruption.status, predictedChance, recorded: true });
-
-      // ── Step 3: send push notifications if subscribed & below threshold ──
-      if (predictedChance !== null && predictedChance < NOTIFY_THRESHOLD && KV_URL) {
-        const subKey = `subs:${routeKey.replace(/[^a-z0-9]/gi, '_')}`;
-        const subs = (await kvGet(subKey)) || [];
-        if (subs.length > 0) {
-          const lastSent = (await kvGet(`lastsent:${routeKey.replace(/[^a-z0-9]/gi, '_')}`)) || 0;
-          const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
-          if (lastSent < twoHoursAgo) {
-            try {
-              const notifyResp = await fetch(`${BASE_URL}/api/notify`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
-                body: JSON.stringify({
-                  action: 'send',
-                  route: routeKey,
-                  chance: predictedChance,
-                  message: disruption.status === 'cancelled'
-                    ? `All sailings cancelled on ${routeKey} today.`
-                    : `Disruptions reported on ${routeKey}. Sailing chance: ${predictedChance}%.`,
-                }),
-              });
-              const notifyResult = await notifyResp.json();
-              await kvSet(`lastsent:${routeKey.replace(/[^a-z0-9]/gi, '_')}`, Date.now());
-              results[results.length - 1].pushed = notifyResult.sent;
-            } catch (_) {}
-          }
-        }
-      }
-    }
-
-    // ── Step 3b: sample 5 non-disrupted routes for accuracy calibration ──
-    // Gives us "predicted high % and it sailed" data points alongside the disrupted ones.
-    // Rotate the sample deterministically by day so different routes are covered over time.
-    const disruptedKeySet = new Set(disrupted.map(d => d.routeKey).filter(Boolean));
+    // 5 non-disrupted routes too, for "predicted high % and it sailed" data
+    // points. Rotated by day so different routes are covered over time.
+    const disruptedKeySet = new Set((statusData.disrupted || []).map(d => d.routeKey).filter(Boolean));
     const normalRoutes    = Object.keys(ROUTE_COORDS).filter(k => !disruptedKeySet.has(k));
     const dayIndex        = Math.floor(Date.now() / 86400000);
     const sampleRoutes    = normalRoutes
@@ -377,25 +362,48 @@ module.exports = async function handler(req, res) {
       .slice(0, 5)
       .map(x => x.k);
 
-    for (const routeKey of sampleRoutes) {
-      const coords = ROUTE_COORDS[routeKey];
+    // ── Step 2: predicted chances (all at once) and the health check ──
+    const [disruptedChances, sampleChances, failedChecks] = await Promise.all([
+      Promise.all(disrupted.map(d => weatherChance(d.routeKey))),
+      Promise.all(sampleRoutes.map(weatherChance)),
+      runHealthChecks(statusData),
+    ]);
+    const results = disrupted.map((d, i) => ({ route: d.routeKey, calMacStatus: d.status, predictedChance: disruptedChances[i], recorded: true }));
+
+    // Accuracy log: one read and one write for all the points
+    await recordAccuracyPoints([
+      ...results.map(r => ({ routeKey: r.route, predictedChance: r.predictedChance, sailed: r.calMacStatus !== 'cancelled' })),
+      ...sampleRoutes.map((routeKey, i) => ({ routeKey, predictedChance: sampleChances[i], sailed: true })),
+    ]);
+
+    // Google Sheet ground-truth log, one row at a time, after the reply
+    const sheetRows = results.map(r => [r.route, r.calMacStatus, r.predictedChance]);
+    waitUntil((async () => {
+      for (const row of sheetRows) await recordToSheet(...row);
+    })());
+
+    // ── Step 3: push alerts for subscribed routes below the threshold ──
+    await Promise.all(results.map(async r => {
+      if (r.predictedChance === null || r.predictedChance >= NOTIFY_THRESHOLD || !KV_URL) return;
+      const subs = (await kvGet(`subs:${slug(r.route)}`)) || [];
+      if (!subs.length) return;
+      const lastSent = (await kvGet(`lastsent:${slug(r.route)}`)) || 0;
+      if (lastSent >= Date.now() - 2 * 60 * 60 * 1000) return;
       try {
-        const weatherResp = await fetch(
-          `${BASE_URL}/api/weather?lat=${coords.lat}&lon=${coords.lon}&route=${encodeURIComponent(routeKey)}`,
-          { signal: AbortSignal.timeout(10000) }
-        );
-        if (weatherResp.ok) {
-          const weather = await weatherResp.json();
-          const chance  = weather?.sailingChance ?? weather?.chance ?? null;
-          await recordAccuracyPoint(routeKey, chance, true);
-        }
+        const notifyResp = await sendPushTo(r.route, {
+          chance: r.predictedChance,
+          message: r.calMacStatus === 'cancelled'
+            ? `All sailings cancelled on ${r.route} today.`
+            : `Disruptions reported on ${r.route}. Sailing chance: ${r.predictedChance}%.`,
+        });
+        const notifyResult = await notifyResp.json();
+        await kvSet(`lastsent:${slug(r.route)}`, Date.now());
+        r.pushed = notifyResult.sent;
       } catch (_) {}
-    }
+    }));
 
     // ── Step 4: health check — email if any service is broken ──
-    const failedChecks = await runHealthChecks(statusData);
     let emailResult = null;
-
     if (failedChecks.length > 0 && KV_URL) {
       // Dedup: store a fingerprint of which services are failing; only email when it changes
       const fingerprint = failedChecks.map(c => c.name).sort().join(',');
@@ -409,58 +417,34 @@ module.exports = async function handler(req, res) {
       await kvSet('health_alert_sent', null);
     }
 
-    // ── Check for new timetable notices (amended timetable / vessel substitution) ──
-    for (const route of (statusData.routes || [])) {
+    // ── New timetable notices (amended timetable / vessel substitution) ──
+    // Push only when a route's notice title is one we haven't seen before
+    const noticeResults = await Promise.all((statusData.routes || []).map(async route => {
       const routeKey = route.routeKey;
-      if (!routeKey || !route.timetableNotice) continue;
-
+      if (!routeKey || !route.timetableNotice || !KV_URL) return null;
       const notice    = route.timetableNotice;
-      const noticeKey = `timetablenotice:${routeKey.replace(/[^a-z0-9]/gi, '_')}`;
+      const noticeKey = `timetablenotice:${slug(routeKey)}`;
       const lastNotice = await kvGet(noticeKey);
-
-      // Push only when this is a title we haven't seen before for this route
-      if (notice.title !== lastNotice?.title && KV_URL) {
-        await kvSet(noticeKey, { title: notice.title, seen: Date.now() });
-
-        try {
-          const subKey = `subs:${routeKey.replace(/[^a-z0-9]/gi, '_')}`;
-          const subs = (await kvGet(subKey)) || [];
-          if (subs.length > 0) {
-            await fetch(`${BASE_URL}/api/notify`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
-              body: JSON.stringify({
-                action:  'send',
-                route:   routeKey,
-                message: `${routeKey}: ${notice.title}`,
-              }),
-            });
-          }
-          results.push({ route: routeKey, timetableNotice: notice.title, pushed: true });
-        } catch (_) {}
+      if (notice.title === lastNotice?.title) return null;
+      await kvSet(noticeKey, { title: notice.title, seen: Date.now() });
+      try {
+        const subs = (await kvGet(`subs:${slug(routeKey)}`)) || [];
+        if (subs.length > 0) await sendPushTo(routeKey, { message: `${routeKey}: ${notice.title}` });
+        return { route: routeKey, timetableNotice: notice.title, pushed: true };
+      } catch (_) {
+        return null;
       }
-    }
-
-    // ── Check for new seasonal timetable PDFs on calmac.co.uk ────────────
-    let timetableResult = null;
-    try {
-      // Secret in a header, so it stays out of URLs and request logs
-      const ttResp = await fetch(`${BASE_URL}/api/check-timetables`, {
-        headers: secret ? { Authorization: `Bearer ${secret}` } : {},
-        signal: AbortSignal.timeout(55000),
-      });
-      timetableResult = ttResp.ok ? await ttResp.json() : { error: `HTTP ${ttResp.status}` };
-    } catch (err) {
-      timetableResult = { error: err.message };
-    }
+    }));
+    results.push(...noticeResults.filter(Boolean));
 
     return res.status(200).json({
       ok: true,
-      disrupted: disrupted.length,
+      disrupted: (statusData.disrupted || []).length,
       recorded: results.filter(r => r.recorded).length,
       results,
       healthChecks: { failed: failedChecks.length, checks: failedChecks, emailSent: !!emailResult, emailResult },
-      timetables: timetableResult,
+      sheet: SHEET_URL ? `logging ${sheetRows.length} rows after this reply` : 'not configured',
+      timetables: 'checking after this reply',
     });
 
   } catch (err) {

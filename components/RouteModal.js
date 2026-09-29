@@ -122,9 +122,9 @@ function ModalContent({ routeName, sailingTime, title, subtitle, notice, chance,
   );
 }
 
-function Notice({ colors: [background, border, color], title, detailHtml, reason, reasonIcon }) {
+function Notice({ colors: [background, border, color], pulse, title, detailHtml, reason, reasonIcon }) {
   return (
-    <div style={{ background, border: `1.5px solid ${border}`, borderRadius: 10, padding: "12px 14px", marginBottom: 16 }}>
+    <div className={`pulse-${pulse}`} style={{ background, border: `1.5px solid ${border}`, borderRadius: 10, padding: "12px 14px", marginBottom: 16 }}>
       <div style={{ fontWeight: 700, color, fontSize: ".9rem", marginBottom: 4 }}>{title}</div>
       {/* linkifyDetail escapes the text and adds the links */}
       <div className="calmac-detail" style={{ fontSize: ".82rem", color, lineHeight: 1.55 }} dangerouslySetInnerHTML={{ __html: detailHtml }} />
