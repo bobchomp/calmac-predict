@@ -1,7 +1,7 @@
 // sw.js — Will It Sail? Service Worker
 // Makes the site work offline: the page and its assets are cached, and the
-// last good copy of each data request (weather, CalMac status, timetables,
-// the Sheet's thresholds) is kept and served when the network is down or
+// last good copy of each data request (weather, CalMac status, timetables)
+// is kept and served when the network is down or
 // too slow. Saved copies carry an x-saved-at header (ms since epoch) so the
 // page can say how old they are.
 
@@ -38,11 +38,12 @@ self.addEventListener('activate', e => {
   );
 });
 
-// Requests whose last good response is kept for offline use
+// Requests whose last good response is kept for offline use. (Not the
+// Google Sheet: it answers with a cross-origin redirect, which fails when
+// routed through here; the page keeps its own copy of it.)
 function isData(url) {
   if (url.origin === self.location.origin) return url.pathname === '/api/status' || url.pathname === '/api/timetable';
-  return url.hostname === 'api.open-meteo.com' || url.hostname === 'marine-api.open-meteo.com'
-    || (url.hostname === 'script.google.com' && url.searchParams.get('action') === 'getThresholds');
+  return url.hostname === 'api.open-meteo.com' || url.hostname === 'marine-api.open-meteo.com';
 }
 const isFont = url => url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com';
 
