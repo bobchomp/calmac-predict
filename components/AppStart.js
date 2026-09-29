@@ -2,6 +2,7 @@
 
 import { useEffect, useSyncExternalStore } from "react";
 import { getAppState, getServerAppState, subscribeAppState } from "../lib/appState";
+import { routeOutlook } from "../lib/card";
 import { fetchData, startApp } from "../lib/data";
 import { initPush, registerServiceWorker } from "../lib/push";
 import { watchTabHash } from "../lib/tabs";
@@ -23,9 +24,14 @@ export function AppStart() {
   return null;
 }
 
-// The Routes tab's counts by verdict, shown after a successful load
+// The Routes tab's counts by verdict (as the cards' icons, for the day in
+// view), shown once there's weather data
 export function SummaryCards() {
-  const { summary } = useSyncExternalStore(subscribeAppState, getAppState, getServerAppState);
+  const state = useSyncExternalStore(subscribeAppState, getAppState, getServerAppState);
+  const loaded = state.routes.some(r => r.maxGustMph !== undefined);
+  const verdicts = loaded ? state.routes.map(r => routeOutlook(r, { ...state, disruption: state.disruptions[r.name] }).verdict) : [];
+  const count = verdict => verdicts.filter(v => v === verdict).length;
+  const summary = loaded ? { total: state.routes.length, likely: count("likely"), caution: count("caution"), unlikely: count("unlikely") } : null;
   return (
     <div className="summary-cards" id="summaryCards" style={summary ? undefined : { display: "none" }}>
       <div className="sum-card total"><div className="num" id="sumTotal">{summary?.total ?? "–"}</div><div className="lbl">Total Routes</div></div>
