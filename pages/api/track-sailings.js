@@ -25,8 +25,6 @@ const RESOLVE_AFTER_MS = 10 * 60 * 1000;
 // A status seen this long before departure still counts if no later look came
 const SEEN_GOOD_FOR_MS = 3 * 60 * 60 * 1000;
 const KEEP_SECONDS = 400 * 24 * 60 * 60;
-const CLEANUP_KEY = 'sailings:cleanup:2026-09-29';
-const CLEANUP_BEFORE = '2026-09-29T16:00:00Z';
 
 const ukHour = () => Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: 'numeric', hourCycle: 'h23' }).format(new Date()));
 
@@ -75,18 +73,6 @@ async function trackSailings(progress) {
   if (logs.status === 'rejected') { progress.stage = 'reading the log'; throw logs.reason; }
   const log = { [yesterday]: logs.value[0] || {}, [today]: logs.value[1] || {}, [tomorrow]: logs.value[2] || {} };
   const changed = new Set();
-
-  // One-off (remove once it has run): until 16:00 UTC on 29 September 2026
-  // the Sheet's thresholds didn't load here, so chances were weather-only
-  // where the site showed calibrated ones. Clear that day's log, and let the
-  // next day's first predictions start again from this run.
-  const [cleaned] = await kvGetJsonMany([CLEANUP_KEY]);
-  if (!cleaned) {
-    if (log['2026-09-29']) { log['2026-09-29'] = {}; changed.add('2026-09-29'); }
-    for (const rec of Object.values(log['2026-09-30'] || {})) {
-      if (rec.first && rec.first.at < CLEANUP_BEFORE) { delete rec.first; changed.add('2026-09-30'); }
-    }
-  }
 
   // The site's inputs: forecast per route, thresholds, timetables, CalMac status
   const value = r => (r.status === 'fulfilled' ? r.value : null);
@@ -165,7 +151,6 @@ async function trackSailings(progress) {
     kvSetJson(LOG_KEY(date), log[date], KEEP_SECONDS),
     date !== tomorrow && kvSetJson(STATS_KEY(date), dayStats(log[date]), KEEP_SECONDS),
   ].filter(Boolean)));
-  if (!cleaned) await kvSetJson(CLEANUP_KEY, { at }, KEEP_SECONDS);
 
   return {
     predicted,
