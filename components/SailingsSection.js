@@ -1,5 +1,7 @@
 "use client";
 
+import { openModal } from "../lib/modal";
+
 // A route card's sailing list; lib/card.js works out each row's data
 // (chance, status, next sailing).
 export default function SailingsSection({ routeName, title, rows, emptyText }) {
@@ -35,7 +37,7 @@ function Bar({ width, color }) {
 }
 
 function SailingRow({ routeName, time, from, to, pct, color, isPast, isNext, nextLabel, status, statusTitle, reasonIcon, reasonLabel }) {
-  const open = () => window.openModal(routeName, time);
+  const open = () => openModal(routeName, time);
   const pctText = pct !== null ? `${pct}%` : "–";
 
   if (status === "cancelled") {

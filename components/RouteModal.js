@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { getAppState, getServerAppState, subscribeAppState } from "../lib/appState";
 import { closeModal, getModal, getServerModal, modalData, subscribeModal } from "../lib/modal";
+import { openVesselTracker, shareRoute } from "../lib/overlays";
 import { ROUTE_INFO } from "../lib/routes";
 
 // The bottom sheet for a route or one of its sailings, opened by
@@ -102,7 +103,7 @@ function ModalContent({ routeName, sailingTime, title, subtitle, notice, chance,
             id="modalShareBtn"
             className="modal-calmac-link"
             style={{ flex: 1, background: "var(--offwhite)", color: "var(--navy)", border: "1.5px solid var(--light)" }}
-            onClick={() => sailingTime ? window.shareRoute(routeName, sailingTime) : window.shareRoute(routeName)}
+            onClick={() => shareRoute(routeName, sailingTime)}
           >
             <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
               <circle cx={18} cy={5} r={3} /><circle cx={6} cy={12} r={3} /><circle cx={18} cy={19} r={3} />
@@ -185,7 +186,7 @@ function VesselChip({ routeName, vessel }) {
     <span
       className="vessel-chip scheduled"
       style={{ cursor: "pointer" }}
-      onClick={() => window.openVesselTracker(routeName, vessel.name || "Vessel", vessel.mmsi || null)}
+      onClick={() => openVesselTracker(routeName, vessel.name || "Vessel", vessel.mmsi || null)}
     >
       🚢 {vessel.name} <small style={{ opacity: 0.7 }}>{isLive ? `(live${speed})` : "(scheduled)"}</small>{" "}
       <small style={{ color: "var(--blue)", marginLeft: 6 }}>📍 Track live →</small>
