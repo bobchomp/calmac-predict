@@ -44,6 +44,12 @@
     .status-bar.ok{border-color:var(--green);}
     .pulse{width:9px;height:9px;border-radius:50%;background:var(--sky);flex-shrink:0;animation:pulse 1.4s ease-in-out infinite;}
     @keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.4;transform:scale(.75);}}
+    /* Red and yellow warnings: the background deepens and fades back (from
+       and to each element's own colour) */
+    @keyframes warnPulse{50%{background-color:var(--pulse-to);}}
+    .pulse-red{--pulse-to:#f7c3cb;animation:warnPulse 2.4s ease-in-out infinite;}
+    .pulse-amber{--pulse-to:#ffdf8a;animation:warnPulse 2.4s ease-in-out infinite;}
+    @media (prefers-reduced-motion:reduce){.pulse-red,.pulse-amber{animation:none;}}
 
     .summary-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:22px;}
     .sum-card{background:var(--white);border-radius:12px;padding:16px;box-shadow:var(--shadow);text-align:center;}

@@ -20,7 +20,7 @@ export default function CardHead({ verdictClass, verdictIcon, name, cancelled, c
         {badges.map((b, i) => (
           <Fragment key={b.text}>
             {i > 0 && " "}
-            <div className="calibrated-badge" style={b.colors ? { background: b.colors[0], color: b.colors[1], borderColor: b.colors[2] } : undefined} title={b.title ?? undefined}>
+            <div className={`calibrated-badge${b.pulse ? " pulse-" + b.pulse : ""}`} style={b.colors ? { background: b.colors[0], color: b.colors[1], borderColor: b.colors[2] } : undefined} title={b.title ?? undefined}>
               {b.text}
             </div>
           </Fragment>

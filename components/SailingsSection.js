@@ -42,7 +42,7 @@ function SailingRow({ routeName, time, from, to, pct, color, isPast, isNext, nex
 
   if (status === "cancelled") {
     return (
-      <div className={`sailing-row${isPast ? " sailing-past" : ""}`} style={{ background: "#fceaed", border: "1px solid #ffcdd2", cursor: "pointer" }} title={statusTitle} onClick={open}>
+      <div className={`sailing-row${isPast ? " sailing-past" : " pulse-red"}`} style={{ background: "#fceaed", border: "1px solid #ffcdd2", cursor: "pointer" }} title={statusTitle} onClick={open}>
         <div className="sailing-time" style={{ color: "#c62828" }}>{time}</div>
         <div className="sailing-direction" style={{ color: "#c62828", textDecoration: "line-through", flex: 1 }}>{from} → {to}</div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2, flexShrink: 0 }}>
@@ -55,7 +55,7 @@ function SailingRow({ routeName, time, from, to, pct, color, isPast, isNext, nex
 
   if (status === "disrupted") {
     return (
-      <div className={`sailing-row${isPast ? " sailing-past" : ""}`} style={{ background: "#fff8e1", border: "1px solid #ffe082", cursor: "pointer" }} onClick={open}>
+      <div className={`sailing-row${isPast ? " sailing-past" : " pulse-amber"}`} style={{ background: "#fff8e1", border: "1px solid #ffe082", cursor: "pointer" }} onClick={open}>
         <div className="sailing-time" style={{ color: "#e65100" }}>{time}</div>
         <div className="sailing-direction" style={{ color: "#e65100", flex: 1 }}>{from} → {to}</div>
         <Bar width={pct ?? 0} color={color} />
