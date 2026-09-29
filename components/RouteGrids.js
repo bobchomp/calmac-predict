@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { getAppState, getServerAppState, subscribeAppState } from "../lib/appState";
-import { cardData } from "../lib/card";
+import { cardData, routeOutlook } from "../lib/card";
 import { getPrefs, getServerPrefs, subscribePrefs } from "../lib/prefs";
 import RouteCard from "./RouteCard";
 
@@ -47,7 +47,8 @@ export function RoutesGrid() {
   else if (state.phase === "ready") {
     const search = state.search.toLowerCase();
     const shown = state.routes.filter(r =>
-      (state.filter === "all" || r.verdict === state.filter) && r.name.toLowerCase().includes(search));
+      (state.filter === "all" || routeOutlook(r, { ...state, disruption: state.disruptions[r.name] }).verdict === state.filter)
+      && r.name.toLowerCase().includes(search));
     content = shown.length > 0
       ? <Cards routes={shown} state={state} />
       : <div className="empty"><div className="empty-icon">🔍</div><p>No routes match your filter.</p></div>;
