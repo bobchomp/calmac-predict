@@ -16,7 +16,7 @@
       "maxDuration": 15
     },
     "pages/api/cron.js": {
-      "maxDuration": 60
+      "maxDuration": 300
     },
     "pages/api/record.js": {
       "maxDuration": 55
