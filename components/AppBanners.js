@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { getAppState, getServerAppState, subscribeAppState } from "../lib/appState";
 
 const DISMISSED_KEY = "pwaInstallDismissed";
 
@@ -12,16 +13,13 @@ function storageSet(key, value) {
   try { localStorage.setItem(key, value); } catch (_) {}
 }
 
-// Shown while the device is offline
+// Shown while the device is offline, with how old the forecast on screen is
 export function OfflineBanner() {
   const [offline, setOffline] = useState(false);
-  const lastOnline = useRef(null);
+  const { lastFetched } = useSyncExternalStore(subscribeAppState, getAppState, getServerAppState);
 
   useEffect(() => {
-    const update = () => {
-      if (navigator.onLine) lastOnline.current = new Date();
-      setOffline(!navigator.onLine);
-    };
+    const update = () => setOffline(!navigator.onLine);
     update();
     window.addEventListener("online", update);
     window.addEventListener("offline", update);
@@ -32,7 +30,7 @@ export function OfflineBanner() {
   }, []);
 
   if (!offline) return null;
-  const since = lastOnline.current ? " from " + lastOnline.current.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+  const since = lastFetched ? " — showing the forecast from " + lastFetched.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
   return (
     <div
       id="offlineBanner"
@@ -41,7 +39,7 @@ export function OfflineBanner() {
         padding: "10px 16px", fontSize: ".82rem", fontWeight: 600, paddingTop: "calc(10px + env(safe-area-inset-top))",
       }}
     >
-      📵 You&apos;re offline — showing cached data{since}
+      📵 You&apos;re offline{since}
     </div>
   );
 }
