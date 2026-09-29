@@ -5,7 +5,7 @@
 // 4. Emails teddaharry@gmail.com + ross.mackenzie1@invernessroyalacademy.org.uk
 //    when NEW disruptions appear (first seen, not every day ongoing)
 
-const BASE_URL = process.env.CRON_BASE_URL || 'https://calmac-predict.vercel.app';
+const BASE_URL = process.env.CRON_BASE_URL || 'https://www.willitsail.co.uk';
 
 const KV_URL   = process.env.UPSTASH_REDIS_REST_URL   || '';
 const KV_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || '';
@@ -148,7 +148,7 @@ async function sendHealthAlertEmail(failedChecks, isTest = false, overrideTo = n
           <tbody>${rows}</tbody>
         </table>
         <p style="margin:16px 20px;font-size:13px;color:#6b7280">
-          <a href="https://willitsail.co.uk/#status" style="color:#7f1d1d">View Status page →</a>
+          <a href="https://www.willitsail.co.uk/#status" style="color:#7f1d1d">View Status page →</a>
         </p>
       </div>
     </div>`;
