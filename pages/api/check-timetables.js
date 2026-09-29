@@ -10,7 +10,7 @@
 // Can also be triggered manually:
 //   GET /api/check-timetables  with header  Authorization: Bearer <CRON_SECRET>  (or ?secret=)
 
-const BASE_URL    = process.env.CRON_BASE_URL || 'https://calmac-predict.vercel.app';
+const BASE_URL    = process.env.CRON_BASE_URL || 'https://www.willitsail.co.uk';
 const KV_URL      = process.env.UPSTASH_REDIS_REST_URL   || '';
 const KV_TOKEN    = process.env.UPSTASH_REDIS_REST_TOKEN || '';
 const CRON_SECRET = process.env.CRON_SECRET || '';
