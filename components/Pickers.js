@@ -5,6 +5,7 @@ import { getNotifThreshold, setNotifThreshold } from "../lib/prefs";
 import {
   closeSharePicker, closeThresholdPicker, sharePickerStore, showToast, thresholdStore,
 } from "../lib/overlays";
+import { enableRouteAlerts } from "../lib/push";
 
 // Close when tapping outside the picker (or its opening button). Starts
 // listening a moment after opening so the opening tap doesn't count.
@@ -36,7 +37,7 @@ function ThresholdPickerSheet({ routeName, anchor }) {
   const confirm = () => {
     setNotifThreshold(routeName, value);
     closeThresholdPicker();
-    window.enableRouteAlerts(routeName);
+    enableRouteAlerts(routeName);
   };
 
   return (

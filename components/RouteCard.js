@@ -1,7 +1,9 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { shareRoute, showThresholdPicker } from "../lib/overlays";
 import { getNotifThreshold, getPrefs, getServerPrefs, subscribePrefs, toggleFavourite } from "../lib/prefs";
+import { toggleRouteNotification } from "../lib/push";
 import CardHead from "./CardHead";
 import CardNotices from "./CardNotices";
 import { CardWeather, WindBar } from "./CardWeather";
@@ -44,8 +46,8 @@ function CardActions({ name, notified, threshold }) {
   const onAlert = e => {
     e.stopPropagation();
     // Turning alerts on asks for a threshold first; turning them off doesn't
-    if (notified) window.toggleRouteNotification(name);
-    else window.showThresholdPicker(name, e.currentTarget);
+    if (notified) toggleRouteNotification(name);
+    else showThresholdPicker(name, e.currentTarget);
   };
 
   return (
@@ -54,7 +56,7 @@ function CardActions({ name, notified, threshold }) {
         className="card-action-btn share-btn"
         data-route={name}
         title="Share this route"
-        onClick={e => { e.stopPropagation(); window.shareRoute(name); }}
+        onClick={e => { e.stopPropagation(); shareRoute(name); }}
       >
         <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
           <circle cx={18} cy={5} r={3} /><circle cx={6} cy={12} r={3} /><circle cx={18} cy={19} r={3} />
