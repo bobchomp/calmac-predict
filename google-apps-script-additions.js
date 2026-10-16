@@ -87,6 +87,8 @@ function doGet(e) {
       result = getReliabilityData(e.parameter.route);
     } else if (action === 'getStats') {
       result = getStats();
+    } else if (action === 'export') {          // ← NEW: the move to Upstash
+      result = exportRows(e.parameter);
     } else {
       result = { error: 'Unknown action' };
     }
@@ -409,5 +411,42 @@ function ingestReport(payload) {
     skipped_duplicates: rows.length - newRows.length,
     thresholds_updated: calcResult.routes_calculated,
   };
-  
+
+}
+
+
+// ════════════════════════════════════════════════════════════
+// NEW: exportRows — read-only, for the move to Upstash
+// (scripts/import-sheet.mjs). Returns one page of a tab's rows:
+//   ?action=export&key=…&tab=SailingRecords&offset=0&limit=5000
+// The web app is public, so it needs the EXPORT_KEY script
+// property (Project Settings → Script properties) as &key=.
+// ════════════════════════════════════════════════════════════
+const EXPORT_TABS = [RELIABILITY_TAB, THRESHOLDS_TAB, REPORTS_TAB, SAILING_TAB];
+
+function exportRows(params) {
+  const expected = PropertiesService.getScriptProperties().getProperty('EXPORT_KEY');
+  if (!expected || params.key !== expected) return { error: 'Not allowed' };
+  if (EXPORT_TABS.indexOf(params.tab) < 0)  return { error: 'Unknown tab' };
+
+  const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName(params.tab);
+  if (!sheet) return { tab: params.tab, total: 0, offset: 0, headers: [], rows: [] };
+
+  const total  = Math.max(0, sheet.getLastRow() - 1);
+  const cols   = sheet.getLastColumn();
+  const offset = Math.max(0, parseInt(params.offset) || 0);
+  const limit  = Math.min(10000, Math.max(1, parseInt(params.limit) || 5000));
+  const count  = Math.min(limit, total - offset);
+
+  const headers = cols > 0 ? sheet.getRange(1, 1, 1, cols).getValues()[0] : [];
+  const rows    = cols > 0 && count > 0 ? sheet.getRange(offset + 2, 1, count, cols).getValues() : [];
+  const plain   = function(v) { return v instanceof Date ? v.toISOString() : v; };
+
+  return {
+    tab:     params.tab,
+    total:   total,
+    offset:  offset,
+    headers: headers.map(plain),
+    rows:    rows.map(function(r) { return r.map(plain); }),
+  };
 }
