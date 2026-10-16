@@ -14,15 +14,19 @@ import { runJob, say } from './common.mjs';
 const pdfParse = createRequire(import.meta.url)('pdf-parse/lib/pdf-parse.js');
 
 // The reports are tables, and pdf-parse's own text runs a row's cells
-// together ("2024March267121261080.7%316…"), so each piece of text is kept
-// apart, with a space between pieces on a line
+// together ("2024March267121261080.7%316…"). CalMac's PDFs place each
+// character on its own, so pieces of text that touch are joined, and a gap
+// wider than a quarter of the text's size (between cells) becomes a space
 async function pageText(page) {
   const { items } = await page.getTextContent({ disableCombineTextItems: true });
-  let text = '', lastY = null;
+  let text = '', lastY = null, lastEnd = 0;
   for (const item of items) {
-    const y = item.transform[5];
-    text += (lastY === null ? '' : Math.abs(y - lastY) < 2 ? ' ' : '\n') + item.str;
+    const [scale, , , , x, y] = item.transform;
+    const size = Math.abs(scale) || item.height || 10;
+    const sep = lastY === null ? '' : Math.abs(y - lastY) >= size / 2 ? '\n' : x - lastEnd > size / 4 ? ' ' : '';
+    text += sep + item.str;
     lastY = y;
+    lastEnd = x + item.width;
   }
   return text;
 }
