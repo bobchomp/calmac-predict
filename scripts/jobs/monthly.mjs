@@ -13,6 +13,20 @@ import { runJob, say } from './common.mjs';
 // The package's own entry point runs a self-test when imported this way
 const pdfParse = createRequire(import.meta.url)('pdf-parse/lib/pdf-parse.js');
 
+// The reports are tables, and pdf-parse's own text runs a row's cells
+// together ("2024March267121261080.7%316…"), so each piece of text is kept
+// apart, with a space between pieces on a line
+async function pageText(page) {
+  const { items } = await page.getTextContent({ disableCombineTextItems: true });
+  let text = '', lastY = null;
+  for (const item of items) {
+    const y = item.transform[5];
+    text += (lastY === null ? '' : Math.abs(y - lastY) < 2 ? ' ' : '\n') + item.str;
+    lastY = y;
+  }
+  return text;
+}
+
 const CORPORATE_BASE = 'https://corporate.calmac.co.uk/en-gb/about-us/route-performance-reports';
 
 // Our route keys → corporate.calmac.co.uk/…/route-performance-reports/<slug>/
@@ -58,7 +72,7 @@ async function reportPdfUrl(slug) {
 //   Year Month Operated Additional Diverted Cancelled CancelledAfterRelief Reliability% Scheduled …
 //   2024 October 36 0 0 4 0 90.0% 40 …
 function parseReport(text, route) {
-  const rowRe = new RegExp(`(\\d{4})\\s+(${MONTHS.join('|')})\\s+(\\d+)\\s+\\d+\\s+(\\d+)\\s+(\\d+)\\s+\\d+\\s+([\\d.]+)%\\s+(\\d+)`, 'gi');
+  const rowRe = new RegExp(`(\\d{4})\\s*(${MONTHS.join('|')})\\s+(\\d+)\\s+\\d+\\s+(\\d+)\\s+(\\d+)\\s+\\d+\\s+([\\d.]+)\\s*%\\s+(\\d+)`, 'gi');
   const rows = [];
   for (const m of text.matchAll(rowRe)) {
     const row = {
@@ -76,7 +90,7 @@ async function routeReport(route, slug) {
   const pdfUrl = await reportPdfUrl(slug);
   const resp = await fetch(pdfUrl, { signal: AbortSignal.timeout(30000) });
   if (!resp.ok) throw new Error(`HTTP ${resp.status} downloading the PDF`);
-  const { text } = await pdfParse(Buffer.from(await resp.arrayBuffer()));
+  const { text } = await pdfParse(Buffer.from(await resp.arrayBuffer()), { pagerender: pageText });
   const rows = parseReport(text, route);
   // A report with no rows read is shown in the summary, to see why
   return { rows, pdfUrl, ...(!rows.length && { text: text.replace(/\s+/g, ' ').trim().slice(0, 600) }) };
