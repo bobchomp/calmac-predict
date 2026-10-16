@@ -13,6 +13,24 @@ import { runJob, say } from './common.mjs';
 // The package's own entry point runs a self-test when imported this way
 const pdfParse = createRequire(import.meta.url)('pdf-parse/lib/pdf-parse.js');
 
+// The reports are tables, and pdf-parse's own text runs a row's cells
+// together ("2024March267121261080.7%316…"). CalMac's PDFs place each
+// character on its own, so pieces of text that touch are joined, and a gap
+// wider than a quarter of the text's size (between cells) becomes a space
+async function pageText(page) {
+  const { items } = await page.getTextContent({ disableCombineTextItems: true });
+  let text = '', lastY = null, lastEnd = 0;
+  for (const item of items) {
+    const [scale, , , , x, y] = item.transform;
+    const size = Math.abs(scale) || item.height || 10;
+    const sep = lastY === null ? '' : Math.abs(y - lastY) >= size / 2 ? '\n' : x - lastEnd > size / 4 ? ' ' : '';
+    text += sep + item.str;
+    lastY = y;
+    lastEnd = x + item.width;
+  }
+  return text;
+}
+
 const CORPORATE_BASE = 'https://corporate.calmac.co.uk/en-gb/about-us/route-performance-reports';
 
 // Our route keys → corporate.calmac.co.uk/…/route-performance-reports/<slug>/
@@ -57,15 +75,18 @@ async function reportPdfUrl(slug) {
 // Rows of the report's table:
 //   Year Month Operated Additional Diverted Cancelled CancelledAfterRelief Reliability% Scheduled …
 //   2024 October 36 0 0 4 0 90.0% 40 …
+// (busy routes' counts have thousands separators: 1,772)
 function parseReport(text, route) {
-  const rowRe = new RegExp(`(\\d{4})\\s+(${MONTHS.join('|')})\\s+(\\d+)\\s+\\d+\\s+(\\d+)\\s+(\\d+)\\s+\\d+\\s+([\\d.]+)%\\s+(\\d+)`, 'gi');
+  const n = '(\\d[\\d,]*)';
+  const rowRe = new RegExp(`(\\d{4})\\s*(${MONTHS.join('|')})\\s+${n}\\s+${n}\\s+${n}\\s+${n}\\s+${n}\\s+([\\d.]+)\\s*%\\s+${n}`, 'gi');
+  const num = s => Number(s.replace(/,/g, ''));
   const rows = [];
   for (const m of text.matchAll(rowRe)) {
     const row = {
       route,
       year: Number(m[1]), month: MONTHS.indexOf(m[2].toLowerCase()) + 1,
-      scheduled: Number(m[7]), operated: Number(m[3]), cancelled: Number(m[5]), diverted: Number(m[4]),
-      reliability: Number(m[6]),
+      scheduled: num(m[9]), operated: num(m[3]), cancelled: num(m[6]), diverted: num(m[5]),
+      reliability: Number(m[8]),
     };
     if (row.scheduled > 0 && row.month) rows.push(row);
   }
@@ -76,8 +97,10 @@ async function routeReport(route, slug) {
   const pdfUrl = await reportPdfUrl(slug);
   const resp = await fetch(pdfUrl, { signal: AbortSignal.timeout(30000) });
   if (!resp.ok) throw new Error(`HTTP ${resp.status} downloading the PDF`);
-  const { text } = await pdfParse(Buffer.from(await resp.arrayBuffer()));
-  return parseReport(text, route);
+  const { text } = await pdfParse(Buffer.from(await resp.arrayBuffer()), { pagerender: pageText });
+  const rows = parseReport(text, route);
+  // A report with no rows read is shown in the summary, to see why
+  return { rows, pdfUrl, ...(!rows.length && { text: text.replace(/\s+/g, ' ').trim().slice(0, 600) }) };
 }
 
 async function ingestReports({ dry }) {
@@ -87,10 +110,12 @@ async function ingestReports({ dry }) {
   const results = await Promise.allSettled(Object.entries(ROUTE_SLUGS).map(([route, slug]) => routeReport(route, slug)));
   const failed = [];
   const found = [];
+  const unread = [];
   results.forEach((r, i) => {
     const route = Object.keys(ROUTE_SLUGS)[i];
-    if (r.status === 'fulfilled') found.push(...r.value);
-    else failed.push({ route, error: r.reason?.message });
+    if (r.status === 'rejected') failed.push({ route, error: r.reason?.message });
+    else if (r.value.rows.length) found.push(...r.value.rows);
+    else unread.push({ route, pdfUrl: r.value.pdfUrl, text: r.value.text });
   });
 
   // Months already saved are kept as they are (as the Sheet did)
@@ -101,6 +126,16 @@ async function ingestReports({ dry }) {
   const rows = [...reliability.rows, ...added];
   const thresholds = calcThresholds(rows, reports?.rows || [], at);
 
+  // How the new months move each route's thresholds (the site's chances follow)
+  const [current] = await kvGetJsonMany([THRESHOLDS_KEY]);
+  const changes = Object.entries(thresholds).flatMap(([route, t]) => {
+    const was = current?.thresholds?.[route];
+    const moved = ['base', 'winter', 'summer', 'shoulder']
+      .filter(k => (was?.[k] ?? null) !== t[k])
+      .map(k => `${k} ${was?.[k] ?? '–'} → ${t[k] ?? '–'}`);
+    return moved.length ? [`${route}: ${moved.join(', ')} (${was?.samples ?? 0} → ${t.samples} months)`] : [];
+  });
+
   if (!dry && added.length) {
     await kvSetJson('reliability', { at, rows });
     await kvSetJson(THRESHOLDS_KEY, { at, source: 'CalMac reports', thresholds });
@@ -108,12 +143,15 @@ async function ingestReports({ dry }) {
 
   say(`${Object.keys(ROUTE_SLUGS).length - failed.length} of ${Object.keys(ROUTE_SLUGS).length} reports read: ${found.length} months in them, ${added.length} new.`);
   return {
-    ok: failed.length < Object.keys(ROUTE_SLUGS).length,
+    ok: found.length > 0,
     added: added.map(r => `${r.route} ${r.year}-${String(r.month).padStart(2, '0')}: ${r.reliability}%`),
     reliabilityMonths: rows.length,
+    thresholdChanges: changes,
     thresholdsRoutes: Object.keys(thresholds).length,
     saved: !dry && added.length > 0,
     failed,
+    // Reports read but with no months found in them (the first few in full)
+    unread: unread.map((u, i) => (i < 3 ? u : { route: u.route, pdfUrl: u.pdfUrl })),
   };
 }
 
