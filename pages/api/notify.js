@@ -68,6 +68,8 @@ module.exports = async function handler(req, res) {
 
   // GET — return VAPID public key
   if (req.method === 'GET') {
+    // Every visit asks for the key; it only changes if the VAPID keys do
+    res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate=86400');
     if (!VAPID_PUBLIC) {
       return res.status(200).json({ available: false, reason: 'Push not configured' });
     }
