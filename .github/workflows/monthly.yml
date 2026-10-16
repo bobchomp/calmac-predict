@@ -1,13 +1,13 @@
-# Monthly (the 2nd, with the 15th as a second chance; months already saved
-# are skipped): adds CalMac's latest reliability figures to Redis and works
-# the thresholds out again (scripts/jobs/monthly.mjs).
+# Monthly (the 2nd, with the 15th as a second chance): reads CalMac's latest
+# reliability figures into Redis and works the thresholds out again
+# (scripts/jobs/reliability/).
 name: Monthly
 
 on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'live saves the new months; dry only reports them'
+        description: 'live saves the figures; dry only reports what would change'
         type: choice
         options: [live, dry]
         default: live
@@ -23,15 +23,16 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
-      - run: npm ci --omit=dev --ignore-scripts
-      - run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./scripts/jobs/register.mjs scripts/jobs/monthly.mjs
+          cache-dependency-path: scripts/jobs/reliability/package-lock.json
+      - run: npm ci --prefix scripts/jobs/reliability --ignore-scripts
+      - run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./scripts/jobs/register.mjs scripts/jobs/reliability/index.mjs
         env:
           MODE: ${{ inputs.mode || 'live' }}
           UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}

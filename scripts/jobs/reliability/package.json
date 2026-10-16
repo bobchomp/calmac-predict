@@ -1,0 +1,9 @@
+{
+  "name": "willitsail-reliability-job",
+  "private": true,
+  "description": "Reads CalMac's reliability reports into Redis (see README.md)",
+  "type": "module",
+  "dependencies": {
+    "pdf-parse": "1.1.1"
+  }
+}
