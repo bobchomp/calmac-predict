@@ -1,9 +1,8 @@
-// api/cron.js — daily 8am UTC
-// 1. Fetches live CalMac service status via GraphQL
-// 2. Records any cancellations/disruptions to Google Sheet (ground truth log)
-// 3. Sends push notifications to subscribers of affected routes
-// 4. Emails teddaharry@gmail.com + ross.mackenzie1@invernessroyalacademy.org.uk
-//    when NEW disruptions appear (first seen, not every day ongoing)
+// api/cron.js — every 5 minutes, from cron-job.org
+// 1. Fetches live CalMac service status
+// 2. Sends push notifications to subscribers of affected routes
+// 3. Emails ALERT_TO when one of the services the site needs breaks
+//    (once per change in what's broken, not every run)
 
 const { waitUntil } = require('@vercel/functions');
 
@@ -11,10 +10,10 @@ const BASE_URL = process.env.CRON_BASE_URL || 'https://www.willitsail.co.uk';
 
 const KV_URL   = process.env.UPSTASH_REDIS_REST_URL   || '';
 const KV_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || '';
-const SHEET_URL = process.env.FEEDBACK_SHEET_URL || '';
 
 const RESEND_API_KEY  = process.env.RESEND_API_KEY || '';
-const ALERT_FROM      = 'noreply@rossmackenzie.co.uk';
+// The Resend key may only send from willitsail.co.uk
+const ALERT_FROM      = 'Will It Sail <info@willitsail.co.uk>';
 const ALERT_TO        = ['teddaharry@gmail.com', 'ross.mackenzie1@invernessroyalacademy.org.uk'];
 
 const NOTIFY_THRESHOLD = 70;
@@ -164,7 +163,7 @@ async function sendHealthAlertEmail(failedChecks, isTest = false, overrideTo = n
       },
       body: JSON.stringify({
         from:    ALERT_FROM,
-        ...(overrideTo ? { to: overrideTo } : { to: ALERT_FROM, bcc: ALERT_TO }),
+        to:      overrideTo || ALERT_TO,
         subject: isTest
           ? 'Will It Sail — test health alert'
           : `Will It Sail — ${failedChecks.length === 1 ? failedChecks[0].name : `${failedChecks.length} services`} down`,
@@ -193,49 +192,6 @@ async function recordAccuracyPoints(points) {
   await kvSet('accuracy:log', log);
 }
 
-// ── Write a cancellation record to Google Sheet ────────────────────────
-async function recordToSheet(route, calMacStatus, predictedChance) {
-  if (!SHEET_URL) return;
-  const row = {
-    timestamp:       new Date().toISOString(),
-    route,
-    sailed:          calMacStatus === 'cancelled' ? 'NO' : 'YES',
-    calMacStatus,
-    predictedChance: predictedChance ?? '',
-    source:          'calmac-graphql-api',
-  };
-  try {
-    const r = await fetch(SHEET_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(row),
-      signal: AbortSignal.timeout(8000),
-    });
-    return `${r.status} ${(await r.text()).slice(0, 120)}`;
-  } catch (err) {
-    console.error('Sheet write failed:', err.message);
-    return `failed: ${err.message}`;
-  }
-}
-
-// Temporary, until this job moves to GitHub Actions: what FEEDBACK_SHEET_URL
-// is (its value can't be seen in Vercel), shown in cron-job.org's job
-// history without revealing the address: whether it's the main Sheet's
-// script, what that script says to a stats request, and how it answered the
-// last row this job sent it
-async function feedbackSheetNote() {
-  if (!SHEET_URL) return { configured: false };
-  const note = { configured: true, sameAsSheetScriptUrl: SHEET_URL === process.env.SHEET_SCRIPT_URL };
-  try {
-    const r = await fetch(`${SHEET_URL}?action=getStats`, { signal: AbortSignal.timeout(8000) });
-    note.getStatsReply = `${r.status} ${(await r.text()).slice(0, 120)}`;
-  } catch (err) {
-    note.getStatsReply = `failed: ${err.message}`;
-  }
-  note.lastRowReply = (await kvGet('diag:feedback_sheet_reply').catch(() => null)) || null;
-  return note;
-}
-
 module.exports = async function handler(req, res) {
   const secret = process.env.CRON_SECRET;
   // Accept auth from:
@@ -259,12 +215,12 @@ module.exports = async function handler(req, res) {
       ], true, customTo);
       if (sendResult) sendResult.to = customTo;
     } else {
-      // Default test — fake health alert to the normal BCC recipients
+      // Default test — fake health alert to the normal recipients
       sendResult = await sendHealthAlertEmail([
         { name: 'Weather API',       detail: 'HTTP 503 — test alert only, no real error' },
         { name: 'CalMac Status API', detail: 'API unavailable — test alert only, no real error' },
       ], true);
-      if (sendResult) sendResult.to = ALERT_TO.join(', ') + ' (BCC)';
+      if (sendResult) sendResult.to = ALERT_TO.join(', ');
     }
 
     const resultBox = sendResult
@@ -307,7 +263,7 @@ module.exports = async function handler(req, res) {
 
   <div class="card">
     <h2>Standard test</h2>
-    <p>Sends a fake health-alert email to the normal BCC recipients (teddaharry@gmail.com &amp; ross.mackenzie1@invernessroyalacademy.org.uk).</p>
+    <p>Sends a fake health-alert email to the normal recipients (${ALERT_TO.join(' &amp; ')}).</p>
     <a class="btn" href="?secret=${pageSecret}&action=test-email">Send test alert</a>
   </div>
 
@@ -350,9 +306,9 @@ module.exports = async function handler(req, res) {
   });
 
   // cron-job.org gives up after 30s, and a stormy day can have 20 disrupted
-  // routes. So the independent steps run side by side, and the slow ones
-  // that nothing waits on (the Google Sheet log, the timetable PDF check)
-  // carry on after the reply (waitUntil keeps the function running for them).
+  // routes. So the independent steps run side by side, and the slow one
+  // that nothing waits on (the timetable PDF check) carries on after the
+  // reply (waitUntil keeps the function running for it).
   try {
     // ── New seasonal timetable PDFs on calmac.co.uk (its own function) ──
     const timetables = fetch(`${BASE_URL}/api/check-timetables`, {
@@ -395,15 +351,6 @@ module.exports = async function handler(req, res) {
       ...results.map(r => ({ routeKey: r.route, predictedChance: r.predictedChance, sailed: r.calMacStatus !== 'cancelled' })),
       ...sampleRoutes.map((routeKey, i) => ({ routeKey, predictedChance: sampleChances[i], sailed: true })),
     ]);
-
-    // Google Sheet ground-truth log, one row at a time, after the reply
-    const sheetRows = results.map(r => [r.route, r.calMacStatus, r.predictedChance]);
-    waitUntil((async () => {
-      for (const [i, row] of sheetRows.entries()) {
-        const reply = await recordToSheet(...row);
-        if (i === 0 && reply && KV_URL) await kvSet('diag:feedback_sheet_reply', { at: new Date().toISOString(), reply });
-      }
-    })());
 
     // ── Step 3: push alerts for subscribed routes below the threshold ──
     await Promise.all(results.map(async r => {
@@ -466,9 +413,7 @@ module.exports = async function handler(req, res) {
       recorded: results.filter(r => r.recorded).length,
       results,
       healthChecks: { failed: failedChecks.length, checks: failedChecks, emailSent: !!emailResult, emailResult },
-      sheet: SHEET_URL ? `logging ${sheetRows.length} rows after this reply` : 'not configured',
       timetables: 'checking after this reply',
-      feedbackSheet: await feedbackSheetNote(),
     });
 
   } catch (err) {
