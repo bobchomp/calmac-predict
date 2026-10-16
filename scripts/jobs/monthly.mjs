@@ -75,15 +75,18 @@ async function reportPdfUrl(slug) {
 // Rows of the report's table:
 //   Year Month Operated Additional Diverted Cancelled CancelledAfterRelief Reliability% Scheduled …
 //   2024 October 36 0 0 4 0 90.0% 40 …
+// (busy routes' counts have thousands separators: 1,772)
 function parseReport(text, route) {
-  const rowRe = new RegExp(`(\\d{4})\\s*(${MONTHS.join('|')})\\s+(\\d+)\\s+\\d+\\s+(\\d+)\\s+(\\d+)\\s+\\d+\\s+([\\d.]+)\\s*%\\s+(\\d+)`, 'gi');
+  const n = '(\\d[\\d,]*)';
+  const rowRe = new RegExp(`(\\d{4})\\s*(${MONTHS.join('|')})\\s+${n}\\s+${n}\\s+${n}\\s+${n}\\s+${n}\\s+([\\d.]+)\\s*%\\s+${n}`, 'gi');
+  const num = s => Number(s.replace(/,/g, ''));
   const rows = [];
   for (const m of text.matchAll(rowRe)) {
     const row = {
       route,
       year: Number(m[1]), month: MONTHS.indexOf(m[2].toLowerCase()) + 1,
-      scheduled: Number(m[7]), operated: Number(m[3]), cancelled: Number(m[5]), diverted: Number(m[4]),
-      reliability: Number(m[6]),
+      scheduled: num(m[9]), operated: num(m[3]), cancelled: num(m[6]), diverted: num(m[5]),
+      reliability: Number(m[8]),
     };
     if (row.scheduled > 0 && row.month) rows.push(row);
   }
@@ -123,6 +126,16 @@ async function ingestReports({ dry }) {
   const rows = [...reliability.rows, ...added];
   const thresholds = calcThresholds(rows, reports?.rows || [], at);
 
+  // How the new months move each route's thresholds (the site's chances follow)
+  const [current] = await kvGetJsonMany([THRESHOLDS_KEY]);
+  const changes = Object.entries(thresholds).flatMap(([route, t]) => {
+    const was = current?.thresholds?.[route];
+    const moved = ['base', 'winter', 'summer', 'shoulder']
+      .filter(k => (was?.[k] ?? null) !== t[k])
+      .map(k => `${k} ${was?.[k] ?? '–'} → ${t[k] ?? '–'}`);
+    return moved.length ? [`${route}: ${moved.join(', ')} (${was?.samples ?? 0} → ${t.samples} months)`] : [];
+  });
+
   if (!dry && added.length) {
     await kvSetJson('reliability', { at, rows });
     await kvSetJson(THRESHOLDS_KEY, { at, source: 'CalMac reports', thresholds });
@@ -133,6 +146,7 @@ async function ingestReports({ dry }) {
     ok: found.length > 0,
     added: added.map(r => `${r.route} ${r.year}-${String(r.month).padStart(2, '0')}: ${r.reliability}%`),
     reliabilityMonths: rows.length,
+    thresholdChanges: changes,
     thresholdsRoutes: Object.keys(thresholds).length,
     saved: !dry && added.length > 0,
     failed,
