@@ -205,15 +205,35 @@ async function recordToSheet(route, calMacStatus, predictedChance) {
     source:          'calmac-graphql-api',
   };
   try {
-    await fetch(SHEET_URL, {
+    const r = await fetch(SHEET_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(row),
       signal: AbortSignal.timeout(8000),
     });
+    return `${r.status} ${(await r.text()).slice(0, 120)}`;
   } catch (err) {
     console.error('Sheet write failed:', err.message);
+    return `failed: ${err.message}`;
   }
+}
+
+// Temporary, until this job moves to GitHub Actions: what FEEDBACK_SHEET_URL
+// is (its value can't be seen in Vercel), shown in cron-job.org's job
+// history without revealing the address: whether it's the main Sheet's
+// script, what that script says to a stats request, and how it answered the
+// last row this job sent it
+async function feedbackSheetNote() {
+  if (!SHEET_URL) return { configured: false };
+  const note = { configured: true, sameAsSheetScriptUrl: SHEET_URL === process.env.SHEET_SCRIPT_URL };
+  try {
+    const r = await fetch(`${SHEET_URL}?action=getStats`, { signal: AbortSignal.timeout(8000) });
+    note.getStatsReply = `${r.status} ${(await r.text()).slice(0, 120)}`;
+  } catch (err) {
+    note.getStatsReply = `failed: ${err.message}`;
+  }
+  note.lastRowReply = (await kvGet('diag:feedback_sheet_reply').catch(() => null)) || null;
+  return note;
 }
 
 module.exports = async function handler(req, res) {
@@ -379,7 +399,10 @@ module.exports = async function handler(req, res) {
     // Google Sheet ground-truth log, one row at a time, after the reply
     const sheetRows = results.map(r => [r.route, r.calMacStatus, r.predictedChance]);
     waitUntil((async () => {
-      for (const row of sheetRows) await recordToSheet(...row);
+      for (const [i, row] of sheetRows.entries()) {
+        const reply = await recordToSheet(...row);
+        if (i === 0 && reply && KV_URL) await kvSet('diag:feedback_sheet_reply', { at: new Date().toISOString(), reply });
+      }
     })());
 
     // ── Step 3: push alerts for subscribed routes below the threshold ──
@@ -445,6 +468,7 @@ module.exports = async function handler(req, res) {
       healthChecks: { failed: failedChecks.length, checks: failedChecks, emailSent: !!emailResult, emailResult },
       sheet: SHEET_URL ? `logging ${sheetRows.length} rows after this reply` : 'not configured',
       timetables: 'checking after this reply',
+      feedbackSheet: await feedbackSheetNote(),
     });
 
   } catch (err) {
