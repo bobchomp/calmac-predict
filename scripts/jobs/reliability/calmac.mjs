@@ -84,10 +84,19 @@ const PACK_ROUTES = {
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const SHORT = MONTHS.map(m => m.slice(0, 3));
 
+// Tried up to three times: reading a year of packs side by side can see a
+// dropped connection or two
 async function fetchOk(url, ms = 30000) {
-  const resp = await fetch(url, { headers: UA, signal: AbortSignal.timeout(ms) });
-  if (!resp.ok) throw new Error(`HTTP ${resp.status} from ${url}`);
-  return resp;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const resp = await fetch(url, { headers: UA, signal: AbortSignal.timeout(ms) });
+      if (!resp.ok) throw Object.assign(new Error(`HTTP ${resp.status} from ${url}`), { final: resp.status < 500 && resp.status !== 429 });
+      return resp;
+    } catch (err) {
+      if (err.final || attempt === 3) throw err;
+      await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+    }
+  }
 }
 export const pdfText = async url => (await pdfParse(Buffer.from(await (await fetchOk(url)).arrayBuffer()), { pagerender: pageText })).text;
 const pdfLinks = html => [...new Set([...html.matchAll(/href="(https:\/\/assets\.calmac\.co\.uk\/[^"]+\.pdf)"/gi)].map(m => m[1]))];
