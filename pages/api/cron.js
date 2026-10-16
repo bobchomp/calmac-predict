@@ -310,6 +310,10 @@ module.exports = async function handler(req, res) {
   // that nothing waits on (the timetable PDF check) carries on after the
   // reply (waitUntil keeps the function running for it).
   try {
+    // While this runs, the GitHub Actions jobs replacing it run dry
+    // (scripts/jobs/common.mjs)
+    if (KV_URL) await kvSet('jobs:vercel:cron', Date.now());
+
     // ── New seasonal timetable PDFs on calmac.co.uk (its own function) ──
     const timetables = fetch(`${BASE_URL}/api/check-timetables`, {
       // Secret in a header, so it stays out of URLs and request logs

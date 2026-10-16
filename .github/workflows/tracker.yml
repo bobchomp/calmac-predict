@@ -1,0 +1,38 @@
+# Every 15 minutes: the per-sailing prediction log and the status-and-weather
+# snapshots (scripts/jobs/tracker.mjs). Started by cron-job.org through
+# GitHub's API; the hourly schedule is a fallback, skipped while cron-job.org
+# is starting it.
+name: Tracker
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'auto goes live once the Vercel job has stopped; dry saves nothing'
+        type: choice
+        options: [auto, live, dry]
+        default: auto
+  schedule:
+    - cron: '11 * * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: job-tracker
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./scripts/jobs/register.mjs scripts/jobs/tracker.mjs
+        env:
+          MODE: ${{ inputs.mode || 'auto' }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}

@@ -1,0 +1,36 @@
+# Daily: checks calmac.co.uk for new timetable PDFs and pushes an alert to
+# every subscriber when one appears (scripts/jobs/daily.mjs).
+name: Daily
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'auto goes live once the Vercel job has stopped; dry saves and sends nothing'
+        type: choice
+        options: [auto, live, dry]
+        default: auto
+  schedule:
+    - cron: '23 5 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: job-daily
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./scripts/jobs/register.mjs scripts/jobs/daily.mjs
+        env:
+          MODE: ${{ inputs.mode || 'auto' }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
