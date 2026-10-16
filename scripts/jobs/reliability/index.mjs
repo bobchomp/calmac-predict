@@ -3,6 +3,11 @@
 // (calmac.mjs), saves them to Redis `reliability`, and works the thresholds
 // out again (lib/reliability.js) into Redis `thresholds`, which the site
 // uses. A newer figure for a month replaces an older one.
+//
+// The months imported from the Google Sheet were mostly estimates (whole
+// numbers, often far from CalMac's figures), so rows this job saves are
+// marked source: 'CalMac'. Only those count as a month already being had,
+// and a route's estimates are dropped once it has a year of CalMac's figures.
 
 import { kvGetJsonMany, kvSetJson } from '../../../lib/kv.js';
 import { calcThresholds } from '../../../lib/reliability.js';
@@ -20,7 +25,7 @@ async function ingestReports({ dry }) {
   // Each route-month's figures from the newest source that has it
   const found = new Map();
   const id = r => `${r.route}|${r.year}|${r.month}`;
-  const take = rows => { for (const r of rows) if (!found.has(id(r))) found.set(id(r), r); };
+  const take = rows => { for (const r of rows) if (!found.has(id(r))) found.set(id(r), { ...r, source: 'CalMac' }); };
 
   // A month's packs, read side by side
   const readPacks = async (heading, list) => {
@@ -46,10 +51,10 @@ async function ingestReports({ dry }) {
   });
   sources['route pages'] = `${pages.filter(r => r.status === 'fulfilled').length} of ${pages.length} read`;
 
-  // Then the packs for any month neither those nor what's saved already has
-  // for most routes (on the first run, the year from late 2024)
+  // Then the packs for any month neither those nor CalMac's figures already
+  // saved have for most routes (on the first run, the year from late 2024)
   const perMonth = new Map();
-  for (const r of [...found.values(), ...reliability.rows]) {
+  for (const r of [...found.values(), ...reliability.rows.filter(r => r.source === 'CalMac')]) {
     const k = r.year * 12 + r.month - 1;
     perMonth.set(k, (perMonth.get(k) || new Set()).add(r.route));
   }
@@ -59,15 +64,23 @@ async function ingestReports({ dry }) {
   }
 
   // Months not saved yet are added; a saved month CalMac now gives another
-  // figure for is replaced
+  // figure for (or that was an estimate) is replaced
   const saved = new Map(reliability.rows.map(r => [id(r), r]));
   const added = [], updated = [];
   for (const [key, r] of found) {
     const was = saved.get(key);
     if (!was) added.push(r);
-    else if (Math.abs((was.reliability ?? NaN) - r.reliability) > 0.05 || Number.isNaN(was.reliability)) updated.push({ ...r, was: was.reliability });
+    else if (was.source !== 'CalMac' || Math.abs((was.reliability ?? NaN) - r.reliability) > 0.05 || Number.isNaN(was.reliability)) updated.push({ ...r, was: was.reliability });
     else continue;
     saved.set(key, r);
+  }
+
+  // A route's remaining estimates go once it has a year of CalMac's figures
+  const calmacMonths = {};
+  for (const r of saved.values()) if (r.source === 'CalMac') calmacMonths[r.route] = (calmacMonths[r.route] || 0) + 1;
+  const dropped = [];
+  for (const [key, r] of saved) {
+    if (r.source !== 'CalMac' && (calmacMonths[r.route] || 0) >= 12) { dropped.push(r); saved.delete(key); }
   }
   const at = new Date().toISOString();
   const rows = [...saved.values()].sort((a, b) => a.route.localeCompare(b.route) || a.year - b.year || a.month - b.month);
@@ -83,31 +96,34 @@ async function ingestReports({ dry }) {
     return moved.length ? [`${route}: ${moved.join(', ')} (${was?.samples ?? 0} → ${t.samples} months)`] : [];
   });
 
-  // The months saved for each route, first to last
+  // The months saved for each route, first to last, and how many are estimates
   const ym = r => `${r.year}-${String(r.month).padStart(2, '0')}`;
   const coverage = {};
   for (const r of rows) {
-    const c = coverage[r.route] ||= { months: 0, from: ym(r), to: ym(r) };
+    const c = coverage[r.route] ||= { months: 0, estimates: 0, from: ym(r), to: ym(r) };
     c.months++;
+    if (r.source !== 'CalMac') c.estimates++;
     if (ym(r) < c.from) c.from = ym(r);
     if (ym(r) > c.to) c.to = ym(r);
   }
 
-  const changed = added.length + updated.length > 0;
+  const changed = added.length + updated.length + dropped.length > 0;
   if (!dry && changed) {
     await kvSetJson('reliability', { at, rows });
     await kvSetJson(THRESHOLDS_KEY, { at, source: 'CalMac reports', thresholds });
   }
 
-  say(`${found.size} route-months read from CalMac: ${added.length} new, ${updated.length} with a changed figure.`);
+  say(`${found.size} route-months read from CalMac: ${added.length} new, ${updated.length} replacing an estimate or older figure; ${dropped.length} estimates dropped.`);
   const list = items => items.slice(0, 40).concat(items.length > 40 ? [`… and ${items.length - 40} more`] : []);
   return {
     ok: found.size > 0,
     sources,
     added: list(added.map(r => `${r.route} ${ym(r)}: ${r.reliability}%`)),
     updated: list(updated.map(r => `${r.route} ${ym(r)}: ${r.was}% → ${r.reliability}%`)),
+    // Estimates for months CalMac hasn't published, on routes it has a year of
+    estimatesDropped: list(dropped.map(r => `${r.route} ${ym(r)}: ${r.reliability}%`)),
     reliabilityMonths: rows.length,
-    coverage: Object.fromEntries(Object.entries(coverage).map(([route, c]) => [route, `${c.from} → ${c.to} (${c.months} months)`])),
+    coverage: Object.fromEntries(Object.entries(coverage).map(([route, c]) => [route, `${c.from} → ${c.to} (${c.months} months${c.estimates ? `, ${c.estimates} of them estimates` : ''})`])),
     thresholdChanges: changes,
     saved: !dry && changed,
     failed,

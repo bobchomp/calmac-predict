@@ -10,6 +10,8 @@ Each run:
      - Before that, each pack has only its own month's sailings, leg by leg. Reliability is worked out from those counts as CalMac does: sailings operated, less additional ones, out of those scheduled (`parseLegRows`).
    - **Each route's own report page**, from [corporate.calmac.co.uk/…/route-performance-reports](https://corporate.calmac.co.uk/en-gb/about-us/route-performance-reports/). CalMac stopped updating these at October 2024, but they're the only source for Mallaig – Armadale, Mallaig – Small Isles and Oban – Lismore.
 2. **Saves them to Redis `reliability`.** A month not saved yet is added. A month CalMac now gives a different figure for is replaced, since the newest source wins.
+   - **Estimates are replaced.** Most months imported from the Google Sheet were estimates: whole numbers, often far from CalMac's figures. So rows this job saves are marked `source: 'CalMac'`, and an estimate is always replaced by CalMac's figure for that month.
+   - **Leftover estimates are dropped.** Once a route has a year of CalMac's figures, its remaining estimates go. Troon – Brodick has no CalMac source, so its estimates stay.
 3. **Works the thresholds out again into Redis `thresholds`.**
 
 Run with `MODE=dry` (the workflow's **dry** option), it saves nothing. Instead it reports:
