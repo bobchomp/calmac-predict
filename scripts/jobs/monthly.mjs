@@ -77,7 +77,9 @@ async function routeReport(route, slug) {
   const resp = await fetch(pdfUrl, { signal: AbortSignal.timeout(30000) });
   if (!resp.ok) throw new Error(`HTTP ${resp.status} downloading the PDF`);
   const { text } = await pdfParse(Buffer.from(await resp.arrayBuffer()));
-  return parseReport(text, route);
+  const rows = parseReport(text, route);
+  // A report with no rows read is shown in the summary, to see why
+  return { rows, pdfUrl, ...(!rows.length && { text: text.replace(/\s+/g, ' ').trim().slice(0, 600) }) };
 }
 
 async function ingestReports({ dry }) {
@@ -87,10 +89,12 @@ async function ingestReports({ dry }) {
   const results = await Promise.allSettled(Object.entries(ROUTE_SLUGS).map(([route, slug]) => routeReport(route, slug)));
   const failed = [];
   const found = [];
+  const unread = [];
   results.forEach((r, i) => {
     const route = Object.keys(ROUTE_SLUGS)[i];
-    if (r.status === 'fulfilled') found.push(...r.value);
-    else failed.push({ route, error: r.reason?.message });
+    if (r.status === 'rejected') failed.push({ route, error: r.reason?.message });
+    else if (r.value.rows.length) found.push(...r.value.rows);
+    else unread.push({ route, pdfUrl: r.value.pdfUrl, text: r.value.text });
   });
 
   // Months already saved are kept as they are (as the Sheet did)
@@ -108,12 +112,14 @@ async function ingestReports({ dry }) {
 
   say(`${Object.keys(ROUTE_SLUGS).length - failed.length} of ${Object.keys(ROUTE_SLUGS).length} reports read: ${found.length} months in them, ${added.length} new.`);
   return {
-    ok: failed.length < Object.keys(ROUTE_SLUGS).length,
+    ok: found.length > 0,
     added: added.map(r => `${r.route} ${r.year}-${String(r.month).padStart(2, '0')}: ${r.reliability}%`),
     reliabilityMonths: rows.length,
     thresholdsRoutes: Object.keys(thresholds).length,
     saved: !dry && added.length > 0,
     failed,
+    // Reports read but with no months found in them (the first few in full)
+    unread: unread.map((u, i) => (i < 3 ? u : { route: u.route, pdfUrl: u.pdfUrl })),
   };
 }
 
