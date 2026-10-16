@@ -34,7 +34,7 @@ export function StatusChecks() {
   );
 }
 
-// One of the About tab's database figures from the Google Sheet
+// One of the About tab's database figures (/api/stats)
 export function AboutStat({ field, id }) {
   const stats = aboutStatsStore.use();
   return <div style={{ fontSize: "1.6rem", fontWeight: 800, color: "var(--navy)" }} id={id}>{stats[field]}</div>;

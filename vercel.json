@@ -35,6 +35,12 @@
     },
     "pages/api/sailings.js": {
       "maxDuration": 15
+    },
+    "pages/api/thresholds.js": {
+      "maxDuration": 30
+    },
+    "pages/api/stats.js": {
+      "maxDuration": 10
     }
   }
 }
