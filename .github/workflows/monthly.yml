@@ -1,0 +1,39 @@
+# Monthly (the 2nd, with the 15th as a second chance; months already saved
+# are skipped): adds CalMac's latest reliability figures to Redis and works
+# the thresholds out again (scripts/jobs/monthly.mjs).
+name: Monthly
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'live saves the new months; dry only reports them'
+        type: choice
+        options: [live, dry]
+        default: live
+  schedule:
+    - cron: '41 8 2,15 * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: job-monthly
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --omit=dev --ignore-scripts
+      - run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./scripts/jobs/register.mjs scripts/jobs/monthly.mjs
+        env:
+          MODE: ${{ inputs.mode || 'live' }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}

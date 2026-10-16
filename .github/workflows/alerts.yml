@@ -1,0 +1,39 @@
+# Every 5 minutes: disruption and timetable-notice push alerts, and the
+# health-check emails (scripts/jobs/alerts.mjs). Started by cron-job.org
+# through GitHub's API; the hourly schedule is a fallback, skipped while
+# cron-job.org is starting it.
+name: Alerts
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'auto goes live once the Vercel job has stopped; dry saves and sends nothing'
+        type: choice
+        options: [auto, live, dry]
+        default: auto
+  schedule:
+    - cron: '7 * * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: job-alerts
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./scripts/jobs/register.mjs scripts/jobs/alerts.mjs
+        env:
+          MODE: ${{ inputs.mode || 'auto' }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}

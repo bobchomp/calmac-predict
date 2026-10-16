@@ -8,7 +8,7 @@ import { ukDateStr } from "../lib/timetable";
 import TabPage from "./TabPage";
 
 // The Accuracy tab: how the per-sailing predictions have done, from the
-// sailing log (api/sailings.js, written by api/track-sailings.js)
+// sailing log (api/sailings.js, written by lib/tracker.js)
 
 const PERIODS = [[1, "Today"], [7, "7 days"], [30, "30 days"], [90, "90 days"]];
 const VERDICT_LABELS = { likely: "Likely (75%+)", caution: "Caution (45–74%)", unlikely: "At risk (under 45%)" };
