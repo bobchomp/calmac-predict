@@ -164,9 +164,10 @@ async function main() {
   say(`| ${TABS.reliability} | ${rel.total} | \`reliability\`: ${reliability.length} months, ${new Set(reliability.map(r => r.route)).size} routes |`);
   say(`| ${TABS.thresholds} | ${sheet.thresholds.total} | \`thresholds\`: ${Object.keys(thresholds).length} routes |`);
   say(`| ${TABS.reports} | ${sheet.reports.total} | \`reports\`: ${reports.length} reports |`);
-  say(`| ${TABS.records} | ${sheet.records.total} | \`records:<date>\`: ${kept} rows over ${days.length} days |`);
+  say(`| ${TABS.records} | ${sheet.records.rows.length} | \`records:<date>\`: ${kept} rows over ${days.length} days |`);
   say();
-  if (sheet.records.rows.length !== sheet.records.total) say(`⚠️ Read ${sheet.records.rows.length} of ${sheet.records.total} SailingRecords rows`);
+  // The Sheet is still being added to, so it can have grown while being read
+  if (sheet.records.rows.length < sheet.records.total) say(`⚠️ Read ${sheet.records.rows.length} of ${sheet.records.total} SailingRecords rows`);
   if (badTime) say(`⚠️ ${badTime} SailingRecords rows had no readable time and are left out`);
   const dupes = sheet.records.rows.length - badTime - kept;
   if (dupes) say(`ℹ️ ${dupes} SailingRecords rows repeat another's time and route, and are kept once`);
