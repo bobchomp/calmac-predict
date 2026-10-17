@@ -1,10 +1,9 @@
-// GitHub Actions: daily. Replaces /api/check-timetables (which /api/cron ran
-// every 5 minutes): finds new seasonal timetable PDFs on each route's
+// GitHub Actions: daily. Finds new seasonal timetable PDFs on each route's
 // calmac.co.uk page and pushes an alert to every subscriber when one appears.
 // The PDFs seen so far are kept per route in Redis (timetable_pdfs:<slug>).
 
 import { kvGetJsonMany, kvSetJson } from '../../lib/kv.js';
-import { VERCEL_CRON_KEY, notify, ranWithin, runJob, say } from './common.mjs';
+import { notify, runJob, say } from './common.mjs';
 
 const CALMAC_ROUTE_BASE = 'https://www.calmac.co.uk/route-information';
 
@@ -90,4 +89,4 @@ async function checkTimetables({ dry }) {
   return { ok: failed.length < entries.length, newRoutes, broadcast, failed };
 }
 
-await runJob({ name: 'daily', vercelBusy: () => ranWithin(VERCEL_CRON_KEY, 12 * 60 * 1000) }, checkTimetables);
+await runJob({ name: 'daily' }, checkTimetables);

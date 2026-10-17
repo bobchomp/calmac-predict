@@ -8,10 +8,10 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'auto goes live once the Vercel job has stopped; dry saves nothing'
+        description: 'dry saves nothing'
         type: choice
-        options: [auto, live, dry]
-        default: auto
+        options: [live, dry]
+        default: live
   schedule:
     - cron: '11 * * * *'
 
@@ -32,7 +32,7 @@ jobs:
           node-version: 24
       - run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./scripts/jobs/register.mjs scripts/jobs/tracker.mjs
         env:
-          MODE: ${{ inputs.mode || 'auto' }}
+          MODE: ${{ inputs.mode || 'live' }}
           UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
           UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
