@@ -1,6 +1,6 @@
 // GET /api/stats — the About tab's database figures: months of CalMac
-// reliability figures and routes with thresholds, from Redis
-// (scripts/import-sheet.mjs). Cached by the CDN for an hour.
+// reliability figures and routes with thresholds, from Redis (written by
+// scripts/jobs/reliability/). Cached by the CDN for an hour.
 
 import { kvConfigured, kvGetJsonMany } from '../../lib/kv';
 import { THRESHOLDS_KEY } from '../../lib/thresholds';

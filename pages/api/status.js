@@ -155,7 +155,7 @@ function cleanDetail(detail) {
 
 // Scan all routeStatus entries for amended timetable / vessel substitution notices.
 // CalMac publishes these as separate entries (often status: INFORMATION or SERVICE)
-// alongside the normal SAILING disruption entries. api/cron.js pushes each new one.
+// alongside the normal SAILING disruption entries. The alerts job (scripts/jobs/alerts.mjs) pushes each new one.
 function extractTimetableNotice(routeStatuses) {
   const KEYWORDS = /amended\s*timetable|vessel\s*sub|temporary\s*timetable|winter\s*timetable|summer\s*timetable|additional\s*sail|timetable\s*change|replacement\s*vessel/i;
   const now = new Date();

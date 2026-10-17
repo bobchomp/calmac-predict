@@ -1,8 +1,7 @@
-// GitHub Actions: monthly (.github/workflows/monthly.yml). Replaces
-// /api/ingest-report: reads CalMac's published reliability figures
-// (calmac.mjs), saves them to Redis `reliability`, and works the thresholds
-// out again (lib/reliability.js) into Redis `thresholds`, which the site
-// uses. A newer figure for a month replaces an older one.
+// GitHub Actions: monthly (.github/workflows/monthly.yml). Reads CalMac's
+// published reliability figures (calmac.mjs), saves them to Redis
+// `reliability`, and works the thresholds out again (lib/reliability.js)
+// into Redis `thresholds`, which the site uses. A newer figure for a month replaces an older one.
 //
 // The months imported from the Google Sheet were mostly estimates (whole
 // numbers, often far from CalMac's figures), so rows this job saves are

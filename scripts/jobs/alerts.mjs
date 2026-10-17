@@ -1,18 +1,17 @@
 // GitHub Actions: every 5 minutes (cron-job.org, with an hourly fallback).
-// Replaces /api/cron:
 // 1. Push alerts to a route's subscribers when CalMac reports disruption and
 //    the site's sailing chance is under 70% (at most every 2 hours a route)
 // 2. Push alerts for a route's new timetable notices
 // 3. An email when one of the services the site needs breaks (once per
 //    change in what's broken)
-// The timetable PDF check that /api/cron also ran is now daily (daily.mjs).
+// New timetable PDFs are checked daily (daily.mjs).
 
 import { forecastUrls } from '../../lib/forecast.js';
 import { kvGetJsonMany, kvSetJson } from '../../lib/kv.js';
 import { calcOverallRisk, chanceFromRisk, historicalReliability } from '../../lib/risk.js';
 import { ROUTES } from '../../lib/routes.js';
 import { loadThresholds } from '../../lib/thresholds.js';
-import { BASE_URL, VERCEL_CRON_KEY, getJson, notify, ranWithin, runJob, say } from './common.mjs';
+import { BASE_URL, getJson, notify, runJob, say } from './common.mjs';
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const ALERT_FROM = 'Will It Sail <info@willitsail.co.uk>';
@@ -25,8 +24,8 @@ const slug = routeKey => routeKey.replace(/[^a-z0-9]/gi, '_');
 const ukParts = () => Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: 'numeric', month: 'numeric', hourCycle: 'h23' })
   .formatToParts(new Date()).map(p => [p.type, p.value]));
 
-// Each route's sailing chance over the next 12 hours, as /api/weather works
-// it out (the same forecast, thresholds and sums), for all routes in one go
+// Each route's sailing chance over the next 12 hours (the site's forecast,
+// thresholds and sums), for all routes in one go
 async function sailingChances() {
   const { windUrl, marineUrl } = forecastUrls();
   const [wind, marine, thresholds] = await Promise.allSettled([getJson(windUrl), getJson(marineUrl), loadThresholds()]);
@@ -214,4 +213,4 @@ async function alerts({ dry }) {
   };
 }
 
-await runJob({ name: 'alerts', vercelBusy: () => ranWithin(VERCEL_CRON_KEY, 12 * 60 * 1000), skipWithin: 10 * 60 * 1000 }, alerts);
+await runJob({ name: 'alerts', skipWithin: 10 * 60 * 1000 }, alerts);
