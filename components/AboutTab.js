@@ -31,7 +31,7 @@ export default function AboutTab() {
       {/* HOW IT WORKS */}
       <div className="about-card">
         <h3>How the prediction works</h3>
-        <p style={{fontSize: '.85rem', color: 'var(--muted)', marginBottom: 14}}>Every route gets a <strong>Sailing Chance %</strong> calculated in three stages:</p>
+        <p style={{fontSize: '.85rem', color: 'var(--muted)', marginBottom: 14}}>Every route gets a <strong>Sailing Chance %</strong> calculated in four stages:</p>
         <div style={{display: 'flex', gap: 12, marginBottom: 16}}>
           <div style={{flexShrink: 0, width: 28, height: 28, borderRadius: '50%', background: 'var(--navy)', color: '#fff', fontWeight: 800, fontSize: '.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>1</div>
           <div>
