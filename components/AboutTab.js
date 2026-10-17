@@ -66,6 +66,13 @@ export default function AboutTab() {
             <p style={{fontSize: '.78rem', color: 'var(--muted)', marginTop: 8, lineHeight: '1.6'}}>The result is capped at that route's historical reliability + 10% — so even in perfect weather, a structurally unreliable route can't show an unrealistically high score. The 📊 Calibrated badge only appears when the historical data shifts the final score by more than 3%, so it's a genuine signal rather than a label on every route. Routes without PDF data use weather-only predictions.</p>
           </div>
         </div>
+        <div style={{display: 'flex', gap: 12, marginTop: 16}}>
+          <div style={{flexShrink: 0, width: 28, height: 28, borderRadius: '50%', background: 'var(--navy)', color: '#fff', fontWeight: 800, fontSize: '.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>4</div>
+          <div>
+            <div style={{fontWeight: 700, fontSize: '.9rem', color: 'var(--text)', marginBottom: 4}}>CalMac's own cancellations</div>
+            <p style={{fontSize: '.82rem', color: 'var(--muted)', margin: 0, lineHeight: '1.6'}}>CalMac's word beats the forecast. A sailing CalMac has cancelled — for weather, a technical fault or anything else — counts as 0%, and a route's score only counts the sailings still running that day (so if half are cancelled, its score halves). <strong>Disrupted</strong> and <strong>Be Aware</strong> notices don't lower the score: in our records almost all of those sailings still went ahead (they're mostly amended timetables and delays).</p>
+          </div>
+        </div>
       </div>
       {/* NEW FEATURES */}
       <div className="about-card">

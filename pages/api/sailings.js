@@ -14,6 +14,8 @@ const CSV_COLUMNS = [
   ['date', r => r.date], ['time', r => r.time], ['route', r => r.route], ['from', r => r.from], ['to', r => r.to],
   ['first_chance', r => r.first?.chance], ['first_at', r => r.first?.at],
   ['last_chance', r => r.last?.chance], ['last_at', r => r.last?.at],
+  // The forecast's own chance, before CalMac's cancellations (logged since 17 Oct)
+  ['last_weather_chance', r => r.last?.weather],
   ['sailed', r => (r.outcome ? (r.outcome.sailed === null ? 'unknown' : r.outcome.sailed ? 'yes' : 'no') : 'pending')],
   ['calmac_status', r => r.outcome?.status ?? r.seen?.status], ['reason', r => r.outcome?.reason ?? r.seen?.reason],
   ['correct', r => (r.correct == null ? '' : r.correct ? 'yes' : 'no')],
