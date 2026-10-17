@@ -1,6 +1,7 @@
 // GitHub Actions: every 5 minutes (cron-job.org, with an hourly fallback).
 // 1. Push alerts to a route's subscribers when CalMac reports disruption and
-//    the site's sailing chance is under 70% (at most every 2 hours a route)
+//    the site's sailing chance is under 70%, which a route CalMac has
+//    cancelled always is (at most every 2 hours a route)
 // 2. Push alerts for a route's new timetable notices
 // 3. An email when one of the services the site needs breaks (once per
 //    change in what's broken)
@@ -141,7 +142,8 @@ async function alerts({ dry }) {
 
   const pushes = [];
   for (const d of disrupted) {
-    const chance = chances[d.routeKey] ?? null;
+    // As the card: CalMac cancelling the route makes it 0%, whatever the weather
+    const chance = d.status === 'cancelled' ? 0 : chances[d.routeKey] ?? null;
     const subs = state[`subs:${slug(d.routeKey)}`] || [];
     const lastSent = state[`lastsent:${slug(d.routeKey)}`] || 0;
     const entry = { route: d.routeKey, calMacStatus: d.status, chance, subscribers: subs.length };
