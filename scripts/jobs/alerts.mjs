@@ -3,8 +3,9 @@
 //    the site's sailing chance is under 70%, which a route CalMac has
 //    cancelled always is (at most every 2 hours a route)
 // 2. Push alerts for a route's new timetable notices
-// 3. An email when one of the services the site needs breaks (once per
-//    change in what's broken)
+// 3. An email when one of the services the site needs has been down for
+//    15 minutes (not for a moment's hiccup), once until it's been back up
+//    for 30 minutes
 // New timetable PDFs are checked daily (daily.mjs).
 
 import { forecastUrls } from '../../lib/forecast.js';
@@ -47,16 +48,22 @@ async function sailingChances() {
   return { chances };
 }
 
-// The services the site needs (as the Status tab checks them)
+// The services the site needs (as the Status tab checks them): those
+// failing, and those that couldn't be judged
 async function healthChecks(statusData) {
   const failed = [];
-  // Tried again on a busy reply, so a moment's 429 isn't reported as an outage
+  const unknown = [];
+  // Tried again on a busy reply. Open-Meteo still turning this job away
+  // (429) is GitHub's shared address being rate-limited, not the site's
+  // weather failing (visitors' browsers fetch it themselves), so it
+  // doesn't count either way.
   const check = async (name, url, what) => {
     try {
       const j = await getJson(url, 8000);
       const one = Array.isArray(j) ? j[0] : j;
       if (name === 'Weather API' && !one?.hourly?.windspeed_10m?.length) failed.push({ name, detail: 'Open-Meteo responded but returned no hourly data' });
     } catch (e) {
+      if (/^HTTP 429\b/.test(e.message)) return unknown.push({ name, detail: 'rate-limited (429) from GitHub’s shared address' });
       failed.push({ name, detail: /^HTTP/.test(e.message) ? `${e.message.split(' from ')[0]} — ${what} unavailable` : e.message });
     }
   };
@@ -69,7 +76,33 @@ async function healthChecks(statusData) {
   } else if (!statusData.routes?.length) {
     failed.push({ name: 'CalMac Status API', detail: 'API responded but returned 0 routes' });
   }
-  return failed;
+  return { failed, unknown };
+}
+
+const EMAIL_AFTER_MS = 15 * 60 * 1000;
+const RECOVERED_AFTER_MS = 30 * 60 * 1000;
+
+// Each service's health over time, in Redis health_state:
+// { [service]: { failingSince, okSince, detail, emailedAt } }. A service is
+// emailed about once it's been failing since 15 minutes ago, and not again
+// until it's been working for 30 minutes, so a flicker sends nothing.
+function healthUpdate(state, { failed, unknown }, now) {
+  const next = {};
+  const names = new Set([...Object.keys(state || {}), ...failed.map(f => f.name), 'Weather API', 'Marine / Wave API', 'CalMac Status API']);
+  for (const name of names) {
+    const was = state?.[name] || {};
+    const fail = failed.find(f => f.name === name);
+    if (unknown.some(u => u.name === name)) next[name] = was;
+    else if (fail) next[name] = { failingSince: was.failingSince || now, okSince: null, detail: fail.detail, emailedAt: was.emailedAt || null };
+    else {
+      const okSince = was.okSince || now;
+      next[name] = { failingSince: null, okSince, detail: null, emailedAt: was.emailedAt && now - okSince < RECOVERED_AFTER_MS ? was.emailedAt : null };
+    }
+  }
+  const toEmail = Object.entries(next)
+    .filter(([, s]) => s.failingSince && now - s.failingSince >= EMAIL_AFTER_MS && !s.emailedAt)
+    .map(([name, s]) => ({ name, detail: `${s.detail} (since ${new Date(s.failingSince).toLocaleTimeString('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit' })})` }));
+  return { next, toEmail };
 }
 
 const escape = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -129,16 +162,16 @@ async function alerts({ dry }) {
     getJson(`${BASE_URL}/api/status`, 15000).catch(err => ({ fallback: true, error: err.message, routes: [] })),
     sailingChances(),
   ]);
-  const failedChecks = await healthChecks(statusData);
+  const health = await healthChecks(statusData);
   const known = new Set(ROUTES.map(r => r.name));
 
   // ── 1. Disruption pushes ──
   const disrupted = (statusData.disrupted || []).filter(d => d.routeKey && known.has(d.routeKey));
   const routeKeys = [...new Set([...disrupted.map(d => d.routeKey), ...(statusData.routes || []).filter(r => r.routeKey && r.timetableNotice).map(r => r.routeKey)])];
   const stateKeys = routeKeys.flatMap(k => [`subs:${slug(k)}`, `lastsent:${slug(k)}`, `timetablenotice:${slug(k)}`]);
-  const values = await kvGetJsonMany([...stateKeys, 'health_alert_sent']);
+  const values = await kvGetJsonMany([...stateKeys, 'health_state']);
   const state = Object.fromEntries(stateKeys.map((k, i) => [k, values[i]]));
-  const lastHealthAlert = values.at(-1);
+  const healthState = values.at(-1);
 
   const pushes = [];
   for (const d of disrupted) {
@@ -188,30 +221,27 @@ async function alerts({ dry }) {
     notices.push(entry);
   }
 
-  // ── 3. Health email, when what's broken changes ──
+  // ── 3. Health email, for a service down for 15 minutes ──
+  const now = Date.now();
+  const { next, toEmail } = healthUpdate(healthState, health, now);
   let email = null;
-  if (failedChecks.length) {
-    const fingerprint = failedChecks.map(c => c.name).sort().join(',');
-    if (lastHealthAlert?.fingerprint !== fingerprint) {
-      if (dry) email = 'would send';
-      else {
-        await kvSetJson('health_alert_sent', { fingerprint, sentAt: Date.now() });
-        email = await sendHealthEmail(failedChecks);
-      }
-    } else email = 'already sent for this';
-  } else if (lastHealthAlert && !dry) {
-    // All clear: email again if something breaks later
-    await kvSetJson('health_alert_sent', null);
+  if (toEmail.length) {
+    if (dry) email = 'would send';
+    else {
+      email = await sendHealthEmail(toEmail);
+      if (email?.ok) for (const { name } of toEmail) next[name].emailedAt = now;
+    }
   }
+  if (!dry) await kvSetJson('health_state', next);
 
-  say(`${disrupted.length} disrupted routes, ${pushes.filter(p => /^sent|^would/.test(p.push)).length} disruption pushes, ${notices.length} new notices, ${failedChecks.length} failed checks.`);
+  say(`${disrupted.length} disrupted routes, ${pushes.filter(p => /^sent|^would/.test(p.push)).length} disruption pushes, ${notices.length} new notices, ${health.failed.length} failed checks.`);
   return {
     ok: true,
     calmacStatus: !statusData.fallback,
     ...(forecastError && { forecastError }),
     pushes,
     notices,
-    health: { failed: failedChecks, email },
+    health: { failed: health.failed, unknown: health.unknown, email, failing: Object.fromEntries(Object.entries(next).filter(([, s]) => s.failingSince).map(([n, s]) => [n, new Date(s.failingSince).toISOString()])) },
   };
 }
 
