@@ -1,8 +1,13 @@
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
+// dev.willitsail.co.uk and pull request previews: marked as dev, and kept
+// out of search engines
+const IS_PREVIEW = process.env.VERCEL_ENV === "preview";
+
 export const metadata = {
-  title: "Will It Sail? – CalMac Predictor",
+  title: (IS_PREVIEW ? "[Dev] " : "") + "Will It Sail? – CalMac Predictor",
+  ...(IS_PREVIEW && { robots: { index: false, follow: false } }),
 };
 
 export const viewport = {
@@ -30,6 +35,19 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body>
+        {IS_PREVIEW && (
+          <div
+            aria-hidden="true"
+            style={{
+              position: "fixed", top: "calc(env(safe-area-inset-top) + 6px)", left: "50%", transform: "translateX(-50%)",
+              zIndex: 10000, pointerEvents: "none", background: "#c62828", color: "#fff",
+              font: "700 11px/1 'Source Sans 3', sans-serif", letterSpacing: "0.08em",
+              padding: "4px 8px", borderRadius: 999, opacity: 0.9,
+            }}
+          >
+            DEV · TEST DATA · ALERTS OFF
+          </div>
+        )}
         {children}
         <Analytics />
       </body>

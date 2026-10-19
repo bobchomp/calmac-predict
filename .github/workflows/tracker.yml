@@ -19,7 +19,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: job-tracker
+  group: job-tracker-${{ github.ref_name }}
 
 jobs:
   run:
@@ -33,6 +33,9 @@ jobs:
       - run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./scripts/jobs/register.mjs scripts/jobs/tracker.mjs
         env:
           MODE: ${{ inputs.mode || 'live' }}
-          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
-          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          # From main: production. From any other branch (dev): the dev database
+          # and no CRON_SECRET, so nothing can be sent
+          SITE: ${{ github.ref_name == 'main' && 'production' || 'dev' }}
+          UPSTASH_REDIS_REST_URL: ${{ github.ref_name == 'main' && secrets.UPSTASH_REDIS_REST_URL || secrets.DEV_UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ github.ref_name == 'main' && secrets.UPSTASH_REDIS_REST_TOKEN || secrets.DEV_UPSTASH_REDIS_REST_TOKEN }}
+          CRON_SECRET: ${{ github.ref_name == 'main' && secrets.CRON_SECRET || '' }}

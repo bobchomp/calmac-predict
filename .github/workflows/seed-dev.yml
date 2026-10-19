@@ -1,0 +1,27 @@
+# By hand, from the dev branch: copies the reliability figures and thresholds
+# from the production database into the dev one (scripts/jobs/seed-dev.mjs).
+# Production is only read.
+name: Copy production data to dev
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    if: github.ref_name != 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./scripts/jobs/register.mjs scripts/jobs/seed-dev.mjs
+        env:
+          PROD_UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          PROD_UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+          DEV_UPSTASH_REDIS_REST_URL: ${{ secrets.DEV_UPSTASH_REDIS_REST_URL }}
+          DEV_UPSTASH_REDIS_REST_TOKEN: ${{ secrets.DEV_UPSTASH_REDIS_REST_TOKEN }}

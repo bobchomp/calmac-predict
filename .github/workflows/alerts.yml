@@ -23,6 +23,8 @@ concurrency:
 
 jobs:
   run:
+    # Production only: these send alerts and emails, which dev never does
+    if: github.ref_name == 'main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
