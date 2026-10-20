@@ -64,6 +64,7 @@ export default function AccuracyTab() {
             <TrackerNote tracker={data.tracker} />
             <Headline data={data} />
             {data.comparison && <ComparisonCard comparison={data.comparison} />}
+            {data.warnings?.warned.sailings > 0 && <WarningsCard warnings={data.warnings} />}
             {data.resolved > 0 ? (
               <>
                 <CalibrationCard calibration={data.calibration} bands={data.bands} />
@@ -131,6 +132,23 @@ function ComparisonCard({ comparison: c }) {
         <tbody>
           <tr><td>New{better ? " ✓" : ""}</td><td>{c.errorNew.toFixed(4)}</td><td>{c.correctNew}%</td></tr>
           <tr><td>Old{better ? "" : " ✓"}</td><td>{c.errorOld.toFixed(4)}</td><td>{c.correctOld}%</td></tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ── Sailings CalMac warned were liable to disruption, against the rest ──
+function WarningsCard({ warnings }) {
+  const rows = [["With a warning", warnings.warned], ["Without", warnings.notWarned]];
+  return (
+    <div className="accp-card">
+      <h3>CalMac's "liable to disruption" warnings</h3>
+      <p className="accp-sub">Sailings with a CalMac notice in force before they left saying the service was liable to disruption or cancellation. The warnings don't change our chance yet: if warned sailings run less often than we said, they should.</p>
+      <table className="accp-table">
+        <thead><tr><th></th><th>Sailings</th><th>We said</th><th>Sailed</th></tr></thead>
+        <tbody>
+          {rows.map(([label, w]) => <tr key={label}><td>{label}</td><td>{w.sailings.toLocaleString()}</td><td>{w.said !== null ? `${w.said}%` : "–"}</td><td>{w.sailedPct !== null ? `${w.sailedPct}%` : "–"}</td></tr>)}
         </tbody>
       </table>
     </div>
