@@ -63,6 +63,7 @@ export default function AccuracyTab() {
           <div className="accp-results" style={loading ? { opacity: 0.5 } : undefined}>
             <TrackerNote tracker={data.tracker} />
             <Headline data={data} />
+            {data.comparison && <ComparisonCard comparison={data.comparison} />}
             {data.resolved > 0 ? (
               <>
                 <CalibrationCard calibration={data.calibration} bands={data.bands} />
@@ -114,6 +115,24 @@ function Headline({ data }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ── The new formula against the old one, on the same sailings ──
+function ComparisonCard({ comparison: c }) {
+  const better = c.errorNew < c.errorOld;
+  return (
+    <div className="accp-card">
+      <h3>New formula vs the old one</h3>
+      <p className="accp-sub">Both worked out for the same {plural(c.sailings, "sailing")}. The error score is the average squared miss (lower is better): saying 90% for a sailing that ran misses by 0.01, for one that was cancelled by 0.81.</p>
+      <table className="accp-table">
+        <thead><tr><th></th><th>Error score</th><th>Called right</th></tr></thead>
+        <tbody>
+          <tr><td>New{better ? " ✓" : ""}</td><td>{c.errorNew.toFixed(4)}</td><td>{c.correctNew}%</td></tr>
+          <tr><td>Old{better ? "" : " ✓"}</td><td>{c.errorOld.toFixed(4)}</td><td>{c.correctOld}%</td></tr>
+        </tbody>
+      </table>
     </div>
   );
 }

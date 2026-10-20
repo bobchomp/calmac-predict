@@ -1,6 +1,7 @@
 // Shared by the GitHub Actions jobs (scripts/jobs/*.mjs): settings and the
 // run's summary. MODE=dry (the workflow's input) works everything out but
-// saves and sends nothing.
+// saves and sends nothing. SITE=dev (a run from the dev branch) has the dev
+// database and never sends anything.
 
 import { appendFileSync } from 'node:fs';
 import { kvGetJsonMany, kvSetJson } from '../../lib/kv.js';
@@ -8,12 +9,13 @@ import { getJson as getJsonRetrying } from '../../lib/tracker.js';
 
 export const BASE_URL = process.env.CRON_BASE_URL || 'https://www.willitsail.co.uk';
 export const CRON_SECRET = process.env.CRON_SECRET || '';
+export const IS_DEV = process.env.SITE === 'dev';
 
 const lastRunKey = name => `jobs:github:${name}`;
 
 const lines = [];
 export const say = (line = '') => { console.log(line); lines.push(line); };
-const writeSummary = () => {
+export const writeSummary = () => {
   if (process.env.GITHUB_STEP_SUMMARY && lines.length) appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n') + '\n');
 };
 
@@ -24,7 +26,7 @@ export const getJson = (url, ms = 15000) => getJsonRetrying(url, ms);
 //   name        its Redis note, jobs:github:<name>
 //   skipWithin  ms: a scheduled (fallback) run is skipped if one ran this recently
 export async function runJob({ name, skipWithin }, job) {
-  const missing = ['UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN', 'CRON_SECRET'].filter(k => !process.env[k]);
+  const missing = ['UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN', ...(IS_DEV ? [] : ['CRON_SECRET'])].filter(k => !process.env[k]);
   if (missing.length) {
     say(`❌ Missing ${missing.join(', ')}`);
     process.exitCode = 1;
@@ -37,7 +39,7 @@ export async function runJob({ name, skipWithin }, job) {
       return writeSummary();
     }
     const dry = process.env.MODE === 'dry';
-    say(`## ${name}: ${dry ? 'dry run' : 'live'}`);
+    say(`## ${name}: ${dry ? 'dry run' : 'live'}${IS_DEV ? ' (dev)' : ''}`);
     const result = await job({ dry });
     say();
     say('```json');
@@ -55,6 +57,7 @@ export async function runJob({ name, skipWithin }, job) {
 
 // Asks the site to push a notification (the push keys stay on Vercel)
 export async function notify(body) {
+  if (IS_DEV) throw new Error('alerts are off on dev');
   const r = await fetch(`${BASE_URL}/api/notify`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${CRON_SECRET}` },

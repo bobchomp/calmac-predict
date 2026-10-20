@@ -2,9 +2,20 @@
 
 ## Shipping changes
 
-When a change is finished, create a pull request and merge it into `main` without asking first — the owner has pre-approved this. Merging to `main` deploys to production on Vercel, so before merging:
+There are two long-lived branches:
+- `dev` deploys to **dev.willitsail.co.uk** (Vercel preview, behind Vercel login, its own Upstash database, never sends push alerts or emails).
+- `main` deploys to production, **www.willitsail.co.uk**.
+
+When a change is finished, create a pull request **into `main`** and merge it without asking first — the owner has pre-approved this. Merging to `main` deploys to production, so before merging:
 - make sure the Vercel preview deployment check on the PR has passed (if it failed, fix it rather than merging), and
 - say in the PR description what was tested and what couldn't be.
+
+Use `dev` only when the owner asks for something to be tried there first: then the pull request goes into `dev` (merged without asking, same checks), and `dev` goes to `main` only when the owner says. After anything merges into `main`, bring `dev` up to date with it so the two don't drift apart.
+
+How dev stays apart from production:
+- Vercel preview deployments read `DEV_UPSTASH_REDIS_REST_URL`/`_TOKEN` only (`lib/kv.js`, `pages/api/notify.js`), and `/api/notify` refuses to send on them.
+- The GitHub Actions workflows pick the database by branch: `main` gets production's secrets; any other branch gets the `DEV_` ones, `SITE=dev` and no `CRON_SECRET`. Alerts and Daily run from `main` only. The dev tracker is started by cron-job.org with `{"ref":"dev"}`.
+- Never point dev at the production database. The `Copy production data to dev` workflow only reads production.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

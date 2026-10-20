@@ -14,8 +14,11 @@
 const VAPID_PUBLIC  = process.env.VAPID_PUBLIC_KEY  || '';
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || '';
 const VAPID_EMAIL   = process.env.VAPID_EMAIL       || 'mailto:hello@willitsail.app';
-const KV_URL        = process.env.UPSTASH_REDIS_REST_URL   || '';
-const KV_TOKEN      = process.env.UPSTASH_REDIS_REST_TOKEN || '';
+// Preview deployments (dev.willitsail.co.uk, pull request previews) use the
+// dev database only, as lib/kv.js, and never send alerts
+const IS_PREVIEW    = process.env.VERCEL_ENV === 'preview';
+const KV_URL        = (IS_PREVIEW ? process.env.DEV_UPSTASH_REDIS_REST_URL   : process.env.UPSTASH_REDIS_REST_URL)   || '';
+const KV_TOKEN      = (IS_PREVIEW ? process.env.DEV_UPSTASH_REDIS_REST_TOKEN : process.env.UPSTASH_REDIS_REST_TOKEN) || '';
 const CRON_SECRET   = process.env.CRON_SECRET || '';
 
 // ── Upstash Redis REST helpers ──────────────────────────────────────────
@@ -70,6 +73,9 @@ module.exports = async function handler(req, res) {
   if (req.method === 'GET') {
     // Every visit asks for the key; it only changes if the VAPID keys do
     res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate=86400');
+    if (IS_PREVIEW) {
+      return res.status(200).json({ available: false, reason: 'Alerts are off on the dev site' });
+    }
     if (!VAPID_PUBLIC) {
       return res.status(200).json({ available: false, reason: 'Push not configured' });
     }
@@ -86,6 +92,9 @@ module.exports = async function handler(req, res) {
   if ((action === 'send' || action === 'broadcast') &&
       (!CRON_SECRET || req.headers['authorization'] !== `Bearer ${CRON_SECRET}`)) {
     return res.status(401).json({ error: 'Unauthorized' });
+  }
+  if ((action === 'send' || action === 'broadcast') && IS_PREVIEW) {
+    return res.status(403).json({ error: 'Alerts are off on the dev site' });
   }
 
   // ── SUBSCRIBE ──
