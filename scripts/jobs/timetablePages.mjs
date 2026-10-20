@@ -1,4 +1,4 @@
-// Shared by the daily job (daily.mjs) and the key cleanup (cleanup-keys.mjs).
+// The CalMac route pages the daily job (daily.mjs) checks for new timetables.
 
 // Our route keys → their pages, calmac.co.uk/route-information/<slug>/, as
 // named in calmac.co.uk/sitemap.xml (two of our routes are two CalMac pages)
