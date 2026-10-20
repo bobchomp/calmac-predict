@@ -31,43 +31,37 @@ export default function AboutTab() {
       {/* HOW IT WORKS */}
       <div className="about-card">
         <h3>How the prediction works</h3>
-        <p style={{fontSize: '.85rem', color: 'var(--muted)', marginBottom: 14}}>Every route gets a <strong>Sailing Chance %</strong> calculated in four stages:</p>
+        <p style={{fontSize: '.85rem', color: 'var(--muted)', marginBottom: 14}}>Every route gets a <strong>Sailing Chance %</strong> calculated in three stages:</p>
         <div style={{display: 'flex', gap: 12, marginBottom: 16}}>
           <div style={{flexShrink: 0, width: 28, height: 28, borderRadius: '50%', background: 'var(--navy)', color: '#fff', fontWeight: 800, fontSize: '.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>1</div>
           <div>
-            <div style={{fontWeight: 700, fontSize: '.9rem', color: 'var(--text)', marginBottom: 4}}>Weather risk score (0–100)</div>
-            <p style={{fontSize: '.82rem', color: 'var(--muted)', margin: 0, lineHeight: '1.6'}}>Live data fetched from <a href="https://open-meteo.com" target="_blank" style={{color: 'var(--blue)', fontWeight: 600}}>Open-Meteo</a> every 30 minutes. Four conditions scored and summed:</p>
+            <div style={{fontWeight: 700, fontSize: '.9rem', color: 'var(--text)', marginBottom: 4}}>Will the weather let it sail?</div>
+            <p style={{fontSize: '.82rem', color: 'var(--muted)', margin: 0, lineHeight: '1.6'}}>Live data fetched from <a href="https://open-meteo.com" target="_blank" style={{color: 'var(--blue)', fontWeight: 600}}>Open-Meteo</a> every 30 minutes goes into a curve fitted to thousands of real CalMac sailings — which ones ran and which were cancelled for weather. It uses:</p>
             <div style={{marginTop: 10}}>
-              <div className="factor-row"><div className="factor-icon">💨</div><div className="factor-text"><div className="factor-name">Wind gusts &amp; direction</div><div className="factor-desc">Gust speed compared against each route's specific cancellation threshold — 40 mph for the exposed Stornoway crossing, 65 mph for the sheltered Gourock–Dunoon run. The score scales from 3 pts at 45% of threshold up to 40 pts when gusts exceed 120%. Wind direction (N/NE/E etc.) is also displayed on each card, averaged over the next 12 hours.</div></div><div className="factor-weight">0–40 pts</div></div>
-              <div className="factor-row"><div className="factor-icon">🌊</div><div className="factor-text"><div className="factor-name">Wave height &amp; swell</div><div className="factor-desc">Significant wave height combined with swell period — long-period Atlantic swells are weighted more heavily than short wind chop at the same height. Threshold varies by route exposure (1 = sheltered, 4 = open ocean).</div></div><div className="factor-weight">0–30 pts</div></div>
-              <div className="factor-row"><div className="factor-icon">🌫</div><div className="factor-text"><div className="factor-name">Visibility / fog</div><div className="factor-desc">CalMac can suspend sailings in fog independently of wind. 0 pts above 5 km, scaling to 15 pts in dense fog below 500 m.</div></div><div className="factor-weight">0–15 pts</div></div>
-              <div className="factor-row" style={{borderBottom: 'none'}}><div className="factor-icon">🌧</div><div className="factor-text"><div className="factor-name">Precipitation &amp; snow</div><div className="factor-desc">Heavy rain adds 2 pts, heavy snow adds 5 pts, and blizzard conditions (WMO code ≥ 71) add the full 10 pts. Accounts for port access and loading difficulties.</div></div><div className="factor-weight">0–10 pts</div></div>
+              <div className="factor-row"><div className="factor-icon">💨</div><div className="factor-text"><div className="factor-name">Gusts &amp; sustained wind</div><div className="factor-desc">At the sailing's hour. Sustained wind matters even more than the gusts: a steady gale stops more sailings than one sharp gust.</div></div></div>
+              <div className="factor-row"><div className="factor-icon">🌊</div><div className="factor-text"><div className="factor-name">Wave height</div><div className="factor-desc">From Open-Meteo's marine forecast, where the route has one.</div></div></div>
+              <div className="factor-row"><div className="factor-icon">🧭</div><div className="factor-text"><div className="factor-name">Route exposure</div><div className="factor-desc">From 1 (sheltered, like Colintraive–Rhubodach) to 4 (open sea, like Oban–Castlebay): exposed crossings stop at lower winds.</div></div></div>
+              <div className="factor-row" style={{borderBottom: 'none'}}><div className="factor-icon">🌫</div><div className="factor-text"><div className="factor-name">Fog, snow &amp; thunderstorms</div><div className="factor-desc">A small allowance off the chance in dense fog, snow, thunderstorms or freezing rain. Rain alone doesn't stop ferries, so it doesn't count.</div></div></div>
             </div>
-            <p style={{fontSize: '.78rem', color: 'var(--muted)', marginTop: 10, background: 'var(--light)', borderRadius: 8, padding: 8}}>The <strong>overall route score</strong> is the average of the three worst hours in the next 12 — so one gusty hour doesn't tank a mostly calm day. Each individual <strong>sailing row</strong> shows that departure's specific hour score.</p>
-          </div>
-        </div>
-        <div style={{display: 'flex', gap: 12, marginBottom: 16}}>
-          <div style={{flexShrink: 0, width: 28, height: 28, borderRadius: '50%', background: 'var(--navy)', color: '#fff', fontWeight: 800, fontSize: '.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>2</div>
-          <div>
-            <div style={{fontWeight: 700, fontSize: '.9rem', color: 'var(--text)', marginBottom: 4}}>Season &amp; route adjustments</div>
-            <ul style={{fontSize: '.82rem', color: 'var(--muted)', margin: '6px 0 0 0', paddingLeft: 18, lineHeight: '1.7'}}>
-              <li><strong>Season factor</strong> — cancellation thresholds are 15% stricter in winter (Nov–Feb), 7% stricter in shoulder months (Mar, Sep, Oct), and standard in summer (Apr–Aug). This reflects CalMac's real-world higher cancellation rates in winter.</li>
-              <li><strong>Route exposure profile</strong> — each of the 22 routes has a wind threshold (mph), wave threshold, and exposure rating built from route geography and historical cancellation data.</li>
-              <li><strong>Tidal penalty</strong> — a small fixed penalty for routes with known tidal constraints (Uig triangle, Small Isles) that can cause cancellations independently of weather.</li>
-            </ul>
+            <div style={{background: 'var(--light)', borderRadius: 8, padding: '10px 12px', marginTop: 10, fontSize: '.78rem', color: 'var(--navy)', lineHeight: '1.7'}}>
+              <strong>Roughly, with 1 m waves</strong> (sheltered → open sea):<br />
+              30 mph gusts: 97% → 92% · 40 mph: 87% → 74%<br />
+              50 mph: 60% → 39% · 60 mph: 26% → 13%
+            </div>
+            <p style={{fontSize: '.78rem', color: 'var(--muted)', marginTop: 10, background: 'var(--light)', borderRadius: 8, padding: 8}}>Each <strong>sailing row</strong> shows that departure's hour. The <strong>route's score</strong> is the average of the three worst hours in the next 12 (tomorrow: 6am–10pm) — so one gusty hour doesn't tank a mostly calm day.</p>
           </div>
         </div>
         <div style={{display: 'flex', gap: 12}}>
-          <div style={{flexShrink: 0, width: 28, height: 28, borderRadius: '50%', background: 'var(--navy)', color: '#fff', fontWeight: 800, fontSize: '.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>3</div>
+          <div style={{flexShrink: 0, width: 28, height: 28, borderRadius: '50%', background: 'var(--navy)', color: '#fff', fontWeight: 800, fontSize: '.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>2</div>
           <div>
-            <div style={{fontWeight: 700, fontSize: '.9rem', color: 'var(--text)', marginBottom: 4}}>Historical calibration blend</div>
-            <p style={{fontSize: '.82rem', color: 'var(--muted)', margin: 0, lineHeight: '1.6'}}>For routes with a 📊 Calibrated badge, the weather score is blended with real CalMac reliability data — seasonal figures from official monthly performance PDFs:</p>
-            <div style={{background: 'var(--light)', borderRadius: 8, padding: '10px 12px', marginTop: 8, fontFamily: 'monospace', fontSize: '.8rem', color: 'var(--navy)'}}>final = (weather × 0.7) + (history × 0.3)</div>
-            <p style={{fontSize: '.78rem', color: 'var(--muted)', marginTop: 8, lineHeight: '1.6'}}>The result is capped at that route's historical reliability + 10% — so even in perfect weather, a structurally unreliable route can't show an unrealistically high score. The 📊 Calibrated badge only appears when the historical data shifts the final score by more than 3%, so it's a genuine signal rather than a label on every route. Routes without PDF data use weather-only predictions.</p>
+            <div style={{fontWeight: 700, fontSize: '.9rem', color: 'var(--text)', marginBottom: 4}}>Will anything else stop it?</div>
+            <p style={{fontSize: '.82rem', color: 'var(--muted)', margin: 0, lineHeight: '1.6'}}>About half of all cancellations aren't the weather at all: breakdowns, crewing, tides. So the weather chance is multiplied by how reliably CalMac runs the route in summer (May–September), when cancellations are mostly for those reasons — from CalMac's official monthly performance reports:</p>
+            <div style={{background: 'var(--light)', borderRadius: 8, padding: '10px 12px', marginTop: 8, fontFamily: 'monospace', fontSize: '.8rem', color: 'var(--navy)'}}>chance = weather chance × summer reliability</div>
+            <p style={{fontSize: '.78rem', color: 'var(--muted)', marginTop: 8, lineHeight: '1.6'}}>A route CalMac runs 98% of the time barely moves; one with frequent breakdowns shows lower even in calm weather. The 📊 Calibrated badge appears when this takes 3% or more off a route's score. Routes without CalMac figures use the weather chance alone.</p>
           </div>
         </div>
         <div style={{display: 'flex', gap: 12, marginTop: 16}}>
-          <div style={{flexShrink: 0, width: 28, height: 28, borderRadius: '50%', background: 'var(--navy)', color: '#fff', fontWeight: 800, fontSize: '.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>4</div>
+          <div style={{flexShrink: 0, width: 28, height: 28, borderRadius: '50%', background: 'var(--navy)', color: '#fff', fontWeight: 800, fontSize: '.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>3</div>
           <div>
             <div style={{fontWeight: 700, fontSize: '.9rem', color: 'var(--text)', marginBottom: 4}}>CalMac's own cancellations</div>
             <p style={{fontSize: '.82rem', color: 'var(--muted)', margin: 0, lineHeight: '1.6'}}>CalMac's word beats the forecast. A sailing CalMac has cancelled — for weather, a technical fault or anything else — counts as 0%, and a route's score only counts the sailings still running that day (so if half are cancelled, its score halves). <strong>Disrupted</strong> and <strong>Be Aware</strong> notices don't lower the score: in our records almost all of those sailings still went ahead (they're mostly amended timetables and delays).</p>
@@ -181,7 +175,7 @@ export default function AboutTab() {
         <ul style={{fontSize: '.84rem', color: 'var(--muted)', paddingLeft: 18, lineHeight: '1.85', margin: 0}}>
           <li><strong>Not all cancellations are weather-related.</strong> Mechanical breakdowns, crewing issues and port problems cause a significant proportion of cancellations. The live CalMac status API catches many of these — but only when CalMac has already published an alert. Surprise failures won't appear until CalMac posts them.</li>
           <li><strong>The forecast grid may miss local conditions.</strong> The Minch, Sound of Mull and Firth of Lorn can have sea states that differ significantly from the nearest Open-Meteo grid point.</li>
-          <li><strong>CalMac masters have the final say.</strong> Internal safety thresholds aren't published — our thresholds are reverse-engineered from cancellation history and will never be perfectly calibrated.</li>
+          <li><strong>CalMac masters have the final say.</strong> Internal safety limits aren't published — our curve is fitted to past cancellations and will never be perfectly calibrated.</li>
           <li><strong>Tidal routes are especially uncertain.</strong> Operational constraints at some piers go beyond weather alone and aren't fully captured in the model.</li>
           <li><strong>AIS coverage has gaps.</strong> Some areas have limited AIS receiver coverage. The vessel shown may be delayed or missing if the vessel is out of range of a receiver.</li>
           <li><strong>Historical data quality varies.</strong> Six routes have full verified PDF data; the rest use estimates which are less precise — particularly in winter months where disruption patterns are harder to model.</li>

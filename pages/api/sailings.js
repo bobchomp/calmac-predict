@@ -16,6 +16,8 @@ const CSV_COLUMNS = [
   ['last_chance', r => r.last?.chance], ['last_at', r => r.last?.at],
   // The forecast's own chance, before CalMac's cancellations (logged since 17 Oct)
   ['last_weather_chance', r => r.last?.weather],
+  // The old points model's chance for the same sailing (dev, to compare the two)
+  ['last_old_chance', r => r.last?.old],
   ['sailed', r => (r.outcome ? (r.outcome.sailed === null ? 'unknown' : r.outcome.sailed ? 'yes' : 'no') : 'pending')],
   ['calmac_status', r => r.outcome?.status ?? r.seen?.status], ['reason', r => r.outcome?.reason ?? r.seen?.reason],
   ['correct', r => (r.correct == null ? '' : r.correct ? 'yes' : 'no')],
