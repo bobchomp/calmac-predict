@@ -8,11 +8,11 @@
 //    for 30 minutes
 // New timetable PDFs are checked daily (daily.mjs).
 
-import { forecastUrls } from '../../lib/forecast.js';
 import { kvGetJsonMany, kvSetJson } from '../../lib/kv.js';
 import { windowChance } from '../../lib/risk.js';
 import { ROUTES } from '../../lib/routes.js';
 import { loadThresholds } from '../../lib/thresholds.js';
+import { fetchForecast } from '../../lib/tracker.js';
 import { BASE_URL, getJson, notify, runJob, say } from './common.mjs';
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
@@ -27,14 +27,15 @@ const ukParts = () => Object.fromEntries(new Intl.DateTimeFormat('en-GB', { time
   .formatToParts(new Date()).map(p => [p.type, p.value]));
 
 // Each route's sailing chance over the next 12 hours (the site's forecast,
-// thresholds and sums), for all routes in one go
-async function sailingChances() {
-  const { windUrl, marineUrl } = forecastUrls();
-  const [wind, marine, thresholds] = await Promise.allSettled([getJson(windUrl), getJson(marineUrl), loadThresholds()]);
-  if (wind.status === 'rejected') return { chances: {}, error: wind.reason.message };
+// thresholds and sums), for all routes in one go. A forecast Open-Meteo
+// refuses falls back to the last one fetched, if recent (fetchForecast).
+async function sailingChances({ dry }) {
+  const [forecast, thresholds] = await Promise.allSettled([fetchForecast({ baseUrl: BASE_URL, save: !dry }), loadThresholds()]);
+  const { wind, marine, saved, errors } = forecast.status === 'fulfilled' ? forecast.value : { wind: null, marine: null, saved: {}, errors: { wind: forecast.reason?.message } };
+  if (!wind) return { chances: {}, error: errors.wind };
   const asArray = v => (Array.isArray(v) ? v : [v]);
-  const windArr = asArray(wind.value);
-  const marineArr = marine.status === 'fulfilled' ? asArray(marine.value) : [];
+  const windArr = asArray(wind);
+  const marineArr = marine ? asArray(marine) : [];
   const t = thresholds.status === 'fulfilled' ? thresholds.value.thresholds : null;
   const parts = ukParts();
   const hour = Number(parts.hour);
@@ -44,7 +45,7 @@ async function sailingChances() {
     if (!hourly) return;
     chances[r.name] = windowChance(r.name, hour, hour + 11, hourly, marineArr[i]?.hourly || null, t);
   });
-  return { chances };
+  return { chances, ...(Object.keys(saved).length && { savedMinutesAgo: saved }) };
 }
 
 // The services the site needs (as the Status tab checks them): those
@@ -157,9 +158,9 @@ async function sendHealthEmail(failedChecks) {
 }
 
 async function alerts({ dry }) {
-  const [statusData, { chances, error: forecastError }] = await Promise.all([
+  const [statusData, { chances, error: forecastError, savedMinutesAgo }] = await Promise.all([
     getJson(`${BASE_URL}/api/status`, 15000).catch(err => ({ fallback: true, error: err.message, routes: [] })),
-    sailingChances(),
+    sailingChances({ dry }),
   ]);
   const health = await healthChecks(statusData);
   const known = new Set(ROUTES.map(r => r.name));
@@ -238,6 +239,7 @@ async function alerts({ dry }) {
     ok: true,
     calmacStatus: !statusData.fallback,
     ...(forecastError && { forecastError }),
+    ...(savedMinutesAgo && { forecastSavedMinutesAgo: savedMinutesAgo }),
     pushes,
     notices,
     health: { failed: health.failed, unknown: health.unknown, email, failing: Object.fromEntries(Object.entries(next).filter(([, s]) => s.failingSince).map(([n, s]) => [n, new Date(s.failingSince).toISOString()])) },
