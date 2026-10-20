@@ -18,6 +18,8 @@ const CSV_COLUMNS = [
   ['last_weather_chance', r => r.last?.weather],
   // The old points model's chance for the same sailing (dev, to compare the two)
   ['last_old_chance', r => r.last?.old],
+  // Whether a CalMac notice warned it was liable to disruption (logged since 21 Oct)
+  ['warned', r => (!('warned' in r) ? '' : r.warnedAt ? 'yes' : 'no')], ['warned_since', r => r.warnedAt],
   ['sailed', r => (r.outcome ? (r.outcome.sailed === null ? 'unknown' : r.outcome.sailed ? 'yes' : 'no') : 'pending')],
   ['calmac_status', r => r.outcome?.status ?? r.seen?.status], ['reason', r => r.outcome?.reason ?? r.seen?.reason],
   ['correct', r => (r.correct == null ? '' : r.correct ? 'yes' : 'no')],

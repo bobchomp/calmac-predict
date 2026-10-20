@@ -1,0 +1,33 @@
+# By hand, once: deletes Redis keys nothing uses any more
+# (scripts/jobs/cleanup-keys.mjs). Production only.
+name: Delete unused Redis keys
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'dry only lists what it would delete'
+        type: choice
+        options: [dry, live]
+        default: dry
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    if: github.ref_name == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./scripts/jobs/register.mjs scripts/jobs/cleanup-keys.mjs
+        env:
+          MODE: ${{ inputs.mode }}
+          SITE: production
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
