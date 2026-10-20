@@ -6,11 +6,11 @@ There are two long-lived branches:
 - `dev` deploys to **dev.willitsail.co.uk** (Vercel preview, behind Vercel login, its own Upstash database, never sends push alerts or emails).
 - `main` deploys to production, **www.willitsail.co.uk**.
 
-When a change is finished, create a pull request **into `dev`** and merge it without asking first — the owner has pre-approved this. Before merging:
+When a change is finished, create a pull request **into `main`** and merge it without asking first — the owner has pre-approved this. Merging to `main` deploys to production, so before merging:
 - make sure the Vercel preview deployment check on the PR has passed (if it failed, fix it rather than merging), and
 - say in the PR description what was tested and what couldn't be.
 
-**Nothing goes to `main` until the owner says so.** When they do, open a pull request from `dev` into `main`, with the same two checks, listing what it releases.
+Use `dev` only when the owner asks for something to be tried there first: then the pull request goes into `dev` (merged without asking, same checks), and `dev` goes to `main` only when the owner says. After anything merges into `main`, bring `dev` up to date with it so the two don't drift apart.
 
 How dev stays apart from production:
 - Vercel preview deployments read `DEV_UPSTASH_REDIS_REST_URL`/`_TOKEN` only (`lib/kv.js`, `pages/api/notify.js`), and `/api/notify` refuses to send on them.
