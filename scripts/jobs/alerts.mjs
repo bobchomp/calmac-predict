@@ -10,7 +10,7 @@
 
 import { forecastUrls } from '../../lib/forecast.js';
 import { kvGetJsonMany, kvSetJson } from '../../lib/kv.js';
-import { calcOverallRisk, chanceFromRisk, historicalReliability } from '../../lib/risk.js';
+import { windowChance } from '../../lib/risk.js';
 import { ROUTES } from '../../lib/routes.js';
 import { loadThresholds } from '../../lib/thresholds.js';
 import { BASE_URL, getJson, notify, runJob, say } from './common.mjs';
@@ -37,13 +37,12 @@ async function sailingChances() {
   const marineArr = marine.status === 'fulfilled' ? asArray(marine.value) : [];
   const t = thresholds.status === 'fulfilled' ? thresholds.value.thresholds : null;
   const parts = ukParts();
-  const hour = Number(parts.hour), month1 = Number(parts.month);
+  const hour = Number(parts.hour);
   const chances = {};
   ROUTES.forEach((r, i) => {
     const hourly = windArr[i]?.hourly;
     if (!hourly) return;
-    const risk = calcOverallRisk(r.name, hour, hourly, marineArr[i]?.hourly || null, month1 - 1);
-    chances[r.name] = chanceFromRisk(risk, historicalReliability(t, r.name, month1));
+    chances[r.name] = windowChance(r.name, hour, hour + 11, hourly, marineArr[i]?.hourly || null, t);
   });
   return { chances };
 }
