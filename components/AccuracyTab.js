@@ -63,7 +63,7 @@ export default function AccuracyTab() {
           <div className="accp-results" style={loading ? { opacity: 0.5 } : undefined}>
             <TrackerNote tracker={data.tracker} />
             <Headline data={data} />
-            <ComparisonCard comparison={data.comparison} byDay={data.byDay} byRoute={route ? [] : data.byRoute} />
+            {data.formulas && <ComparisonCard formulas={data.formulas} route={route} />}
             {data.warnings?.warned.sailings > 0 && <WarningsCard warnings={data.warnings} />}
             {data.resolved > 0 ? (
               <>
@@ -124,17 +124,22 @@ function Headline({ data }) {
 const errorText = c => c.errorNew.toFixed(3) + " / " + c.errorOld.toFixed(3);
 const dayMonth = date => new Date(`${date}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
 const rightText = c => `${c.correctNew}% / ${c.correctOld}%`;
-function ComparisonCard({ comparison: c, byDay, byRoute }) {
-  if (!c) {
+function ComparisonCard({ formulas, route }) {
+  if (!formulas.ready) {
+    const { progress: p, needs } = formulas;
     return (
       <div className="accp-card">
         <h3>New formula vs the old one</h3>
-        <p className="accp-sub" style={{ marginBottom: 0 }}>The new formula went live on 20 October 2026. The old formula's chance is logged beside it for every sailing from then, and the two are compared here once those sailings have left.</p>
+        <p className="accp-sub" style={{ marginBottom: 0 }}>
+          The new formula went live on 20 October 2026, with the old one worked out beside it for every sailing. A few days of sailings can't tell them apart, so the comparison appears once it covers at least {needs.days} days and {needs.cancelled} cancelled sailings{route ? " on this route" : ""}.
+          {p.days > 0 && <> So far: {plural(p.days, "day")}, {plural(p.sailings, "sailing")}, {plural(p.cancelled, "cancellation")}.</>}
+        </p>
       </div>
     );
   }
-  const days = [...byDay].reverse().filter(d => d.comparison);
-  const routes = byRoute.filter(r => r.comparison);
+  const { total: c, progress } = formulas;
+  const days = [...formulas.byDay].reverse();
+  const routes = formulas.byRoute;
   // [label, new, old, which is better: lower or higher]
   const rows = [
     ["Error score", c.errorNew, c.errorOld, "lower", v => v.toFixed(4)],
@@ -146,7 +151,7 @@ function ComparisonCard({ comparison: c, byDay, byRoute }) {
   return (
     <div className="accp-card">
       <h3>New formula vs the old one</h3>
-      <p className="accp-sub">Both worked out for the same {plural(c.sailings, "sailing")}. The error score is the average squared miss (lower is better): saying 90% for a sailing that ran misses by 0.01, for one that was cancelled by 0.81.</p>
+      <p className="accp-sub">Both worked out for the same {plural(c.sailings, "sailing")} since {dayMonth(progress.since)}, whatever period is chosen above. The error score is the average squared miss (lower is better): saying 90% for a sailing that ran misses by 0.01, for one that was cancelled by 0.81.</p>
       <table className="accp-table">
         <thead><tr><th></th><th>New</th><th>Old</th></tr></thead>
         <tbody>
@@ -161,7 +166,7 @@ function ComparisonCard({ comparison: c, byDay, byRoute }) {
           <div className="accp-table-wrap">
             <table className="accp-table">
               <thead><tr><th>Day</th><th>Error new / old</th><th>Right new / old</th></tr></thead>
-              <tbody>{days.map(d => <tr key={d.date}><td>{dayMonth(d.date)}</td><td>{errorText(d.comparison)}</td><td>{rightText(d.comparison)}</td></tr>)}</tbody>
+              <tbody>{days.map(d => <tr key={d.date}><td>{dayMonth(d.date)}</td><td>{errorText(d)}</td><td>{rightText(d)}</td></tr>)}</tbody>
             </table>
           </div>
         </details>
@@ -172,7 +177,7 @@ function ComparisonCard({ comparison: c, byDay, byRoute }) {
           <div className="accp-table-wrap">
             <table className="accp-table accp-route-table">
               <thead><tr><th>Route</th><th>Error new / old</th><th>Right new / old</th></tr></thead>
-              <tbody>{routes.map(r => <tr key={r.route}><td>{r.route}</td><td>{errorText(r.comparison)}</td><td>{rightText(r.comparison)}</td></tr>)}</tbody>
+              <tbody>{routes.map(r => <tr key={r.route}><td>{r.route}</td><td>{errorText(r)}</td><td>{rightText(r)}</td></tr>)}</tbody>
             </table>
           </div>
         </details>
