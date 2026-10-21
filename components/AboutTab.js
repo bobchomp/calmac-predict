@@ -48,7 +48,7 @@ export default function AboutTab() {
               30 mph gusts: 97% → 92% · 40 mph: 87% → 74%<br />
               50 mph: 60% → 39% · 60 mph: 26% → 13%
             </div>
-            <p style={{fontSize: '.78rem', color: 'var(--muted)', marginTop: 10, background: 'var(--light)', borderRadius: 8, padding: 8}}>Each <strong>sailing row</strong> shows that departure's hour. The <strong>route's score</strong> is the average of the three worst hours in the next 12 (tomorrow: 6am–10pm) — so one gusty hour doesn't tank a mostly calm day.</p>
+            <p style={{fontSize: '.78rem', color: 'var(--muted)', marginTop: 10, background: 'var(--light)', borderRadius: 8, padding: 8}}>Each <strong>sailing row</strong> shows that departure's chance. The <strong>route's score</strong> is the average of its sailings still to go today (or all of tomorrow's) — the share of them expected to run. After the last sailing of the day it shows the next 12 hours' weather instead.</p>
           </div>
         </div>
         <div style={{display: 'flex', gap: 12}}>
@@ -64,7 +64,7 @@ export default function AboutTab() {
           <div style={{flexShrink: 0, width: 28, height: 28, borderRadius: '50%', background: 'var(--navy)', color: '#fff', fontWeight: 800, fontSize: '.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>3</div>
           <div>
             <div style={{fontWeight: 700, fontSize: '.9rem', color: 'var(--text)', marginBottom: 4}}>CalMac's own cancellations</div>
-            <p style={{fontSize: '.82rem', color: 'var(--muted)', margin: 0, lineHeight: '1.6'}}>CalMac's word beats the forecast. A sailing CalMac has cancelled — for weather, a technical fault or anything else — counts as 0%, and a route's score only counts the sailings still running that day (so if half are cancelled, its score halves). <strong>Disrupted</strong> and <strong>Be Aware</strong> notices don't lower the score: in our records almost all of those sailings still went ahead (they're mostly amended timetables and delays).</p>
+            <p style={{fontSize: '.82rem', color: 'var(--muted)', margin: 0, lineHeight: '1.6'}}>CalMac's word beats the forecast. A sailing CalMac has cancelled — for weather, a technical fault or anything else — counts as 0%, and so counts as 0 in the route's score (if half its remaining sailings are cancelled, its score halves). <strong>Disrupted</strong> and <strong>Be Aware</strong> notices don't lower the score: in our records almost all of those sailings still went ahead (they're mostly amended timetables and delays).</p>
           </div>
         </div>
       </div>
