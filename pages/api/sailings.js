@@ -1,13 +1,14 @@
 // api/sailings.js — the per-sailing log (lib/sailingLog.js)
 //   GET /api/sailings                     how the predictions did, last 30 days (?days= up to 90,
 //                                         ?route= for one route): totals, by day, by route and by
-//                                         what we said, and how the tracker's latest run went
+//                                         what we said, and how the tracker's latest run went;
+//                                         and the new formula against the old over the last 90 days
 //   GET /api/sailings?date=YYYY-MM-DD     every sailing logged that day
 //   GET /api/sailings?date=…&format=csv   the same as a spreadsheet
 
 import { kvConfigured, kvGetJsonMany } from '../../lib/kv';
 import { ROUTES } from '../../lib/routes';
-import { LOG_KEY, STATS_KEY, TRACKER_KEY, addStats, calibration, dayStats, figures, summarise, verdictBands } from '../../lib/sailingLog';
+import { LOG_KEY, STATS_KEY, TRACKER_KEY, addStats, calibration, dayStats, figures, formulaComparison, summarise, verdictBands } from '../../lib/sailingLog';
 import { ukDateStr } from '../../lib/timetable';
 
 const CSV_COLUMNS = [
@@ -48,15 +49,18 @@ export default async function handler(req, res) {
 
     const days = Math.min(90, Math.max(1, parseInt(req.query?.days, 10) || 30));
     const route = req.query?.route || null;
-    const dates = Array.from({ length: days }, (_, i) => ukDateStr(-i)).reverse();
-    const [tracker, ...stats] = await kvGetJsonMany([TRACKER_KEY, ...dates.map(STATS_KEY)]);
+    // Always 90 days: the formula comparison uses them all, whatever the period
+    const allDates = Array.from({ length: 90 }, (_, i) => ukDateStr(-i)).reverse();
+    const [tracker, ...allStats] = await kvGetJsonMany([TRACKER_KEY, ...allDates.map(STATS_KEY)]);
     // Figures for the last two days come from their logs if the tracker
     // hasn't written them yet
-    const missing = dates.slice(-2).filter((d, i) => !stats[dates.length - 2 + i]);
+    const missing = allDates.slice(-2).filter((d, i) => !allStats[allDates.length - 2 + i]);
     if (missing.length) {
       const logs = await kvGetJsonMany(missing.map(LOG_KEY));
-      missing.forEach((d, i) => { if (logs[i]) stats[dates.indexOf(d)] = dayStats(logs[i]); });
+      missing.forEach((d, i) => { if (logs[i]) allStats[allDates.indexOf(d)] = dayStats(logs[i]); });
     }
+    const dates = allDates.slice(-days);
+    const stats = allStats.slice(-days);
     const total = addStats(stats, route);
     const byDay = dates.map((date, i) => ({ date, ...figures(addStats([stats[i]], route)) })).filter(d => d.sailings);
     const byRoute = ROUTES.map(r => r.name).filter(name => !route || name === route)
@@ -65,6 +69,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       ok: true, days, route, since: byDay[0]?.date || null, tracker,
       ...figures(total), bands: verdictBands(total), calibration: calibration(total), byDay, byRoute,
+      formulas: formulaComparison(allDates, allStats, route),
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });
