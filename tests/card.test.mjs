@@ -4,9 +4,10 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { cardData, routeOutlook, sailingChanceAt } from '../lib/card.js';
+import { cardData, headlineChances, routeOutlook, sailingChanceAt } from '../lib/card.js';
 import { modalData } from '../lib/modal.js';
-import { disruptions, routes, thresholds, timetable } from './helpers.mjs';
+import { windowChance } from '../lib/risk.js';
+import { disruptions, forecastMarine, forecastWind, routes, status, thresholds, timetable } from './helpers.mjs';
 
 const ctx = (r, showingTomorrow) => ({ disruption: disruptions()[r.name], timetable: timetable(), thresholds, showingTomorrow, lastFetched: new Date() });
 const pct = text => (text === '–' ? null : parseInt(text));
@@ -53,17 +54,51 @@ test('a route with every sailing cancelled reads 0% and unlikely', () => {
   assert.equal(outlook.verdict, 'unlikely');
 });
 
-test("the route's chance is scaled by the share of its remaining sailings still running", () => {
+test("the route's chance is the average of its sailings still to go, cancelled ones as 0", () => {
   const r = routes().find(x => x.name === 'Oban - Craignure (Mull)');
   const tt = timetable();
-  const opts = { thresholds, showingTomorrow: true, timetable: tt };
   const tomorrow = Object.values(tt)[1][r.name];
   // Half of tomorrow's sailings cancelled
   const half = Object.fromEntries(tomorrow.slice(0, Math.floor(tomorrow.length / 2)).map(s => [s.t, { status: 'cancelled' }]));
-  const full = routeOutlook(r, { ...opts, disruption: null });
-  const halved = routeOutlook(r, { ...opts, disruption: { status: 'normal', sailingStatuses: {}, sailingStatusesTomorrow: half, notices: [] } });
-  const share = (tomorrow.length - Object.keys(half).length) / tomorrow.length;
-  assert.equal(halved.chance, Math.round(full.forecast * share));
+  const disruption = { status: 'normal', sailingStatuses: {}, sailingStatusesTomorrow: half, notices: [] };
+  const outlook = routeOutlook(r, { disruption, thresholds, showingTomorrow: true, timetable: tt });
+  const rows = tomorrow.map(s => sailingChanceAt(r, s.t, true, thresholds, disruption, s.f));
+  assert.equal(outlook.bySailing, true);
+  assert.equal(outlook.chance, Math.round(rows.reduce((a, b) => a + b) / rows.length));
+  // ...and before CalMac's cancellations, the weather's average
+  const weather = tomorrow.map(s => sailingChanceAt(r, s.t, true, thresholds));
+  assert.equal(outlook.forecast, Math.round(weather.reduce((a, b) => a + b) / weather.length));
+});
+
+test("every card's headline is the average of its rows still to go, labelled for what it covers", () => {
+  for (const r of routes()) {
+    for (const showingTomorrow of [false, true]) {
+      const card = cardData(r, 0, ctx(r, showingTomorrow));
+      const toGo = card.sailings.rows.filter(row => !row.isPast && row.pct !== null);
+      if (!toGo.length || card.head.cancelled) continue;
+      const label = `${r.name}${showingTomorrow ? ' tomorrow' : ''}`;
+      assert.equal(pct(card.head.chanceText), Math.round(toGo.reduce((a, row) => a + row.pct, 0) / toGo.length), label);
+      assert.equal(card.head.chanceLabel, showingTomorrow ? 'Tomorrow' : 'Rest of today', label);
+    }
+  }
+});
+
+test('with no sailings left today, the headline is the next 12 hours\' weather', () => {
+  const r = routes().find(x => x.name === 'Oban - Craignure (Mull)');
+  // A timetable whose only sailing has left (00:00 is always past)
+  const tt = { ...timetable(), [Object.keys(timetable())[0]]: { [r.name]: [{ t: '00:00', f: 'Oban', to: 'Craignure' }] } };
+  const card = cardData(r, 0, { disruption: null, timetable: tt, thresholds, showingTomorrow: false, lastFetched: new Date() });
+  const hour = new Date().getHours();
+  assert.equal(card.head.chanceLabel, 'Next 12h');
+  assert.equal(pct(card.head.chanceText), windowChance(r.name, hour, hour + 11, r.hourlyData, r.marineData, thresholds));
+});
+
+test("the alerts job's chance for each route is its card's headline", () => {
+  const chances = headlineChances({ wind: forecastWind, marine: forecastMarine, status, timetable: Object.values(timetable())[0], thresholds });
+  for (const r of routes()) {
+    const card = cardData(r, 0, ctx(r, false));
+    assert.equal(chances[r.name], pct(card.head.chanceText), r.name);
+  }
 });
 
 test("some sailings cancelled and the rest not listed isn't the whole day cancelled", () => {

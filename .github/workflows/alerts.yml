@@ -35,6 +35,8 @@ jobs:
       - run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./scripts/jobs/register.mjs scripts/jobs/alerts.mjs
         env:
           MODE: ${{ inputs.mode || 'live' }}
+          # The chance counts the sailings still to go by the clock, as the card does on UK time
+          TZ: Europe/London
           UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
           UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}

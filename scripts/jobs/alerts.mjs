@@ -9,9 +9,10 @@
 // New timetable PDFs are checked daily (daily.mjs).
 
 import { kvGetJsonMany, kvSetJson } from '../../lib/kv.js';
-import { windowChance } from '../../lib/risk.js';
+import { headlineChances } from '../../lib/card.js';
 import { ROUTES } from '../../lib/routes.js';
 import { loadThresholds } from '../../lib/thresholds.js';
+import { ukDateStr } from '../../lib/timetable.js';
 import { fetchForecast } from '../../lib/tracker.js';
 import { BASE_URL, getJson, notify, runJob, say } from './common.mjs';
 
@@ -26,24 +27,23 @@ const slug = routeKey => routeKey.replace(/[^a-z0-9]/gi, '_');
 const ukParts = () => Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: 'numeric', month: 'numeric', hourCycle: 'h23' })
   .formatToParts(new Date()).map(p => [p.type, p.value]));
 
-// Each route's sailing chance over the next 12 hours (the site's forecast,
-// thresholds and sums), for all routes in one go. A forecast Open-Meteo
-// refuses falls back to the last one fetched, if recent (fetchForecast).
-async function sailingChances({ dry }) {
-  const [forecast, thresholds] = await Promise.allSettled([fetchForecast({ baseUrl: BASE_URL, save: !dry }), loadThresholds()]);
+// Each route's sailing chance for the rest of today, as its card headlines
+// it (lib/card.js headlineChances, with the same forecast, thresholds,
+// CalMac status and timetable). A forecast Open-Meteo refuses falls back to
+// the last one fetched, if recent (fetchForecast).
+async function sailingChances({ dry, statusData }) {
+  const [forecast, thresholds, timetable] = await Promise.allSettled([
+    fetchForecast({ baseUrl: BASE_URL, save: !dry }),
+    loadThresholds(),
+    getJson(`${BASE_URL}/api/timetable?date=${ukDateStr(0)}`, 20000),
+  ]);
   const { wind, marine, saved, errors } = forecast.status === 'fulfilled' ? forecast.value : { wind: null, marine: null, saved: {}, errors: { wind: forecast.reason?.message } };
   if (!wind) return { chances: {}, error: errors.wind };
-  const asArray = v => (Array.isArray(v) ? v : [v]);
-  const windArr = asArray(wind);
-  const marineArr = marine ? asArray(marine) : [];
-  const t = thresholds.status === 'fulfilled' ? thresholds.value.thresholds : null;
-  const parts = ukParts();
-  const hour = Number(parts.hour);
-  const chances = {};
-  ROUTES.forEach((r, i) => {
-    const hourly = windArr[i]?.hourly;
-    if (!hourly) return;
-    chances[r.name] = windowChance(r.name, hour, hour + 11, hourly, marineArr[i]?.hourly || null, t);
+  const chances = headlineChances({
+    wind, marine, status: statusData,
+    timetable: timetable.status === 'fulfilled' ? timetable.value?.routes || null : null,
+    thresholds: thresholds.status === 'fulfilled' ? thresholds.value.thresholds : null,
+    hour: Number(ukParts().hour),
   });
   return { chances, ...(Object.keys(saved).length && { savedMinutesAgo: saved }) };
 }
@@ -158,10 +158,8 @@ async function sendHealthEmail(failedChecks) {
 }
 
 async function alerts({ dry }) {
-  const [statusData, { chances, error: forecastError, savedMinutesAgo }] = await Promise.all([
-    getJson(`${BASE_URL}/api/status`, 15000).catch(err => ({ fallback: true, error: err.message, routes: [] })),
-    sailingChances({ dry }),
-  ]);
+  const statusData = await getJson(`${BASE_URL}/api/status`, 15000).catch(err => ({ fallback: true, error: err.message, routes: [] }));
+  const { chances, error: forecastError, savedMinutesAgo } = await sailingChances({ dry, statusData });
   const health = await healthChecks(statusData);
   const known = new Set(ROUTES.map(r => r.name));
 
