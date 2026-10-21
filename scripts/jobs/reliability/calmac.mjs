@@ -10,6 +10,9 @@
 // diverted, reliability }, with `route` one of the site's route names.
 
 import { createRequire } from 'node:module';
+import { PACK_ROUTES } from './routes.mjs';
+
+export { ROUTE_SLUGS } from './routes.mjs';
 
 // The package's own entry point runs a self-test when imported this way
 const pdfParse = createRequire(import.meta.url)('pdf-parse/lib/pdf-parse.js');
@@ -35,51 +38,6 @@ async function pageText(page) {
 const CORPORATE = 'https://corporate.calmac.co.uk/en-gb/about-us';
 const UA = { 'User-Agent': 'Mozilla/5.0 (compatible; WillItSailBot/1.0)' };
 
-// Our route keys → corporate.calmac.co.uk/…/route-performance-reports/<slug>/
-// (Troon - Brodick, Seil - Luing and Port Askaig - Feolin have no report)
-export const ROUTE_SLUGS = {
-  'Ardrossan - Brodick (Arran)':                       'ardrossan-brodick',
-  'Kennacraig - Port Ellen / Port Askaig (Islay)':     'kennacraig-islay',
-  'Oban - Craignure (Mull)':                           'oban-craignure',
-  'Oban - Coll / Tiree':                               'oban-coll-tiree',
-  'Oban - Colonsay':                                   'oban-colonsay',
-  'Oban - Castlebay / Lochboisdale':                   'oban-castlebaylochboisdale',
-  'Mallaig - Armadale (Skye)':                         'mallaig-armadale',
-  'Ullapool - Stornoway (Lewis)':                      'ullapool-stornoway',
-  'Uig - Tarbert / Lochmaddy':                         'uig-tarbert-lochmaddy',
-  'Gourock - Dunoon':                                  'gourock-dunoon',
-  'Wemyss Bay - Rothesay (Bute)':                      'wemyss-bay-rothesay',
-  'Colintraive - Rhubodach (Bute)':                    'colintraive-rhubodach',
-  'Largs - Cumbrae Slip':                              'largs-cumbrae',
-  'Tarbert - Portavadie':                              'tarbert-loch-fyne-portavadie',
-  'Claonaig - Lochranza (Arran)':                      'claonaig-lochranza',
-  'Tobermory - Kilchoan':                              'tobermory-kilchoan',
-  'Fishnish - Lochaline':                              'fishnish-lochaline',
-  'Mallaig - Small Isles':                             'mallaig-small-isles',
-  'Oban - Lismore':                                    'oban-lismore',
-};
-
-// The island packs' route names → our route keys (their other routes, such
-// as Fionnphort - Iona, aren't on the site; Mallaig - Armadale, Mallaig -
-// Small Isles and Oban - Lismore aren't in any pack)
-const PACK_ROUTES = {
-  'Ardrossan - Brodick':           'Ardrossan - Brodick (Arran)',
-  'Claonaig - Lochranza':          'Claonaig - Lochranza (Arran)',
-  'Wemyss Bay - Rothesay':         'Wemyss Bay - Rothesay (Bute)',
-  'Colintraive - Rhubodach':       'Colintraive - Rhubodach (Bute)',
-  'Oban - Castlebay/Lochboisdale': 'Oban - Castlebay / Lochboisdale',
-  'Oban - Coll/Tiree':             'Oban - Coll / Tiree',
-  'Oban - Colonsay':               'Oban - Colonsay',
-  'Kennacraig - Islay':            'Kennacraig - Port Ellen / Port Askaig (Islay)',
-  'Uig - Tarbert/Lochmaddy':       'Uig - Tarbert / Lochmaddy',
-  'Ullapool - Stornoway':          'Ullapool - Stornoway (Lewis)',
-  'Oban - Craignure':              'Oban - Craignure (Mull)',
-  'Tobermory - Kilchoan':          'Tobermory - Kilchoan',
-  'Fishnish - Lochaline':          'Fishnish - Lochaline',
-  'Gourock - Dunoon':              'Gourock - Dunoon',
-  'Tarbert LF - Portavadie':       'Tarbert - Portavadie',
-  'Largs - Cumbrae Slip':          'Largs - Cumbrae Slip',
-};
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const SHORT = MONTHS.map(m => m.slice(0, 3));
