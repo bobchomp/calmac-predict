@@ -8,7 +8,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "node -e \"const fs=require('fs');const f='public/sw.js';fs.writeFileSync(f,fs.readFileSync(f,'utf8').replace('__BUILD__',Date.now()));console.log('sw.js stamped with build timestamp');\" && next build",
-    "start": "next start"
+    "start": "next start",
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./scripts/jobs/register.mjs --test \"tests/**/*.test.mjs\""
   },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",

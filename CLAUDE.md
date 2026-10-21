@@ -7,7 +7,8 @@ There are two long-lived branches:
 - `main` deploys to production, **www.willitsail.co.uk**.
 
 When a change is finished, create a pull request **into `main`** and merge it without asking first — the owner has pre-approved this. Merging to `main` deploys to production, so before merging:
-- make sure the Vercel preview deployment check on the PR has passed (if it failed, fix it rather than merging), and
+- make sure both checks on the PR have passed — the Vercel preview deployment and **Tests** (`npm test`, required on `main`); if either failed, fix it rather than merging,
+- add or update tests in `tests/` for what the change does, and
 - say in the PR description what was tested and what couldn't be.
 
 Use `dev` only when the owner asks for something to be tried there first: then the pull request goes into `dev` (merged without asking, same checks), and `dev` goes to `main` only when the owner says. After anything merges into `main`, bring `dev` up to date with it so the two don't drift apart.
