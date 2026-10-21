@@ -87,7 +87,7 @@ test('a run logs every sailing still to go with both chances, and the warnings',
   assert.equal(result.inputs.forecast, true);
   assert.equal(result.inputs.thresholds, 'upstash');
   assert.ok(result.predicted > 300, `${result.predicted} predicted`);
-  assert.equal(result.snapshot.withWeather, 22);
+  assert.equal(result.snapshot.withWeather, ROUTES.length);
 
   const tomorrow = JSON.parse(redis.data.get(`sailings:${timetableLib.ukDateStr(1)}`));
   const sailings = Object.values(tomorrow);
