@@ -50,7 +50,18 @@ test('warned sailings are compared with the rest, counting only sailings checked
     c: rec('Oban - Coll / Tiree', 95, true, { rec: { warned: false } }),
     d: rec('Oban - Coll / Tiree', 90, true), // logged before warnings were
   })])).warnings;
-  assert.deepEqual(w, { warned: { sailings: 2, said: 70, sailedPct: 50 }, notWarned: { sailings: 1, said: 95, sailedPct: 100 } });
+  assert.deepEqual({ warned: w.warned, notWarned: w.notWarned }, { warned: { sailings: 2, said: 70, sailedPct: 50 }, notWarned: { sailings: 1, said: 95, sailedPct: 100 } });
+  assert.equal(w.metWarned.sailings + w.metNotWarned.sailings, 0, 'none checked for Met Office warnings');
+});
+
+test('Met Office warnings are compared with the rest, counting only sailings checked for them', () => {
+  const w = figures(addStats([dayStats({
+    a: rec('Oban - Coll / Tiree', 50, false, { rec: { met: ['amber wind'], metAt: '2026-10-24T06:00:00Z' } }),
+    b: rec('Oban - Coll / Tiree', 70, true, { rec: { met: [], metAt: '2026-10-24T05:00:00Z' } }), // warned earlier, then not
+    c: rec('Oban - Coll / Tiree', 90, true, { rec: { met: [] } }),
+    d: rec('Oban - Coll / Tiree', 90, true), // logged before they were
+  })])).warnings;
+  assert.deepEqual({ metWarned: w.metWarned, metNotWarned: w.metNotWarned }, { metWarned: { sailings: 2, said: 60, sailedPct: 50 }, metNotWarned: { sailings: 1, said: 90, sailedPct: 100 } });
 });
 
 test(`the formula comparison waits for ${COMPARE_MIN.days} days and ${COMPARE_MIN.cancelled} cancellations`, () => {

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:dc="http://purl.org/dc/elements/1.1/" version="2.0">
+    <channel>
+        <title>Met Office warnings for Highlands &amp; Eilean Siar</title>
+        <link>https://www.metoffice.gov.uk/weather/warnings-and-advice/uk-warnings</link>
+        <description>Weather warnings of severe and extreme weather from the Met Office</description>
+        <language>en-gb</language>
+        <copyright>(c) Crown copyright</copyright>
+        <pubDate>Thu, 22 Oct 2026 10:00:10 GMT</pubDate>
+        <dc:creator>webteam@metoffice.gov.uk</dc:creator>
+        <item>
+            <title>Yellow warning of wind affecting Highlands &amp; Eilean Siar</title>
+            <link>https://www.metoffice.gov.uk/weather/warnings-and-advice/uk-warnings#?date=2026-10-24&amp;id=6bbbf7de-7347-4694-9206-9bafe612b208&amp;referrer=rss</link>
+            <description>Yellow warning of wind affecting Highlands &amp; Eilean Siar: Na h-Eileanan Siar, Highland valid from 1700 Sat 24 Oct to 2100 Sun 25 Oct</description>
+            <guid isPermaLink="false">https://www.metoffice.gov.uk/weather/warnings-and-advice/uk-warnings#?date=2026-10-24&amp;id=6bbbf7de-7347-4694-9206-9bafe612b208&amp;referrer=rss&amp;region=Highlands &amp; Eilean Siar</guid>
+            <enclosure length="15776" type="image/png" url="https://data.consumer-digital.api.metoffice.gov.uk/v1/warnings/rss/image/yellow-wind.png"/>
+        </item>
+    </channel>
+</rss>

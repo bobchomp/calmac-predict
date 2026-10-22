@@ -64,7 +64,7 @@ export default function AccuracyTab() {
             <TrackerNote tracker={data.tracker} />
             <Headline data={data} />
             {data.formulas && <ComparisonCard formulas={data.formulas} route={route} />}
-            {data.warnings?.warned.sailings > 0 && <WarningsCard warnings={data.warnings} />}
+            {(data.warnings?.warned.sailings > 0 || data.warnings?.metWarned.sailings > 0) && <WarningsCard warnings={data.warnings} />}
             {data.resolved > 0 ? (
               <>
                 <CalibrationCard calibration={data.calibration} bands={data.bands} />
@@ -186,18 +186,24 @@ function ComparisonCard({ formulas, route }) {
   );
 }
 
-// ── Sailings CalMac warned were liable to disruption, against the rest ──
+// ── Sailings with a warning in force (CalMac's, the Met Office's), against the rest ──
 function WarningsCard({ warnings }) {
-  const rows = [["With a warning", warnings.warned], ["Without", warnings.notWarned]];
+  const groups = [
+    ["CalMac \u201cliable to disruption\u201d", [["With a warning", warnings.warned], ["Without", warnings.notWarned]]],
+    ["Met Office weather warning", [["With a warning", warnings.metWarned], ["Without", warnings.metNotWarned]]],
+  ].filter(([, rows]) => rows[0][1].sailings > 0);
   return (
     <div className="accp-card">
-      <h3>CalMac's "liable to disruption" warnings</h3>
-      <p className="accp-sub">Sailings with a CalMac notice in force before they left saying the service was liable to disruption or cancellation. The warnings don't change our chance yet: if warned sailings run less often than we said, they should.</p>
+      <h3>Warnings</h3>
+      <p className="accp-sub">Sailings with a CalMac notice saying the service was liable to disruption or cancellation before they left, or a Met Office warning for their area when they left. Warnings don't change our chance yet: if warned sailings run less often than we said, they should.</p>
       <table className="accp-table">
         <thead><tr><th></th><th>Sailings</th><th>We said</th><th>Sailed</th></tr></thead>
-        <tbody>
-          {rows.map(([label, w]) => <tr key={label}><td>{label}</td><td>{w.sailings.toLocaleString()}</td><td>{w.said !== null ? `${w.said}%` : "–"}</td><td>{w.sailedPct !== null ? `${w.sailedPct}%` : "–"}</td></tr>)}
-        </tbody>
+        {groups.map(([group, rows]) => (
+          <tbody key={group}>
+            <tr><th colSpan={4} style={{ textAlign: "left" }}>{group}</th></tr>
+            {rows.map(([label, w]) => <tr key={label}><td>{label}</td><td>{w.sailings.toLocaleString()}</td><td>{w.said !== null ? `${w.said}%` : "–"}</td><td>{w.sailedPct !== null ? `${w.sailedPct}%` : "–"}</td></tr>)}
+          </tbody>
+        ))}
       </table>
     </div>
   );

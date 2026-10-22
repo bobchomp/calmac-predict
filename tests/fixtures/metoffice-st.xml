@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:dc="http://purl.org/dc/elements/1.1/" version="2.0">
+    <channel>
+        <title>Met Office warnings for Strathclyde</title>
+        <link>https://www.metoffice.gov.uk/weather/warnings-and-advice/uk-warnings</link>
+        <description>Weather warnings of severe and extreme weather from the Met Office</description>
+        <language>en-gb</language>
+        <copyright>(c) Crown copyright</copyright>
+        <pubDate>Thu, 22 Oct 2026 10:00:14 GMT</pubDate>
+        <dc:creator>webteam@metoffice.gov.uk</dc:creator>
+        <item>
+            <title>Yellow warning of wind affecting Strathclyde</title>
+            <link>https://www.metoffice.gov.uk/weather/warnings-and-advice/uk-warnings#?date=2026-10-24&amp;id=6bbbf7de-7347-4694-9206-9bafe612b208&amp;referrer=rss</link>
+            <description>Yellow warning of wind affecting Strathclyde: Argyll and Bute, East Ayrshire, East Dunbartonshire, East Renfrewshire, Glasgow, Inverclyde, North Ayrshire, North Lanarkshire, Renfrewshire, South Ayrshire, South Lanarkshire, West Dunbartonshire valid from 1700 Sat 24 Oct to 2100 Sun 25 Oct</description>
+            <guid isPermaLink="false">https://www.metoffice.gov.uk/weather/warnings-and-advice/uk-warnings#?date=2026-10-24&amp;id=6bbbf7de-7347-4694-9206-9bafe612b208&amp;referrer=rss&amp;region=Strathclyde</guid>
+            <enclosure length="15776" type="image/png" url="https://data.consumer-digital.api.metoffice.gov.uk/v1/warnings/rss/image/yellow-wind.png"/>
+        </item>
+        <item>
+            <title>Yellow warning of rain affecting Strathclyde</title>
+            <link>https://www.metoffice.gov.uk/weather/warnings-and-advice/uk-warnings#?date=2026-10-23&amp;id=b2b9e4c7-1ef0-4063-a091-9ec1453dba13&amp;referrer=rss</link>
+            <description>Yellow warning of rain affecting Strathclyde: East Ayrshire, East Dunbartonshire, East Renfrewshire, Glasgow, North Ayrshire, North Lanarkshire, Renfrewshire, South Ayrshire, South Lanarkshire, West Dunbartonshire valid from 0500 Fri 23 Oct to 2259 Fri 23 Oct</description>
+            <guid isPermaLink="false">https://www.metoffice.gov.uk/weather/warnings-and-advice/uk-warnings#?date=2026-10-23&amp;id=b2b9e4c7-1ef0-4063-a091-9ec1453dba13&amp;referrer=rss&amp;region=Strathclyde</guid>
+            <enclosure length="15285" type="image/png" url="https://data.consumer-digital.api.metoffice.gov.uk/v1/warnings/rss/image/yellow-rain.png"/>
+        </item>
+    </channel>
+</rss>
