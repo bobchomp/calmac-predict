@@ -21,6 +21,8 @@ const CSV_COLUMNS = [
   ['last_old_chance', r => r.last?.old],
   // Whether a CalMac notice warned it was liable to disruption (logged since 21 Oct)
   ['warned', r => (!('warned' in r) ? '' : r.warnedAt ? 'yes' : 'no')], ['warned_since', r => r.warnedAt],
+  // Met Office warnings in force for its route when it leaves (logged since 22 Oct)
+  ['met_office', r => (!('met' in r) ? '' : r.met.join('; ') || (r.metAt ? 'earlier' : 'none'))], ['met_office_since', r => r.metAt],
   ['sailed', r => (r.outcome ? (r.outcome.sailed === null ? 'unknown' : r.outcome.sailed ? 'yes' : 'no') : 'pending')],
   ['calmac_status', r => r.outcome?.status ?? r.seen?.status], ['reason', r => r.outcome?.reason ?? r.seen?.reason],
   ['correct', r => (r.correct == null ? '' : r.correct ? 'yes' : 'no')],

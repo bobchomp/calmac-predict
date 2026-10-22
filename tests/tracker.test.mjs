@@ -24,6 +24,7 @@ before(async () => {
     }
     if (u.hostname === 'site.test') {
       if (u.pathname === '/api/status') return Response.json(siteStatus);
+      if (u.pathname === '/api/warnings') return Response.json({ ok: true, warnings: metWarnings });
       if (u.pathname === '/api/timetable') return Response.json(fixture(u.searchParams.get('date') === timetableLib.ukDateStr(0) ? 'timetable-day1' : 'timetable-day2'));
       return new Response('not found', { status: 404 });
     }
@@ -47,6 +48,10 @@ const siteStatus = {
     startDateTime: new Date(Date.now() - 3600000).toISOString(), endDateTime: new Date(Date.now() + 3 * 86400000).toISOString(),
   }] } : r)),
 };
+
+// A Met Office wind warning for North Ayrshire, in force from now for three days
+const metWarnings = [{ id: 'w1', level: 'amber', type: 'wind', areas: ['North Ayrshire'], from: Date.now() - 3600000, to: Date.now() + 3 * 86400000, title: 'Amber warning of wind', url: 'x' }];
+const MET_ROUTES = ['Ardrossan - Brodick (Arran)', 'Troon - Brodick (Arran)', 'Largs - Cumbrae Slip', 'Claonaig - Lochranza (Arran)'];
 
 const restamp = (part, change) => {
   const key = tracker.SAVED_FORECAST_KEY(part);
@@ -85,6 +90,7 @@ test('a run logs every sailing still to go with both chances, and the warnings',
   const result = await tracker.runTracker({ baseUrl: 'https://site.test', snapshot: true });
   assert.equal(result.ok, true, result.error);
   assert.equal(result.inputs.forecast, true);
+  assert.equal(result.inputs.metOffice, true);
   assert.equal(result.inputs.thresholds, 'upstash');
   assert.ok(result.predicted > 300, `${result.predicted} predicted`);
   assert.equal(result.snapshot.withWeather, ROUTES.length);
@@ -97,6 +103,8 @@ test('a run logs every sailing still to go with both chances, and the warnings',
   for (const s of sailings) {
     for (const k of ['chance', 'weather', 'old']) assert.ok(s.last[k] >= 0 && s.last[k] <= 100, `${s.route} ${s.time} ${k}: ${s.last[k]}`);
     assert.equal(s.warned, s.route === WARNED_ROUTE, `${s.route} ${s.time} warned`);
+    assert.deepEqual(s.met, MET_ROUTES.includes(s.route) ? ['amber wind'] : [], `${s.route} ${s.time} Met Office`);
+    assert.equal(!!s.metAt, MET_ROUTES.includes(s.route));
   }
   assert.ok(sailings.some(s => s.route === WARNED_ROUTE && s.warnedAt));
 });
