@@ -24,8 +24,9 @@ async function getLivePosition(mmsiList, box) {
   return new Promise(resolve => {
     let done = false;
     const finish = val => { if (!done) { done = true; resolve(val); try { ws.terminate(); } catch (_) {} } };
-    let msgCount = 0, opened = false;
-    const fail = why => finish({ why, messages: msgCount });
+    // `skipped`: what the first message that wasn't a usable position was
+    let msgCount = 0, opened = false, skipped = null;
+    const fail = why => finish({ why: skipped ? `${why}; first other message: ${skipped}` : why, messages: msgCount });
     const timeout = setTimeout(() => fail(opened ? 'no position from these ships in 5s' : 'could not connect to the AIS stream in 5s'), 5500);
 
     let ws;
@@ -53,13 +54,17 @@ async function getLivePosition(mmsiList, box) {
         console.log('[vessel] msg#' + msgCount + ' type:', msg.MessageType, JSON.stringify(msg).slice(0, 200));
         if (msg.MessageType === 'PositionReport') {
           const pos  = msg.Message?.PositionReport;
-          const mmsi = msg.MetaData?.MMSI_String ? parseInt(msg.MetaData.MMSI_String) : null;
+          const mmsi = Number(msg.MetaData?.MMSI ?? msg.MetaData?.MMSI_String) || null;
           if (pos && mmsi && pos.Latitude !== 0) {
             clearTimeout(timeout);
-            finish({ mmsi, lat: pos.Latitude, lon: pos.Longitude, speed: pos.Sog, heading: pos.TrueHeading });
+            return finish({ mmsi, lat: pos.Latitude, lon: pos.Longitude, speed: pos.Sog, heading: pos.TrueHeading });
           }
         }
-      } catch (_) {}
+        skipped ||= `${msg.MessageType || 'no MessageType'} {${Object.keys(msg).join(', ')}}${msg.MetaData ? ` MetaData {${Object.keys(msg.MetaData).join(', ')}}` : ''}`;
+      } catch (_) {
+        msgCount++;
+        skipped ||= `not JSON: ${raw.toString().slice(0, 80)}`;
+      }
     });
 
     ws.on('error', (err) => { console.log('[vessel] WS error:', err.message); clearTimeout(timeout); fail(`AIS stream error: ${err.message}`); });
