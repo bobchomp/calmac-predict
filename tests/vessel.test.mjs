@@ -19,7 +19,7 @@ before(async () => {
   wss.on('connection', ws => ws.on('message', raw => {
     const sub = JSON.parse(raw);
     assert.equal(sub.APIKey, 'test-key');
-    const mmsis = sub.FiltersShipMMSI.map(Number);
+    const mmsis = (sub.FiltersShipMMSI || []).map(Number);
     if (mmsis.includes(scheduledVessel('Largs - Cumbrae Slip').mmsi)) {
       ws.send(JSON.stringify({ MessageType: 'PositionReport', MetaData: { MMSI_String: String(scheduledVessel('Largs - Cumbrae Slip').mmsi) }, Message: { PositionReport: { Latitude: 55.795, Longitude: -4.88, Sog: 9.5, TrueHeading: 270 } } }));
     } else if (mmsis.includes(scheduledVessel('Fionnphort - Iona').mmsi)) {
@@ -67,13 +67,19 @@ test('a position is found whichever field the MMSI comes in, after other message
 test('only other messages: the reason says what came instead', { timeout: 10000 }, async () => {
   const r = await call({ route: 'Sconser - Raasay', live: '1' });
   assert.equal(r.vessel, null);
-  assert.match(r.why, /no position from these ships in 5s; first other message: ShipStaticData \{MessageType, MetaData, Message\} MetaData \{MMSI\} \(1 messages\)/);
+  assert.match(r.why, /no position from these ships in 5.5s; first other message: ShipStaticData \{MessageType, MetaData, Message\} MetaData \{MMSI\} \(1 messages\)/);
 });
 
 test('silence is reported as no position in the time', { timeout: 10000 }, async () => {
   const r = await call({ route: 'Mallaig - Small Isles', live: '1' });
   assert.equal(r.vessel, null);
-  assert.match(r.why, /no position from these ships in 5s \(0 messages\)/);
+  assert.match(r.why, /no position from these ships in 5.5s \(0 messages\)/);
+});
+
+test('any=1 takes any ship reporting in the box, and wait sets how long to listen', async () => {
+  // The fake stream has nothing for an unfiltered subscription: the reason gives the wait
+  const r = await call({ route: 'Mallaig - Small Isles', live: '1', any: '1', wait: '1' });
+  assert.match(r.anyShip.why, /no position from any ship in 1s/);
 });
 
 test('without live, the scheduled vessel', async () => {
