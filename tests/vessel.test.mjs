@@ -22,6 +22,13 @@ before(async () => {
     const mmsis = sub.FiltersShipMMSI.map(Number);
     if (mmsis.includes(scheduledVessel('Largs - Cumbrae Slip').mmsi)) {
       ws.send(JSON.stringify({ MessageType: 'PositionReport', MetaData: { MMSI_String: String(scheduledVessel('Largs - Cumbrae Slip').mmsi) }, Message: { PositionReport: { Latitude: 55.795, Longitude: -4.88, Sog: 9.5, TrueHeading: 270 } } }));
+    } else if (mmsis.includes(scheduledVessel('Fionnphort - Iona').mmsi)) {
+      // A position with the MMSI only as a number, after a message that isn't one
+      ws.send(JSON.stringify({ MessageType: 'ShipStaticData', MetaData: { MMSI: 1 }, Message: {} }));
+      ws.send(JSON.stringify({ MessageType: 'PositionReport', MetaData: { MMSI: scheduledVessel('Fionnphort - Iona').mmsi }, Message: { PositionReport: { Latitude: 56.33, Longitude: -6.38, Sog: 7, TrueHeading: 90 } } }));
+    } else if (mmsis.includes(scheduledVessel('Sconser - Raasay').mmsi) && sub.BoundingBoxes[0][0][0] > 57) {
+      // Raasay: only something that isn't a position
+      ws.send(JSON.stringify({ MessageType: 'ShipStaticData', MetaData: { MMSI: 1 }, Message: {} }));
     } else if (mmsis.includes(scheduledVessel('Tayinloan - Gigha').mmsi)) {
       ws.send(JSON.stringify({ error: 'Api Key Is Not Valid' }));
       ws.close();
@@ -52,8 +59,19 @@ test("the stream's own error is the reason given", async () => {
   assert.match(r.why, /Api Key Is Not Valid/);
 });
 
-test('silence is reported as no position in the time', { timeout: 10000 }, async () => {
+test('a position is found whichever field the MMSI comes in, after other messages', async () => {
+  const r = await call({ route: 'Fionnphort - Iona', live: '1' });
+  assert.equal(r.vessel.name, 'MV Loch Buie');
+});
+
+test('only other messages: the reason says what came instead', { timeout: 10000 }, async () => {
   const r = await call({ route: 'Sconser - Raasay', live: '1' });
+  assert.equal(r.vessel, null);
+  assert.match(r.why, /no position from these ships in 5s; first other message: ShipStaticData \{MessageType, MetaData, Message\} MetaData \{MMSI\} \(1 messages\)/);
+});
+
+test('silence is reported as no position in the time', { timeout: 10000 }, async () => {
+  const r = await call({ route: 'Mallaig - Small Isles', live: '1' });
   assert.equal(r.vessel, null);
   assert.match(r.why, /no position from these ships in 5s \(0 messages\)/);
 });
