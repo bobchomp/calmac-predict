@@ -8,28 +8,36 @@ import { after, before, test } from 'node:test';
 import { WebSocketServer } from 'ws';
 
 const require = createRequire(import.meta.url);
-const { scheduledVessel } = require('../lib/fleet.js');
+const { FLEET, ROUTE_BOXES, scheduledVessel } = require('../lib/fleet.js');
 let wss, handler;
 
 before(async () => {
-  // Answers by the route's ships: Largs reports a position, Gigha's
+  // Answers by the route's box (every lookup now listens for the whole
+  // fleet): Largs reports its own ship, Iona its ship after a non-position,
+  // Wemyss Bay only a relief ship, Raasay only a non-position, Gigha's
   // subscription is refused, anything else hears nothing
   wss = new WebSocketServer({ port: 0 });
   await new Promise(resolve => wss.on('listening', resolve));
+  const position = (mmsi, lat, lon, field = 'MMSI_String') =>
+    JSON.stringify({ MessageType: 'PositionReport', MetaData: { [field]: field === 'MMSI' ? mmsi : String(mmsi) }, Message: { PositionReport: { Latitude: lat, Longitude: lon, Sog: 9.5, TrueHeading: 270 } } });
+  const notPosition = JSON.stringify({ MessageType: 'ShipStaticData', MetaData: { MMSI: 1 }, Message: {} });
   wss.on('connection', ws => ws.on('message', raw => {
     const sub = JSON.parse(raw);
     assert.equal(sub.APIKey, 'test-key');
-    const mmsis = (sub.FiltersShipMMSI || []).map(Number);
-    if (mmsis.includes(scheduledVessel('Largs - Cumbrae Slip').mmsi)) {
-      ws.send(JSON.stringify({ MessageType: 'PositionReport', MetaData: { MMSI_String: String(scheduledVessel('Largs - Cumbrae Slip').mmsi) }, Message: { PositionReport: { Latitude: 55.795, Longitude: -4.88, Sog: 9.5, TrueHeading: 270 } } }));
-    } else if (mmsis.includes(scheduledVessel('Fionnphort - Iona').mmsi)) {
+    // Every CalMac lookup listens for the whole fleet
+    if (sub.FiltersShipMMSI) assert.equal(sub.FiltersShipMMSI.length, FLEET.length);
+    const [[minLat, minLon]] = sub.BoundingBoxes[0];
+    const route = Object.keys(ROUTE_BOXES).find(name => ROUTE_BOXES[name][0] === minLat && ROUTE_BOXES[name][2] === minLon);
+    if (route === 'Largs - Cumbrae Slip') ws.send(position(scheduledVessel(route).mmsi, 55.795, -4.88));
+    else if (route === 'Fionnphort - Iona') {
       // A position with the MMSI only as a number, after a message that isn't one
-      ws.send(JSON.stringify({ MessageType: 'ShipStaticData', MetaData: { MMSI: 1 }, Message: {} }));
-      ws.send(JSON.stringify({ MessageType: 'PositionReport', MetaData: { MMSI: scheduledVessel('Fionnphort - Iona').mmsi }, Message: { PositionReport: { Latitude: 56.33, Longitude: -6.38, Sog: 7, TrueHeading: 90 } } }));
-    } else if (mmsis.includes(scheduledVessel('Sconser - Raasay').mmsi) && sub.BoundingBoxes[0][0][0] > 57) {
-      // Raasay: only something that isn't a position
-      ws.send(JSON.stringify({ MessageType: 'ShipStaticData', MetaData: { MMSI: 1 }, Message: {} }));
-    } else if (mmsis.includes(scheduledVessel('Tayinloan - Gigha').mmsi)) {
+      ws.send(notPosition);
+      ws.send(position(scheduledVessel(route).mmsi, 56.33, -6.38, 'MMSI'));
+    } else if (route === 'Wemyss Bay - Rothesay (Bute)') {
+      // Only a relief ship, MV Coruisk, at Rothesay
+      ws.send(position(235008929, 55.839, -5.052));
+    } else if (route === 'Sconser - Raasay') ws.send(notPosition);
+    else if (route === 'Tayinloan - Gigha') {
       ws.send(JSON.stringify({ error: 'Api Key Is Not Valid' }));
       ws.close();
     }
@@ -65,21 +73,27 @@ test('a position is found whichever field the MMSI comes in, after other message
 });
 
 test('only other messages: the reason says what came instead', { timeout: 10000 }, async () => {
-  const r = await call({ route: 'Sconser - Raasay', live: '1' });
+  const r = await call({ route: 'Sconser - Raasay', live: '1', wait: '1' });
   assert.equal(r.vessel, null);
-  assert.match(r.why, /no position from these ships in 5.5s; first other message: ShipStaticData \{MessageType, MetaData, Message\} MetaData \{MMSI\} \(1 messages\)/);
+  assert.match(r.why, /no position from CalMac ships in 1s; first other message: ShipStaticData \{MessageType, MetaData, Message\} MetaData \{MMSI\} \(1 messages\)/);
 });
 
 test('silence is reported as no position in the time', { timeout: 10000 }, async () => {
-  const r = await call({ route: 'Mallaig - Small Isles', live: '1' });
+  const r = await call({ route: 'Mallaig - Small Isles', live: '1', wait: '1' });
   assert.equal(r.vessel, null);
-  assert.match(r.why, /no position from these ships in 5.5s \(0 messages\)/);
+  assert.match(r.why, /no position from CalMac ships in 1s \(0 messages\)/);
 });
 
 test('any=1 takes any ship reporting in the box, and wait sets how long to listen', async () => {
   // The fake stream has nothing for an unfiltered subscription: the reason gives the wait
   const r = await call({ route: 'Mallaig - Small Isles', live: '1', any: '1', wait: '1' });
   assert.match(r.anyShip.why, /no position from any ship in 1s/);
+});
+
+test("with none of the route's own ships about, another CalMac ship there (a relief) is its live vessel", async () => {
+  const r = await call({ route: 'Wemyss Bay - Rothesay (Bute)', live: '1', wait: '1' });
+  assert.equal(r.vessel.name, 'MV Coruisk');
+  assert.equal(r.vessel.live, true);
 });
 
 test('without live, the scheduled vessel', async () => {
