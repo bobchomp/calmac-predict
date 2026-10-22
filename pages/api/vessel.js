@@ -2,6 +2,10 @@
 // Returns the vessel currently operating a given route using AIS position data
 // Uses aisstream.io WebSocket (free tier) with a short timeout
 // Query: GET /api/vessel?route=Oban+-+Craignure+(Mull)
+//   &live=1   look for the ship's live position (up to 5s)
+//   &wait=N   with live, wait up to N seconds (at most 25), to diagnose
+//   &any=1    with live, take any ship reporting in the route's box, to
+//             see whether the stream covers the area at all
 
 // The CalMac fleet, the routes each ship serves and each route's box (lib/fleet.js)
 const { FLEET, ROUTE_BOXES, scheduledVessel } = require('../../lib/fleet');
@@ -14,9 +18,9 @@ const AISSTREAM_URL = process.env.AISSTREAM_URL || 'wss://stream.aisstream.io/v0
 // any known MMSI in the bounding box. Without one, why not: { why, messages }
 // (no key, the stream's own error, the connection closing or failing, or
 // simply no report from those ships in the time).
-async function getLivePosition(mmsiList, box) {
+async function getLivePosition(mmsiList, box, waitMs = 5500) {
   if (!AISSTREAM_KEY) return { why: 'no AIS key configured', messages: 0 };
-  if (!mmsiList.length) return { why: 'no ships known for the route', messages: 0 };
+  if (mmsiList && !mmsiList.length) return { why: 'no ships known for the route', messages: 0 };
   const [minLat, maxLat, minLon, maxLon] = box;
 
   const { default: WebSocket } = await import('ws');
@@ -27,7 +31,8 @@ async function getLivePosition(mmsiList, box) {
     // `skipped`: what the first message that wasn't a usable position was
     let msgCount = 0, opened = false, skipped = null;
     const fail = why => finish({ why: skipped ? `${why}; first other message: ${skipped}` : why, messages: msgCount });
-    const timeout = setTimeout(() => fail(opened ? 'no position from these ships in 5s' : 'could not connect to the AIS stream in 5s'), 5500);
+    const secs = waitMs / 1000;
+    const timeout = setTimeout(() => fail(opened ? `no position from ${mmsiList ? 'these ships' : 'any ship'} in ${secs}s` : `could not connect to the AIS stream in ${secs}s`), waitMs);
 
     let ws;
     try { ws = new WebSocket(AISSTREAM_URL); }
@@ -38,10 +43,10 @@ async function getLivePosition(mmsiList, box) {
       const sub = {
         APIKey:             AISSTREAM_KEY,
         BoundingBoxes:      [[[minLat, minLon], [maxLat, maxLon]]],
-        FiltersShipMMSI:    mmsiList.map(String),
+        ...(mmsiList && { FiltersShipMMSI: mmsiList.map(String) }),
         FilterMessageTypes: ['PositionReport'],
       };
-      console.log('[vessel] WS open, mmsis:', mmsiList.join(','), 'box:', box.join(','));
+      console.log('[vessel] WS open, mmsis:', mmsiList ? mmsiList.join(',') : 'any', 'box:', box.join(','));
       ws.send(JSON.stringify(sub));
     });
 
@@ -57,7 +62,7 @@ async function getLivePosition(mmsiList, box) {
           const mmsi = Number(msg.MetaData?.MMSI ?? msg.MetaData?.MMSI_String) || null;
           if (pos && mmsi && pos.Latitude !== 0) {
             clearTimeout(timeout);
-            return finish({ mmsi, lat: pos.Latitude, lon: pos.Longitude, speed: pos.Sog, heading: pos.TrueHeading });
+            return finish({ mmsi, name: msg.MetaData?.ShipName?.trim() || null, lat: pos.Latitude, lon: pos.Longitude, speed: pos.Sog, heading: pos.TrueHeading });
           }
         }
         skipped ||= `${msg.MessageType || 'no MessageType'} {${Object.keys(msg).join(', ')}}${msg.MetaData ? ` MetaData {${Object.keys(msg.MetaData).join(', ')}}` : ''}`;
@@ -88,10 +93,15 @@ module.exports = async function handler(req, res) {
   if (req.query.live === '1') {
     res.setHeader('Cache-Control', 'no-store');
     const box = ROUTE_BOXES[route];
+    const waitMs = Math.min(25, Math.max(1, Number(req.query.wait) || 5.5)) * 1000;
+    if (box && req.query.any === '1') {
+      const anyShip = await getLivePosition(null, box, waitMs);
+      return res.status(200).json({ anyShip, route });
+    }
     let why = box ? 'no ships known for the route' : 'no box for the route';
     if (box && routeEntries.length) {
       const routeMMSIs = routeEntries.map(v => v.mmsi);
-      const livePos    = await getLivePosition(routeMMSIs, box);
+      const livePos    = await getLivePosition(routeMMSIs, box, waitMs);
       if (livePos?.why) why = `${livePos.why} (${livePos.messages} messages)`;
       else if (livePos) {
         const known = FLEET.find(v => v.mmsi === livePos.mmsi);
@@ -123,3 +133,6 @@ module.exports = async function handler(req, res) {
     fetchedAt: new Date().toISOString(),
   });
 };
+
+// Long enough for a diagnostic wait (&wait=25)
+module.exports.config = { maxDuration: 30 };
