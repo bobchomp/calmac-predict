@@ -28,12 +28,29 @@ test("routes CalMac doesn't run are left out of the figures", () => {
   assert.equal(figures(addStats([{ routes: { 'Seil - Luing': day.routes['Gourock - Dunoon'] } }])).sailings, 0);
 });
 
-test('the new formula is compared with the old on the sailings that have both', () => {
+// The prediction 6 hours ahead: its chance, and both formulas' forecast-only chances
+const ahead = (chance, weather, old) => ({ rec: { ahead: { chance, weather, old, at: '2026-11-03T06:00:00Z' } } });
+
+test('the headline judges the prediction 6 hours ahead, not the last one', () => {
+  const f = figures(addStats([dayStats({
+    // CalMac cancelled it after the 6-hour look: the last chance was 0, the 6-hour one 80
+    a: { ...rec('Oban - Coll / Tiree', 0, false), ...ahead(80, 80, 70).rec },
+    b: { ...rec('Oban - Coll / Tiree', 90, true), ...ahead(30, 30, 30).rec }, // a false alarm 6 hours out
+    c: { ...rec('Oban - Coll / Tiree', 10, false), ...ahead(20, 20, 60).rec },
+    d: rec('Oban - Coll / Tiree', 90, true), // logged before 6-hour predictions were
+  })]));
+  assert.equal(f.accuracy, 100, 'the last chances were all right');
+  assert.deepEqual(f.ahead, { sailings: 3, correct: 1, accuracy: 33, cancelled: 2, cancelledPredicted: 1, falseAlarms: 1 });
+  assert.equal(figures(addStats([dayStats({ d: rec('Oban - Coll / Tiree', 90, true) })])).ahead, null);
+});
+
+test("the new formula's forecast is compared with the old's, 6 hours ahead", () => {
   const c = figures(addStats([dayStats({
-    a: rec('Oban - Coll / Tiree', 90, true, { last: { old: 60 } }),
-    b: rec('Oban - Coll / Tiree', 20, false, { last: { old: 55 } }),
-    c: rec('Gourock - Dunoon', 95, true, { last: { old: 40 } }),
-    d: rec('Gourock - Dunoon', 80, true), // logged before the old chance was
+    a: rec('Oban - Coll / Tiree', 90, true, ahead(90, 90, 60)),
+    // Cancelled by CalMac: both last chances 0, but the forecasts said 20 and 55
+    b: rec('Oban - Coll / Tiree', 0, false, { last: { old: 0 }, ...ahead(20, 20, 55) }),
+    c: rec('Gourock - Dunoon', 95, true, ahead(95, 95, 40)),
+    d: rec('Gourock - Dunoon', 80, true, { last: { old: 80 } }), // logged before 6-hour predictions were
   })])).comparison;
   // Error: the average of (chance - outcome)², outcomes 1 sailed, 0 cancelled
   assert.equal(c.sailings, 3);
@@ -70,7 +87,7 @@ test(`the formula comparison waits for ${COMPARE_MIN.days} days and ${COMPARE_MI
     const dates = Array.from({ length: n }, (_, i) => `2026-11-${String(i + 1).padStart(2, '0')}`);
     const stats = dates.map(() => ({ routes: { 'Oban - Coll / Tiree': {
       sailings: 300, pending: 0, resolved: 300, correct: 290, firstCorrect: 290, cancelled: c, cancelledPredicted: 0, falseAlarms: 0,
-      compared: 300, brierNew: 9, brierOld: 12, correctNew: 290, correctOld: 285, cancelledCompared: c, caughtNew: 0, caughtOld: 0, falseNew: 0, falseOld: 0,
+      cmp: 300, cmpBrierNew: 9, cmpBrierOld: 12, cmpCorrectNew: 290, cmpCorrectOld: 285, cmpCancelled: c, cmpCaughtNew: 0, cmpCaughtOld: 0, cmpFalseNew: 0, cmpFalseOld: 0,
       bins: Array.from({ length: 20 }, () => [0, 0]),
     } } }));
     return formulaComparison(dates, stats);
@@ -85,8 +102,11 @@ test(`the formula comparison waits for ${COMPARE_MIN.days} days and ${COMPARE_MI
   assert.equal(ready.total.sailings, 4200);
   assert.equal(ready.byDay.length, 14);
   assert.deepEqual(ready.byRoute.map(r => r.route), ['Oban - Coll / Tiree']);
-  // Days without a comparison (before it started) aren't counted
+  // Days without a comparison (before it started) aren't counted, nor days
+  // saved with the old last-chance comparison
   assert.equal(formulaComparison(['2026-10-01'], [null]).progress.days, 0);
+  const oldStyle = { routes: { 'Oban - Coll / Tiree': { sailings: 300, resolved: 300, compared: 300, brierNew: 9, brierOld: 12, cancelledCompared: 60, bins: Array.from({ length: 20 }, () => [0, 0]) } } };
+  assert.equal(formulaComparison(['2026-10-24'], [oldStyle]).progress.days, 0);
 });
 
 test('departureMs knows UK summer and winter time', () => {

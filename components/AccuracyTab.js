@@ -93,19 +93,30 @@ function TrackerNote({ tracker }) {
 }
 
 // ── Headline figures ──
+// Judged on the prediction 6 hours before each sailing (data.ahead, logged
+// since 3 Nov 2026): closer in, the chance already knows about CalMac's own
+// cancellations. Until there's any, the earliest prediction stands in.
 function Headline({ data }) {
+  const a = data.ahead;
+  const hero = a
+    ? { label: "Called right 6 hours before", value: `${a.accuracy}%`, note: `${a.correct.toLocaleString()} of ${plural(a.sailings, "sailing")}` }
+    : { label: "Called right with the first prediction", value: data.firstAccuracy !== null ? `${data.firstAccuracy}%` : "–", note: data.resolved ? `${plural(data.resolved, "sailing")}; the 6-hours-before figure starts on 3 Nov` : "waiting for the first departures" };
   const tiles = [
-    { label: "Cancellations predicted", value: data.cancelled ? `${data.cancelledPredicted} of ${data.cancelled}` : "–", note: data.cancelled ? "we said under 50%" : "no cancellations yet" },
-    { label: "False alarms", value: data.falseAlarms.toLocaleString(), note: "said under 50%, but it sailed" },
-    { label: "Day-before calls", value: data.firstAccuracy !== null ? `${data.firstAccuracy}%` : "–", note: "right with the first prediction" },
+    a
+      ? { label: "Cancellations predicted", value: a.cancelled ? `${a.cancelledPredicted} of ${a.cancelled}` : "–", note: a.cancelled ? "under 50%, 6 hours before" : "no cancellations yet" }
+      : { label: "Cancellations predicted", value: data.cancelled ? `${data.cancelledPredicted} of ${data.cancelled}` : "–", note: data.cancelled ? "under 50% just before departure" : "no cancellations yet" },
+    a
+      ? { label: "False alarms", value: a.falseAlarms.toLocaleString(), note: "under 50% 6 hours before, but it sailed" }
+      : { label: "False alarms", value: data.falseAlarms.toLocaleString(), note: "said under 50%, but it sailed" },
+    { label: "Just before departure", value: data.accuracy !== null ? `${data.accuracy}%` : "–", note: "right, counting CalMac's own cancellations" },
     { label: "Still to sail", value: data.pending.toLocaleString(), note: "logged, not departed yet" },
   ];
   return (
     <div className="accp-headline">
       <div className="accp-card accp-hero">
-        <div className="accp-tile-label">Called right</div>
-        <div className="accp-hero-value">{data.accuracy !== null ? `${data.accuracy}%` : "–"}</div>
-        <div className="accp-tile-note">{data.resolved ? `${data.correct.toLocaleString()} of ${plural(data.resolved, "sailing")}` : "waiting for the first departures"}</div>
+        <div className="accp-tile-label">{hero.label}</div>
+        <div className="accp-hero-value">{hero.value}</div>
+        <div className="accp-tile-note">{hero.note}</div>
       </div>
       <div className="accp-tiles">
         {tiles.map(t => (
@@ -131,7 +142,7 @@ function ComparisonCard({ formulas, route }) {
       <div className="accp-card">
         <h3>New formula vs the old one</h3>
         <p className="accp-sub" style={{ marginBottom: 0 }}>
-          The new formula went live on 20 October 2026, with the old one worked out beside it for every sailing. A few days of sailings can't tell them apart, so the comparison appears once it covers at least {needs.days} days and {needs.cancelled} cancelled sailings{route ? " on this route" : ""}.
+          Both formulas' forecasts are compared 6 hours before each sailing, before CalMac's own cancellations can make either look right (logged since 3 November 2026). A few days of sailings can't tell them apart, so the comparison appears once it covers at least {needs.days} days and {needs.cancelled} cancelled sailings{route ? " on this route" : ""}.
           {p.days > 0 && <> So far: {plural(p.days, "day")}, {plural(p.sailings, "sailing")}, {plural(p.cancelled, "cancellation")}.</>}
         </p>
       </div>
@@ -151,7 +162,7 @@ function ComparisonCard({ formulas, route }) {
   return (
     <div className="accp-card">
       <h3>New formula vs the old one</h3>
-      <p className="accp-sub">Both worked out for the same {plural(c.sailings, "sailing")} since {dayMonth(progress.since)}, whatever period is chosen above. The error score is the average squared miss (lower is better): saying 90% for a sailing that ran misses by 0.01, for one that was cancelled by 0.81.</p>
+      <p className="accp-sub">Each formula's forecast 6 hours before the same {plural(c.sailings, "sailing")} since {dayMonth(progress.since)}, whatever period is chosen above, before CalMac's own cancellations are taken into account. The error score is the average squared miss (lower is better): saying 90% for a sailing that ran misses by 0.01, for one that was cancelled by 0.81.</p>
       <table className="accp-table">
         <thead><tr><th></th><th>New</th><th>Old</th></tr></thead>
         <tbody>

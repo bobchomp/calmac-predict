@@ -107,6 +107,20 @@ test('a run logs every sailing still to go with both chances, and the warnings',
     assert.equal(!!s.metAt, MET_ROUTES.includes(s.route));
   }
   assert.ok(sailings.some(s => s.route === WARNED_ROUTE && s.warnedAt));
+
+  // The prediction 6 hours or more ahead, with both formulas' forecast-only chances
+  const { AHEAD_MS, departureMs } = await import('../lib/sailingLog.js');
+  const today = Object.values(JSON.parse(redis.data.get(`sailings:${timetableLib.ukDateStr(0)}`)));
+  for (const s of [...today, ...sailings]) {
+    const farEnough = departureMs(s.date, s.time) - Date.parse(s.last.at) >= AHEAD_MS;
+    assert.equal(!!s.ahead, farEnough, `${s.route} ${s.date} ${s.time} ahead`);
+    if (s.ahead) {
+      assert.equal(s.ahead.chance, s.last.chance);
+      assert.equal(s.ahead.weather, s.last.weather);
+      for (const k of ['chance', 'weather', 'old']) assert.ok(s.ahead[k] >= 0 && s.ahead[k] <= 100, `${s.route} ${s.time} ahead ${k}`);
+    }
+  }
+  assert.ok(sailings.some(s => s.ahead), 'tomorrow has sailings 6 hours off');
 });
 
 test('a run Open-Meteo refuses still predicts, from the saved forecast', { timeout: 30000 }, async () => {

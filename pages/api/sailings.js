@@ -19,6 +19,10 @@ const CSV_COLUMNS = [
   ['last_weather_chance', r => r.last?.weather],
   // The old points model's chance for the same sailing (dev, to compare the two)
   ['last_old_chance', r => r.last?.old],
+  // The last prediction 6 hours or more before it left, and both formulas'
+  // forecast-only chances then (logged since 3 Nov)
+  ['ahead_chance', r => r.ahead?.chance], ['ahead_at', r => r.ahead?.at],
+  ['ahead_weather_chance', r => r.ahead?.weather], ['ahead_old_chance', r => r.ahead?.old],
   // Whether a CalMac notice warned it was liable to disruption (logged since 21 Oct)
   ['warned', r => (!('warned' in r) ? '' : r.warnedAt ? 'yes' : 'no')], ['warned_since', r => r.warnedAt],
   // Met Office warnings in force for its route when it leaves (logged since 22 Oct)
