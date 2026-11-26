@@ -143,4 +143,10 @@ test("a rebuild works each day's figures out again from its log", async () => {
   const s = JSON.parse(redis.data.get(`sailings:stats:${day}`)).routes['Gourock - Dunoon'];
   assert.deepEqual({ cmp: s.cmp, cmpOther: s.cmpOther, ahead: s.ahead }, { cmp: 0, cmpOther: 1, ahead: 1 });
   assert.ok(!redis.data.has(`sailings:stats:${empty}`), 'days with no log are left alone');
+  // Logs read a week at a time (Upstash's 10 MB reply limit), none missed
+  const older = timetableLib.ukDateStr(-20);
+  redis.data.set(`sailings:${older}`, JSON.stringify(log));
+  redis.stats.maxMget = 0;
+  assert.deepEqual(await tracker.rebuildStats({ days: 30, dry: true }), { rebuilt: 2, from: older, to: day });
+  assert.equal(redis.stats.maxMget, 7);
 });

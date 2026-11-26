@@ -43,17 +43,19 @@ export function hourOf({ gust, wind = gust * 0.65, wave = null, visibility = 200
 // imported. data is the store itself.
 export async function fakeRedis() {
   const data = new Map();
+  // The most keys any one MGET has asked for (Upstash limits a reply to 10 MB)
+  const stats = { maxMget: 0 };
   const server = http.createServer(async (req, res) => {
     let body = '';
     for await (const chunk of req) body += chunk;
     const [cmd, ...args] = JSON.parse(body || '[]');
     const reply = result => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ result })); };
     if (cmd === 'GET') return reply(data.get(args[0]) ?? null);
-    if (cmd === 'MGET') return reply(args.map(k => data.get(k) ?? null));
+    if (cmd === 'MGET') { stats.maxMget = Math.max(stats.maxMget, args.length); return reply(args.map(k => data.get(k) ?? null)); }
     if (cmd === 'SET') { data.set(args[0], args[1]); return reply('OK'); }
     if (cmd === 'DEL') { args.forEach(k => data.delete(k)); return reply(args.length); }
     res.writeHead(400); res.end(JSON.stringify({ error: `unknown command ${cmd}` }));
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  return { url: `http://127.0.0.1:${server.address().port}`, data, close: () => server.close() };
+  return { url: `http://127.0.0.1:${server.address().port}`, data, stats, close: () => server.close() };
 }
