@@ -131,3 +131,16 @@ test('a run Open-Meteo refuses still predicts, from the saved forecast', { timeo
   assert.ok(result.predicted > 300);
   assert.deepEqual(result.inputs.forecastSavedMinutesAgo, { wind: 0, marine: 0 });
 });
+
+test("a rebuild works each day's figures out again from its log", async () => {
+  const day = timetableLib.ukDateStr(-10), empty = timetableLib.ukDateStr(-11);
+  const log = { a: { route: 'Gourock - Dunoon', date: day, time: '09:00', last: { chance: 0 }, ahead: { chance: 90, weather: 90, old: 90, at: 'x' }, outcome: { sailed: false, status: 'cancelled', reason: 'Technical' } } };
+  redis.data.set(`sailings:${day}`, JSON.stringify(log));
+  redis.data.set(`sailings:stats:${day}`, JSON.stringify({ routes: { 'Gourock - Dunoon': { sailings: 1, cmp: 1, cmpCancelled: 1, bins: [] } } })); // saved by an older version
+  assert.deepEqual(await tracker.rebuildStats({ days: 30, dry: true }), { rebuilt: 1, from: day, to: day });
+  assert.equal(JSON.parse(redis.data.get(`sailings:stats:${day}`)).routes['Gourock - Dunoon'].cmp, 1, 'a dry run saves nothing');
+  await tracker.rebuildStats({ days: 30 });
+  const s = JSON.parse(redis.data.get(`sailings:stats:${day}`)).routes['Gourock - Dunoon'];
+  assert.deepEqual({ cmp: s.cmp, cmpOther: s.cmpOther, ahead: s.ahead }, { cmp: 0, cmpOther: 1, ahead: 1 });
+  assert.ok(!redis.data.has(`sailings:stats:${empty}`), 'days with no log are left alone');
+});

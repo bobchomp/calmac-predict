@@ -8,9 +8,9 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'dry saves nothing'
+        description: 'dry saves nothing; rebuild works out the last 90 days of figures again from the log'
         type: choice
-        options: [live, dry]
+        options: [live, dry, rebuild]
         default: live
   schedule:
     - cron: '11 * * * *'
