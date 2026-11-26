@@ -142,7 +142,7 @@ function ComparisonCard({ formulas, route }) {
       <div className="accp-card">
         <h3>New formula vs the old one</h3>
         <p className="accp-sub" style={{ marginBottom: 0 }}>
-          Both formulas' forecasts are compared 6 hours before each sailing, before CalMac's own cancellations can make either look right (logged since 3 November 2026). A few days of sailings can't tell them apart, so the comparison appears once it covers at least {needs.days} days and {needs.cancelled} cancelled sailings{route ? " on this route" : ""}.
+          Both formulas' forecasts are compared 6 hours before each sailing, before CalMac's own cancellations can make either look right (logged since 3 November 2026), on sailings that ran or were cancelled for the weather. A few days of sailings can't tell them apart, so the comparison appears once it covers at least {needs.days} days and {needs.cancelled} cancelled sailings{route ? " on this route" : ""}.
           {p.days > 0 && <> So far: {plural(p.days, "day")}, {plural(p.sailings, "sailing")}, {plural(p.cancelled, "cancellation")}.</>}
         </p>
       </div>
@@ -162,7 +162,7 @@ function ComparisonCard({ formulas, route }) {
   return (
     <div className="accp-card">
       <h3>New formula vs the old one</h3>
-      <p className="accp-sub">Each formula's forecast 6 hours before the same {plural(c.sailings, "sailing")} since {dayMonth(progress.since)}, whatever period is chosen above, before CalMac's own cancellations are taken into account. The error score is the average squared miss (lower is better): saying 90% for a sailing that ran misses by 0.01, for one that was cancelled by 0.81.</p>
+      <p className="accp-sub">Each formula's forecast 6 hours before the same {plural(c.sailings, "sailing")} since {dayMonth(progress.since)}, whatever period is chosen above, before CalMac's own cancellations are taken into account.{c.otherCancelled ? ` ${plural(c.otherCancelled, "cancellation")} for other reasons (technical faults and the like), which no forecast could foresee, are left out.` : ""} The error score is the average squared miss (lower is better): saying 90% for a sailing that ran misses by 0.01, for one that was cancelled by 0.81.</p>
       <table className="accp-table">
         <thead><tr><th></th><th>New</th><th>Old</th></tr></thead>
         <tbody>
@@ -206,7 +206,7 @@ function WarningsCard({ warnings }) {
   return (
     <div className="accp-card">
       <h3>Warnings</h3>
-      <p className="accp-sub">Sailings with a CalMac notice saying the service was liable to disruption or cancellation before they left, or a Met Office warning for their area when they left. Warnings don't change our chance yet: if warned sailings run less often than we said, they should.</p>
+      <p className="accp-sub">Sailings with a CalMac notice saying the service was liable to disruption or cancellation before they left, or a Met Office warning for their area when they left. “We said” is our average chance for them 6 hours before (since 3 November 2026). Warnings don't change our chance yet: if warned sailings run less often than we said, they should.</p>
       <table className="accp-table">
         <thead><tr><th></th><th>Sailings</th><th>We said</th><th>Sailed</th></tr></thead>
         {groups.map(([group, rows]) => (
@@ -297,7 +297,7 @@ function CalibrationCard({ calibration, bands }) {
   return (
     <div className="accp-card">
       <h3>When we said…, how often did it sail?</h3>
-      <p className="accp-sub">Each column is the share of sailings that ran, grouped by the chance we gave them. On a well-judged forecast the columns reach the grey marks.</p>
+      <p className="accp-sub">Each column is the share of sailings that ran, grouped by the chance we gave them 6 hours before (since 3 November 2026). On a well-judged forecast the columns reach the grey marks.</p>
       <div className="accp-legend">
         <span><i className="accp-key-col" /> Share that sailed</span>
         <span><i className="accp-key-ref" /> What we said (middle of the band)</span>
@@ -319,23 +319,29 @@ function CalibrationCard({ calibration, bands }) {
   );
 }
 
+// Days and routes are judged, like the headline, on the prediction 6 hours
+// before each sailing (d.ahead), so days before 3 Nov 2026 have no figure
 function DailyCard({ byDay }) {
-  const withResults = byDay.filter(d => d.resolved);
-  const items = byDay.map(d => ({
-    key: d.date, label: new Date(`${d.date}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }),
-    value: d.resolved ? d.accuracy : null,
-    tip: d.resolved ? [`${d.accuracy}% called right`, shortDate(d.date), `${d.correct} of ${plural(d.resolved, "sailing")}`, d.cancelled ? `${d.cancelledPredicted} of ${plural(d.cancelled, "cancellation")} predicted` : "No cancellations"] : [shortDate(d.date), "No sailings checked yet"],
-  }));
+  const withResults = byDay.filter(d => d.ahead);
+  const items = byDay.map(d => {
+    const a = d.ahead;
+    return {
+      key: d.date, label: new Date(`${d.date}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }),
+      value: a ? a.accuracy : null,
+      tip: a ? [`${a.accuracy}% called right`, shortDate(d.date), `${a.correct} of ${plural(a.sailings, "sailing")}`, a.cancelled ? `${a.cancelledPredicted} of ${plural(a.cancelled, "cancellation")} predicted` : "No cancellations"]
+        : [shortDate(d.date), d.resolved ? "Before 6-hour predictions were logged" : "No sailings checked yet"],
+    };
+  });
   return (
     <div className="accp-card">
       <h3>Called right each day</h3>
-      <p className="accp-sub">Share of each day's departed sailings we called right.</p>
+      <p className="accp-sub">Share of each day's departed sailings we called right 6 hours before (since 3 November 2026).</p>
       {withResults.length ? <ColumnChart items={items} ariaLabel="Share of sailings called right each day" /> : null}
       <details className="accp-table-toggle">
         <summary>View as table</summary>
         <table className="accp-table">
           <thead><tr><th>Day</th><th>Checked</th><th>Called right</th><th>Cancellations predicted</th></tr></thead>
-          <tbody>{[...byDay].reverse().map(d => <tr key={d.date}><td>{shortDate(d.date)}</td><td>{d.resolved}</td><td>{d.accuracy !== null ? `${d.accuracy}%` : "–"}</td><td>{d.cancelled ? `${d.cancelledPredicted} of ${d.cancelled}` : "–"}</td></tr>)}</tbody>
+          <tbody>{[...withResults].reverse().map(({ date, ahead: a }) => <tr key={date}><td>{shortDate(date)}</td><td>{a.sailings}</td><td>{a.accuracy}%</td><td>{a.cancelled ? `${a.cancelledPredicted} of ${a.cancelled}` : "–"}</td></tr>)}</tbody>
         </table>
       </details>
     </div>
@@ -343,19 +349,20 @@ function DailyCard({ byDay }) {
 }
 
 function RouteCard({ byRoute }) {
-  const rows = byRoute.filter(r => r.resolved);
+  const rows = byRoute.filter(r => r.ahead);
   if (!rows.length) return null;
   return (
     <div className="accp-card">
       <h3>By route</h3>
+      <p className="accp-sub">Judged on the prediction 6 hours before each sailing.</p>
       <div className="accp-table-wrap">
         <table className="accp-table accp-route-table">
           <thead><tr><th>Route</th><th>Checked</th><th>Called right</th><th>Cancellations predicted</th><th>False alarms</th></tr></thead>
           <tbody>
             {rows.map(r => (
               <tr key={r.route}>
-                <td>{r.route}</td><td>{r.resolved}</td><td>{r.accuracy}%</td>
-                <td>{r.cancelled ? `${r.cancelledPredicted} of ${r.cancelled}` : "–"}</td><td>{r.falseAlarms}</td>
+                <td>{r.route}</td><td>{r.ahead.sailings}</td><td>{r.ahead.accuracy}%</td>
+                <td>{r.ahead.cancelled ? `${r.ahead.cancelledPredicted} of ${r.ahead.cancelled}` : "–"}</td><td>{r.ahead.falseAlarms}</td>
               </tr>
             ))}
           </tbody>

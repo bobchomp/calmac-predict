@@ -2,10 +2,12 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { COMPARE_MIN, addStats, dayStats, departureMs, figures, formulaComparison } from '../lib/sailingLog.js';
+import { COMPARE_MIN, addStats, calibration, dayStats, departureMs, figures, formulaComparison, verdictBands } from '../lib/sailingLog.js';
 
-// A logged sailing: the chance we gave it (and the old formula's), whether it sailed
-const rec = (route, chance, sailed, extra = {}) => ({ route, last: { chance, ...extra.last }, first: { chance }, outcome: { sailed }, ...extra.rec });
+// A logged sailing: the chance we gave it (and the old formula's), whether it
+// sailed (cancelled for the weather, unless extra.reason says otherwise)
+const rec = (route, chance, sailed, extra = {}) => ({ route, last: { chance, ...extra.last }, first: { chance },
+  outcome: { sailed, reason: sailed ? null : 'reason' in extra ? extra.reason : 'Weather' }, ...extra.rec });
 
 test('a day is added up per route: called right, cancellations predicted, false alarms', () => {
   const f = figures(addStats([dayStats({
@@ -51,7 +53,11 @@ test("the new formula's forecast is compared with the old's, 6 hours ahead", () 
     b: rec('Oban - Coll / Tiree', 0, false, { last: { old: 0 }, ...ahead(20, 20, 55) }),
     c: rec('Gourock - Dunoon', 95, true, ahead(95, 95, 40)),
     d: rec('Gourock - Dunoon', 80, true, { last: { old: 80 } }), // logged before 6-hour predictions were
+    // Cancelled for a breakdown: no test of a forecast, so left out
+    e: rec('Gourock - Dunoon', 0, false, { reason: 'Technical', ...ahead(95, 95, 95) }),
+    f: rec('Gourock - Dunoon', 0, false, { reason: null, ...ahead(95, 95, 95) }), // no reason given
   })])).comparison;
+  assert.equal(c.otherCancelled, 2);
   // Error: the average of (chance - outcome)², outcomes 1 sailed, 0 cancelled
   assert.equal(c.sailings, 3);
   assert.equal(c.errorNew, Number((((0.9 - 1) ** 2 + 0.2 ** 2 + (0.95 - 1) ** 2) / 3).toFixed(4)));
@@ -60,25 +66,40 @@ test("the new formula's forecast is compared with the old's, 6 hours ahead", () 
     { correctNew: 100, correctOld: 33, cancelled: 1, caughtNew: 1, caughtOld: 0, falseNew: 0, falseOld: 1 });
 });
 
+// What we said for warned sailings is the chance 6 hours before, where there was one
+const aheadChance = chance => ({ chance, weather: chance, old: chance, at: '2026-11-03T06:00:00Z' });
+
 test('warned sailings are compared with the rest, counting only sailings checked for warnings', () => {
   const w = figures(addStats([dayStats({
-    a: rec('Oban - Coll / Tiree', 60, false, { rec: { warned: true, warnedAt: '2026-10-21T06:00:00Z' } }),
-    b: rec('Oban - Coll / Tiree', 80, true, { rec: { warned: false, warnedAt: '2026-10-21T05:00:00Z' } }), // warned earlier, lifted
-    c: rec('Oban - Coll / Tiree', 95, true, { rec: { warned: false } }),
+    a: rec('Oban - Coll / Tiree', 0, false, { rec: { warned: true, warnedAt: '2026-10-21T06:00:00Z', ahead: aheadChance(60) } }),
+    b: rec('Oban - Coll / Tiree', 80, true, { rec: { warned: false, warnedAt: '2026-10-21T05:00:00Z', ahead: aheadChance(80) } }), // warned earlier, lifted
+    c: rec('Oban - Coll / Tiree', 95, true, { rec: { warned: false, ahead: aheadChance(95) } }),
     d: rec('Oban - Coll / Tiree', 90, true), // logged before warnings were
+    e: rec('Oban - Coll / Tiree', 90, true, { rec: { warned: true, warnedAt: '2026-10-21T05:00:00Z' } }), // before 6-hour predictions
   })])).warnings;
-  assert.deepEqual({ warned: w.warned, notWarned: w.notWarned }, { warned: { sailings: 2, said: 70, sailedPct: 50 }, notWarned: { sailings: 1, said: 95, sailedPct: 100 } });
+  assert.deepEqual({ warned: w.warned, notWarned: w.notWarned }, { warned: { sailings: 3, said: 70, sailedPct: 67 }, notWarned: { sailings: 1, said: 95, sailedPct: 100 } });
   assert.equal(w.metWarned.sailings + w.metNotWarned.sailings, 0, 'none checked for Met Office warnings');
 });
 
 test('Met Office warnings are compared with the rest, counting only sailings checked for them', () => {
   const w = figures(addStats([dayStats({
-    a: rec('Oban - Coll / Tiree', 50, false, { rec: { met: ['amber wind'], metAt: '2026-10-24T06:00:00Z' } }),
-    b: rec('Oban - Coll / Tiree', 70, true, { rec: { met: [], metAt: '2026-10-24T05:00:00Z' } }), // warned earlier, then not
-    c: rec('Oban - Coll / Tiree', 90, true, { rec: { met: [] } }),
+    a: rec('Oban - Coll / Tiree', 0, false, { rec: { met: ['amber wind'], metAt: '2026-10-24T06:00:00Z', ahead: aheadChance(50) } }),
+    b: rec('Oban - Coll / Tiree', 70, true, { rec: { met: [], metAt: '2026-10-24T05:00:00Z', ahead: aheadChance(70) } }), // warned earlier, then not
+    c: rec('Oban - Coll / Tiree', 90, true, { rec: { met: [], ahead: aheadChance(90) } }),
     d: rec('Oban - Coll / Tiree', 90, true), // logged before they were
   })])).warnings;
   assert.deepEqual({ metWarned: w.metWarned, metNotWarned: w.metNotWarned }, { metWarned: { sailings: 2, said: 60, sailedPct: 50 }, metNotWarned: { sailings: 1, said: 90, sailedPct: 100 } });
+});
+
+test('the calibration chart and verdict bands use the chance 6 hours before', () => {
+  const t = addStats([dayStats({
+    a: rec('Oban - Coll / Tiree', 0, false, { rec: { ahead: aheadChance(82) } }), // said 82, CalMac cancelled later
+    b: rec('Oban - Coll / Tiree', 90, true, { rec: { ahead: aheadChance(85) } }),
+    c: rec('Oban - Coll / Tiree', 10, false, { rec: { ahead: aheadChance(30) } }),
+    d: rec('Oban - Coll / Tiree', 95, true), // before 6-hour predictions: not in the chart
+  }), { routes: { 'Gourock - Dunoon': { sailings: 1, resolved: 1, bins: Array.from({ length: 20 }, (_, i) => (i === 19 ? [1, 1] : [0, 0])) } } }]); // a day saved before aheadBins
+  assert.deepEqual(calibration(t).filter(c => c.count).map(c => [c.from, c.count, c.sailedPct]), [[30, 1, 0], [80, 2, 50]]);
+  assert.deepEqual(verdictBands(t).map(b => [b.verdict, b.count, b.sailedPct]), [['likely', 2, 50], ['caution', 0, null], ['unlikely', 1, 0]]);
 });
 
 test(`the formula comparison waits for ${COMPARE_MIN.days} days and ${COMPARE_MIN.cancelled} cancellations`, () => {
